@@ -27,7 +27,7 @@ export function createStateStore(initial) {
 }
 
 // Deep merge tailored to project shapes (objects/arrays of POJOs).
-function deepMerge(target, patch) {
+export function deepMerge(target, patch) {
   if (patch === null || typeof patch !== 'object') return patch;
   if (Array.isArray(patch)) return patch.map((v) => deepMerge(undefined, v));
   const out = { ...(target || {}) };

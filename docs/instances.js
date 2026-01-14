@@ -32,7 +32,8 @@ export function getBuiltInPresets() {
             "left": true,
             "right": true
           },
-          "cladding": true
+          "cladding": true,
+          "roof": true
         },
         "dimMode": "frame",
         "dimGap_mm": 50,

@@ -24,7 +24,7 @@ window.addEventListener("unhandledrejection", function (e) {
   window.__dbg.lastError = (e && e.reason) ? String(e.reason) : "unhandledrejection";
 });
 
-import { createStateStore } from "./state.js";
+import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
@@ -201,8 +201,8 @@ function initApp() {
     } catch (e) {}
 
   var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
-    var initialState = defaultPreset && defaultPreset.state 
-      ? Object.assign({}, DEFAULTS, defaultPreset.state)
+    var initialState = defaultPreset && defaultPreset.state
+      ? deepMerge(DEFAULTS, defaultPreset.state)
       : DEFAULTS;
     var store = createStateStore(initialState);
     window.__dbg.store = store; // Expose for debugging
