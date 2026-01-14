@@ -12,12 +12,20 @@
  * @param {object} state - The shed state containing walls.openings
  * @param {{scene: BABYLON.Scene, materials: object}} ctx - Babylon context
  */
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx;
 
-  // Clean up existing window meshes
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
+
+  // Dispose existing meshes for this section (or all window meshes in legacy mode)
+  const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+  const windowPrefix = meshPrefix + "window-";
+
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("window-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(windowPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
@@ -59,10 +67,10 @@ export function build3D(state, ctx) {
     const isLeftRight = (wallId === "left" || wallId === "right");
     const adjustedWinX = isLeftRight ? winX : (winX - studW / 2);
 
-    // Calculate window position based on wall
-    const pos = getWindowPosition(wallId, dims, wallThk, adjustedWinX, winWidth, winHeight, winY, plateY, WALL_RISE_MM);
+    // Calculate window position based on wall (with section offset)
+    const pos = getWindowPosition(wallId, dims, wallThk, adjustedWinX, winWidth, winHeight, winY, plateY, WALL_RISE_MM, sectionPos);
 
-    buildWindow(scene, win, pos, winWidth, winHeight, index, materials);
+    buildWindow(scene, win, pos, winWidth, winHeight, index, materials, meshPrefix);
   });
 }
 
@@ -94,8 +102,9 @@ function ensureWindowMaterials(scene, materials) {
 
 /**
  * Calculate window world position based on wall
+ * sectionPos is optional - defaults to origin (0,0,0) for legacy mode
  */
-function getWindowPosition(wallId, dims, wallThk, winX, winWidth, winHeight, winY, plateY, wallRise) {
+function getWindowPosition(wallId, dims, wallThk, winX, winWidth, winHeight, winY, plateY, wallRise, sectionPos = { x: 0, y: 0, z: 0 }) {
   const offset = 2; // Small offset to place window just outside wall surface
 
   // Window center Y
@@ -104,41 +113,41 @@ function getWindowPosition(wallId, dims, wallThk, winX, winWidth, winHeight, win
   switch (wallId) {
     case "front":
       return {
-        x: winX + winWidth / 2,
-        y: yCenter,
-        z: -offset,
+        x: sectionPos.x + winX + winWidth / 2,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z - offset,
         rotation: Math.PI  // Match door rotation - face outward
       };
     case "back":
       return {
-        x: winX + winWidth / 2,
-        y: yCenter,
-        z: dims.d + offset,
+        x: sectionPos.x + winX + winWidth / 2,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + dims.d + offset,
         rotation: 0  // Opposite of front
       };
-case "left":
+    case "left":
       return {
-        x: -offset,
-        y: yCenter,
-        z: winX + winWidth / 2,
+        x: sectionPos.x - offset,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + winX + winWidth / 2,
         rotation: -Math.PI / 2
       };
     case "right":
       return {
-        x: dims.w + offset,
-        y: yCenter,
-        z: winX + winWidth / 2,
+        x: sectionPos.x + dims.w + offset,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + winX + winWidth / 2,
         rotation: Math.PI / 2
       };
     default:
-      return { x: 0, y: yCenter, z: 0, rotation: 0 };
+      return { x: sectionPos.x, y: sectionPos.y + yCenter, z: sectionPos.z, rotation: 0 };
   }
 }
 
 /**
  * Build a window with frame and glass
  */
-function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
+function buildWindow(scene, win, pos, winWidth, winHeight, index, materials, meshPrefix = "") {
   // Dimensions in mm
   const frameThickness_mm = 40;
   const frameDepth_mm = 50;
@@ -149,13 +158,13 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
   const mats = scene._windowMaterials;
 
   // Create window group
-  const windowGroup = new BABYLON.TransformNode(`window-${index}-group`, scene);
+  const windowGroup = new BABYLON.TransformNode(`${meshPrefix}window-${index}-group`, scene);
   windowGroup.position = new BABYLON.Vector3(pos.x / 1000, pos.y / 1000, pos.z / 1000);
   windowGroup.rotation.y = pos.rotation;
 
   // Top frame
   const frameTop = BABYLON.MeshBuilder.CreateBox(
-    `window-${index}-frame-top`,
+    `${meshPrefix}window-${index}-frame-top`,
     {
       width: winWidth / 1000,
       height: frameThickness_mm / 1000,
@@ -170,7 +179,7 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
 
   // Bottom frame
   const frameBottom = BABYLON.MeshBuilder.CreateBox(
-    `window-${index}-frame-bottom`,
+    `${meshPrefix}window-${index}-frame-bottom`,
     {
       width: winWidth / 1000,
       height: frameThickness_mm / 1000,
@@ -185,7 +194,7 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
 
   // Left frame
   const frameLeft = BABYLON.MeshBuilder.CreateBox(
-    `window-${index}-frame-left`,
+    `${meshPrefix}window-${index}-frame-left`,
     {
       width: frameThickness_mm / 1000,
       height: (winHeight - frameThickness_mm * 2) / 1000,
@@ -200,7 +209,7 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
 
   // Right frame
   const frameRight = BABYLON.MeshBuilder.CreateBox(
-    `window-${index}-frame-right`,
+    `${meshPrefix}window-${index}-frame-right`,
     {
       width: frameThickness_mm / 1000,
       height: (winHeight - frameThickness_mm * 2) / 1000,
@@ -218,7 +227,7 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
   const glassHeight = winHeight - frameThickness_mm * 2;
 
   const glass = BABYLON.MeshBuilder.CreateBox(
-    `window-${index}-glass`,
+    `${meshPrefix}window-${index}-glass`,
     {
       width: glassWidth / 1000,
       height: glassHeight / 1000,
