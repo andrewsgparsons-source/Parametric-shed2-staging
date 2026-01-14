@@ -1003,16 +1003,16 @@ function render(state) {
         safeDispose();
 
         if (getBaseEnabled(state)) {
-          if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx);
+          if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, undefined);
         }
 
 if (getWallsEnabled(state)) {
-          if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx);
+          if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
           shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
 
           // Build door and window geometry into openings
-          if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx);
-          if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx);
+          if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
+          if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
         }
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
@@ -1023,7 +1023,7 @@ if (getWallsEnabled(state)) {
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
-          if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx);
+          if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
           shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
 
           if (Roof && typeof Roof.updateBOM === "function") Roof.updateBOM(roofState);
