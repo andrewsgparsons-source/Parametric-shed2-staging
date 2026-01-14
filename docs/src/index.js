@@ -36,6 +36,7 @@ import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
 import { initViews } from "./views.js";
+import * as Sections from "./sections.js";
 
 function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
@@ -960,7 +961,27 @@ function applyOpeningsVisibility(scene, on) {
 function render(state) {
       try {
         window.__dbg.buildCalls += 1;
-        
+
+        // CRITICAL: Legacy mode check - if sections not enabled, use current code unchanged
+        // This ensures zero impact on existing functionality
+        if (!state.sections || !state.sections.enabled || !state.sections.attachments || state.sections.attachments.length === 0) {
+          // LEGACY PATH - existing code runs exactly as before
+          renderLegacyMode(state);
+          return;
+        }
+
+        // NEW CODE PATH - only executes when sections.enabled === true AND attachments exist
+        // TODO: Phase 1.3 - Multi-section rendering (will be implemented after legacy path is verified)
+        // For now, fall back to legacy mode
+        renderLegacyMode(state);
+
+      } catch (e) {
+        window.__dbg.lastError = "render() failed: " + String(e && e.message ? e.message : e);
+      }
+    }
+
+    // Legacy single-building render path - preserved unchanged from original render()
+    function renderLegacyMode(state) {
         var R = resolveDims(state);
         var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
@@ -1034,9 +1055,6 @@ if (getWallsEnabled(state)) {
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           });
         } catch (e2) {}
-      } catch (e) {
-        window.__dbg.lastError = "render() failed: " + String(e && e.message ? e.message : e);
-      }
     }
 
     function getOpeningsFromState(state) {
