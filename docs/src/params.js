@@ -20,7 +20,8 @@ export const DEFAULTS = {
     deck: true,
     wallsEnabled: true,
     walls: { front: true, back: true, left: true, right: true },
-    cladding: true
+    cladding: true,
+    roof: true
   },
   dimMode: "frame",
   dimGap_mm: 50,
