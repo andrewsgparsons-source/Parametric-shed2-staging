@@ -201,11 +201,21 @@ function initApp() {
     } catch (e) {}
 
   var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
+
+    // Debug: Log what we're starting with
+    console.log("[INIT] DEFAULTS.vis:", DEFAULTS.vis);
+    console.log("[INIT] defaultPreset.state.vis:", defaultPreset?.state?.vis);
+
     var initialState = defaultPreset && defaultPreset.state
       ? deepMerge(DEFAULTS, defaultPreset.state)
       : DEFAULTS;
+
+    console.log("[INIT] initialState.vis after deepMerge:", initialState.vis);
+
     var store = createStateStore(initialState);
     window.__dbg.store = store; // Expose for debugging
+
+    console.log("[INIT] store.getState().vis after createStateStore:", store.getState().vis);
 
     var vWallsEl = $("vWalls");
     var vRoofEl = $("vRoof");
