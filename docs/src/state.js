@@ -10,7 +10,15 @@ export function createStateStore(initial) {
   }
 
   function setState(patch) {
+    // Debug logging for vis updates
+    if (patch && patch.vis) {
+      console.log("[setState] BEFORE merge - state.vis:", JSON.parse(JSON.stringify(state.vis)));
+      console.log("[setState] Patch.vis:", JSON.parse(JSON.stringify(patch.vis)));
+    }
     state = deepMerge(state, patch);
+    if (patch && patch.vis) {
+      console.log("[setState] AFTER merge - state.vis:", JSON.parse(JSON.stringify(state.vis)));
+    }
     subs.forEach((fn) => fn(state));
     return state;
   }
