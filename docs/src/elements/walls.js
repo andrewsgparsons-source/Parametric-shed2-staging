@@ -31,9 +31,14 @@ import { CONFIG, resolveDims } from "../params.js";
  * @param {any} state Derived state for walls (w/d already resolved to frame outer dims)
  * @param {{scene:BABYLON.Scene, materials:any}} ctx
  */
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx;
   const variant = state.walls?.variant || "insulated";
+
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
 
   // Precompute apex roof underside model once per rebuild (used only for gable cladding trim + height).
   const apexRoofModel = (state && state.roof && String(state.roof.style || "") === "apex")
@@ -64,20 +69,26 @@ export function build3D(state, ctx) {
     }
   }
 
+  // Dispose existing meshes for this section (or all wall meshes in legacy mode)
+  const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+  const wallPrefix = meshPrefix + "wall-";
+  const cladPrefix = meshPrefix + "clad-";
+  const cornerPrefix = meshPrefix + "corner-board-";
+
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("wall-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(wallPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
 
-scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("clad-"))
+  scene.meshes
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(cladPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
 
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("corner-board-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(cornerPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
@@ -748,7 +759,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const panelLenAdj = Math.max(1, panelLen - xShift_mm);
 
         const b0 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
           panelLenAdj,
           hBottomStrip,
           CLAD_T,
@@ -763,7 +774,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const zUpperMin = boardCenterWorldZ_upper - (tUpper / 2);
 
         const b1 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
           panelLenAdj,
           hUpperStrip,
           tUpper,
@@ -819,7 +830,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         console.log(`[CLADDING_Z_POSITION] Wall=${wallId}, Panel=${panelIndex}, Course=${i}, zMin_mm=${zMin_mm}, origin.z=${origin.z}, panelStart=${panelStart}, zStart_mm=${zStart_mm}, expected=${origin.z + panelStart}, DIFF=${zStart_mm - (origin.z + panelStart)}`);
 
         const b0 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
           CLAD_T,
           hBottomStrip,
           panelLenAdj,
@@ -834,7 +845,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const xUpperMin = boardCenterWorldX_upper - (tUpper / 2);
 
         const b1 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
           tUpper,
           hUpperStrip,
           panelLenAdj,
@@ -1040,7 +1051,7 @@ for (let i = 0; i < wins.length; i++) {
               try {
                 const baseCSG = BABYLON.CSG.FromMesh(merged);
                 const resCSG = baseCSG.subtract(cutterCSG);
-                resMesh = resCSG.toMesh(`clad-${wallId}-panel-${panelIndex}`, mat, scene, false);
+                resMesh = resCSG.toMesh(`${meshPrefix}clad-${wallId}-panel-${panelIndex}`, mat, scene, false);
               } catch (e) {
                 resMesh = null;
               }
@@ -1286,7 +1297,7 @@ if (apexRoofModel) {
               try {
                 const baseCSG = BABYLON.CSG.FromMesh(merged);
                 const resCSG = baseCSG.subtract(cutterCSG);
-                resMesh = resCSG.toMesh(`clad-${wallId}-panel-${panelIndex}-roofclip`, mat, scene, false);
+                resMesh = resCSG.toMesh(`${meshPrefix}clad-${wallId}-panel-${panelIndex}-roofclip`, mat, scene, false);
               } catch (e) {
                 resMesh = null;
               }
@@ -1301,7 +1312,7 @@ if (apexRoofModel) {
       } catch (e) {}
       // ---- END roof clip ----
 
-merged.name = `clad-${wallId}-panel-${panelIndex}`;
+merged.name = `${meshPrefix}clad-${wallId}-panel-${panelIndex}`;
       // Apply wall overhang shift for front/back walls only
       // Front/back cladding is built using origin coordinates, not plate bbox world positions,
       // so it needs the -25mm X shift to match the wall frame position.
@@ -1487,10 +1498,10 @@ function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPe
   const backZ = leftWallMaxZ + cornerBoardWidth / 2;
   
   // Create the four corner boards
-  createCornerBoard("corner-board-left-front", leftX, frontZ, "left");
-  createCornerBoard("corner-board-left-back", leftX, backZ, "left");
-  createCornerBoard("corner-board-right-front", rightX, frontZ, "right");
-  createCornerBoard("corner-board-right-back", rightX, backZ, "right");
+  createCornerBoard(meshPrefix + "corner-board-left-front", leftX, frontZ, "left");
+  createCornerBoard(meshPrefix + "corner-board-left-back", leftX, backZ, "left");
+  createCornerBoard(meshPrefix + "corner-board-right-front", rightX, frontZ, "right");
+  createCornerBoard(meshPrefix + "corner-board-right-back", rightX, backZ, "right");
 }
   
 function scheduleDeferredCladdingPass() {
@@ -2297,7 +2308,8 @@ mkBox(
 
   function buildWall(wallId, axis, length, origin) {
     const isAlongX = axis === "x";
-    const wallPrefix = `wall-${wallId}-`;
+    // Use section-aware prefix from outer scope (defined at top of build3D)
+    const wallMeshPrefix = meshPrefix + `wall-${wallId}-`;
 
     const doors = doorIntervalsForWall(wallId);
     const wins = windowIntervalsForWall(wallId);
@@ -2312,7 +2324,7 @@ mkBox(
     const studLenFlat = Math.max(1, wallHeightFlat - 2 * plateY);
 
 if (isAlongX) {
-      mkBox(wallPrefix + "plate-bottom", length, plateY, wallThk, { x: origin.x, y: 0, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-bottom", length, plateY, wallThk, { x: origin.x, y: 0, z: origin.z }, materials.plate);
       if (!isSlopeWall) {
         // Check if this is an apex gable wall with a door extending into the gable
         const isApexGableWall = !isPent && (state && state.roof && String(state.roof.style || "") === "apex") && (wallId === "front" || wallId === "back");
@@ -2341,7 +2353,7 @@ if (isAlongX) {
           const leftPlateLen = Math.max(0, doorLeftEdge);
           if (leftPlateLen > prof.studW) {
             mkBox(
-              wallPrefix + "plate-top-left",
+              wallMeshPrefix + "plate-top-left",
               leftPlateLen,
               plateY,
               wallThk,
@@ -2355,7 +2367,7 @@ if (isAlongX) {
           const rightPlateLen = Math.max(0, length - rightPlateStart);
           if (rightPlateLen > prof.studW) {
             mkBox(
-              wallPrefix + "plate-top-right",
+              wallMeshPrefix + "plate-top-right",
               rightPlateLen,
               plateY,
               wallThk,
@@ -2365,14 +2377,14 @@ if (isAlongX) {
           }
         } else {
           // Normal full top plate
-          mkBox(wallPrefix + "plate-top", length, plateY, wallThk, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
+          mkBox(wallMeshPrefix + "plate-top", length, plateY, wallThk, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
         }
       } else {
 
         const yTop0 = heightAtX(origin.x);
         const yTop1 = heightAtX(origin.x + length);
         mkSlopedPlateAlongX(
-          wallPrefix + "plate-top",
+          wallMeshPrefix + "plate-top",
           length,
           wallThk,
           { x: origin.x, z: origin.z },
@@ -2383,8 +2395,8 @@ if (isAlongX) {
         );
       }
     } else {
-      mkBox(wallPrefix + "plate-bottom", wallThk, plateY, length, { x: origin.x, y: 0, z: origin.z }, materials.plate);
-      mkBox(wallPrefix + "plate-top", wallThk, plateY, length, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-bottom", wallThk, plateY, length, { x: origin.x, y: 0, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-top", wallThk, plateY, length, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
     }
 
     const studLenForXStart = (xStartRel) => {
@@ -2399,7 +2411,7 @@ if (isAlongX) {
 
       for (let p = 0; p < panels.length; p++) {
         const pan = panels[p];
-        const pref = wallPrefix + `panel-${p + 1}-`;
+        const pref = wallMeshPrefix + `panel-${p + 1}-`;
         buildBasicPanel(
           pref,
           axis,
@@ -2480,9 +2492,9 @@ if (apexH && Number.isFinite(apexH.crest_mm)) {
     const placeStud = (x, z, posStartRel) => {
       const h = isAlongX ? studLenForXStart(posStartRel) : studLenFlat;
       if (isAlongX) {
-        studs.push(mkBox(wallPrefix + "stud-" + studs.length, prof.studW, h, wallThk, { x, y: plateY, z }, materials.timber));
+        studs.push(mkBox(wallMeshPrefix + "stud-" + studs.length, prof.studW, h, wallThk, { x, y: plateY, z }, materials.timber));
       } else {
-        studs.push(mkBox(wallPrefix + "stud-" + studs.length, wallThk, h, prof.studW, { x, y: plateY, z }, materials.timber));
+        studs.push(mkBox(wallMeshPrefix + "stud-" + studs.length, wallThk, h, prof.studW, { x, y: plateY, z }, materials.timber));
       }
     };
 
