@@ -53,8 +53,14 @@ export function build3D(state, ctx) {
     const winX = Math.floor(win.x_mm || 0);
     const winY = Math.max(0, Math.floor(win.y_mm || 800)); // Height from floor
 
+    // FIX: For front/back walls, window frame is asymmetric (left upright extends studW left, right extends 0)
+    // Shift window LEFT by half studW to center in the visual frame
+    const studW = prof.studW;
+    const isLeftRight = (wallId === "left" || wallId === "right");
+    const adjustedWinX = isLeftRight ? winX : (winX - studW / 2);
+
     // Calculate window position based on wall
-    const pos = getWindowPosition(wallId, dims, wallThk, winX, winWidth, winHeight, winY, plateY, WALL_RISE_MM);
+    const pos = getWindowPosition(wallId, dims, wallThk, adjustedWinX, winWidth, winHeight, winY, plateY, WALL_RISE_MM);
 
     buildWindow(scene, win, pos, winWidth, winHeight, index, materials);
   });
@@ -101,14 +107,14 @@ function getWindowPosition(wallId, dims, wallThk, winX, winWidth, winHeight, win
         x: winX + winWidth / 2,
         y: yCenter,
         z: -offset,
-        rotation: 0
+        rotation: Math.PI  // Match door rotation - face outward
       };
     case "back":
       return {
         x: winX + winWidth / 2,
         y: yCenter,
         z: dims.d + offset,
-        rotation: Math.PI
+        rotation: 0  // Opposite of front
       };
 case "left":
       return {
@@ -137,6 +143,8 @@ function buildWindow(scene, win, pos, winWidth, winHeight, index, materials) {
   const frameThickness_mm = 40;
   const frameDepth_mm = 50;
   const glazingBarWidth_mm = 20;
+
+  console.log(`[WINDOW_ASSEMBLY] WindowID=${win.id}, Wall=${win.wall}, winWidth=${winWidth}, winHeight=${winHeight}, pos.x=${pos.x}, pos.z=${pos.z}`);
 
   const mats = scene._windowMaterials;
 

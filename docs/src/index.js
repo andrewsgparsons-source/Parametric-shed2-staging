@@ -1389,13 +1389,23 @@ var styleLabel = document.createElement("label");
 var styleSel = document.createElement("select");
           var doorWidthMm = Math.floor(Number(door.width_mm || 900));
           var styleOptions = '<option value="standard">Standard</option>';
+          if (doorWidthMm >= 1200) {
+            styleOptions += '<option value="double-standard">Double Standard</option>';
+          }
+          styleOptions += '<option value="mortise-tenon">Mortise & Tenon</option>';
+          if (doorWidthMm >= 1200) {
+            styleOptions += '<option value="double-mortise-tenon">Double Mortise & Tenon</option>';
+          }
           if (doorWidthMm > 1200) {
             styleOptions += '<option value="french">French Doors</option>';
           }
-          styleOptions += '<option value="mortise-tenon">Mortise & Tenon</option>';
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
           if (currentStyle === "french" && doorWidthMm <= 1200) {
+            currentStyle = "standard";
+            patchOpeningById(id, { style: "standard" });
+          }
+          if ((currentStyle === "double-standard" || currentStyle === "double-mortise-tenon") && doorWidthMm < 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
