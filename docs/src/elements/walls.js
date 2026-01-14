@@ -41,22 +41,26 @@ export function build3D(state, ctx) {
     : null;
 
   // Wall height is normally driven by state.walls.height_mm.
-  // APEX ONLY: "Height to Eaves" is a ground-referenced target for the roof eaves UNDERSIDE at the wall line.
-  // To make that control drive the building, we implicitly drive the wall frame height here.
-  // Base-aware: if the building has a raised base/plinth, we subtract that rise so the final eaves underside
-  // remains at the requested ground-referenced height.
+  // APEX ONLY: "Height to Eaves" is the DRIVING dimension = underside of truss tie beams.
+  // Wall frame height is DERIVED from eaves height.
   //
-  // NOTE: deterministic correction (shared with roof logic):
-  // - If crest < eaves, crest is clamped up to eaves (no inverted roof).
+  // IMPORTANT: Walls are shifted up by WALL_RISE_MM (168mm) externally in index.js via shiftWallMeshes().
+  // So the wall frame height (in local coords) must account for this shift.
+  //
+  // Calculation:
+  // - Height to Eaves = tie beam underside (world Y) = wall_plate_top (world Y)
+  // - Wall plate top (world) = wallH + WALL_RISE_MM
+  // - Therefore: wallH = HeightToEaves - WALL_RISE_MM
+  const WALL_RISE_MM = 168; // Floor frame rise (applied externally in index.js)
+
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
   if (state && state.roof && String(state.roof.style || "") === "apex") {
-    const baseRise_mm = resolveBaseRiseMm(state);
     const apexH = resolveApexHeightsMm(state);
     if (apexH && Number.isFinite(apexH.eaves_mm)) {
-      // Wall frame height is measured from the local "ground" used by walls (world Y=0).
-      // We clamp to a sane minimum so plates can exist.
+      // Wall frame height = eaves height - external wall rise shift
       const minWallH_mm = Math.max(100, 2 * 50 + 1); // 2 plates (approx) + 1mm
-      height = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - baseRise_mm));
+      height = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - WALL_RISE_MM));
+      console.log(`[WALLS] Height to Eaves: ${apexH.eaves_mm}mm, WALL_RISE: ${WALL_RISE_MM}mm, Derived wall frame height: ${height}mm`);
     }
   }
 
@@ -359,6 +363,9 @@ if (isPent) {
   function addCladdingForPanel(wallId, axis, panelIndex, panelStart, panelLen, origin, panelHeight, buildPass) {
     const isAlongX = axis === "x";
 
+    // Log the origin coordinates used for cladding panel
+    console.log(`[CLADDING_ORIGIN] Wall=${wallId}, Panel=${panelIndex}, origin.x=${origin.x}, origin.z=${origin.z}, panelStart=${panelStart}, panelLen=${panelLen}`);
+
     if (__DIAG_ONE_FRONT_ONE_BOARD) {
       if (!(String(wallId) === "front" && Number(panelIndex) === 1)) {
         return { created: 0, anchor: null, reason: "diagSkipNotFrontPanel1" };
@@ -475,6 +482,7 @@ if (topPlateMesh && topPlateMesh.getBoundingInfo) {
           xMax_mm = Number(bb.maximumWorld.x) * 1000;
           zMin_mm = Number(bb.minimumWorld.z) * 1000;
           zMax_mm = Number(bb.maximumWorld.z) * 1000;
+          console.log(`[PLATE_BBOX] Wall=${wallId}, Panel=${panelIndex}, plateName=${plateName}, xMin=${xMin_mm}, xMax=${xMax_mm}, zMin=${zMin_mm}, zMax=${zMax_mm}`);
         }
       }
     } catch (e) {}
@@ -808,6 +816,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const zStart_mm = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
         const zEnd_mm = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
         const panelLenAdj = Math.max(1, zEnd_mm - zStart_mm);
+        console.log(`[CLADDING_Z_POSITION] Wall=${wallId}, Panel=${panelIndex}, Course=${i}, zMin_mm=${zMin_mm}, origin.z=${origin.z}, panelStart=${panelStart}, zStart_mm=${zStart_mm}, expected=${origin.z + panelStart}, DIFF=${zStart_mm - (origin.z + panelStart)}`);
 
         const b0 = mkBox(
           `clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
@@ -925,8 +934,10 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
           const cutters = [];
 
           function addCutterSpan(a0, a1, y0, y1) {
+            console.log(`[CUTTER_CLAMP] Wall=${wallId}, panelA0=${panelA0}, panelA1=${panelA1}, a0=${a0}, a1=${a1}`);
             const s0 = Math.max(panelA0, Math.floor(Number(a0)));
             const s1 = Math.min(panelA1, Math.floor(Number(a1)));
+            console.log(`[CUTTER_RESULT] After clamping: s0=${s0}, s1=${s1}, len=${s1-s0}`);
             const len = Math.max(0, s1 - s0);
             const hh = Math.max(0, Math.floor(Number(y1)) - Math.floor(Number(y0)));
             if (len < 1 || hh < 1) return;
@@ -935,17 +946,30 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
             let m = null;
 
             if (isAlongX) {
+              // Front/back walls use origin.x directly (no plate bbox offset issue)
+              const cutoutLeftEdge = origin.x + s0;
+              const cutoutRightEdge = origin.x + s1;
+              const cutoutX = origin.x + s0 + len / 2;
+              console.log(`[CUTOUT_X] Wall=${wallId}, origin.x=${origin.x}, EDGES: Left=${cutoutLeftEdge}, Right=${cutoutRightEdge}`);
               m = BABYLON.MeshBuilder.CreateBox(
                 name,
                 { width: len / 1000, height: hh / 1000, depth: cutDepth / 1000 },
                 scene
               );
               m.position = new BABYLON.Vector3(
-                (origin.x + s0 + len / 2) / 1000,
+                cutoutX / 1000,
                 (Math.floor(Number(y0)) + hh / 2) / 1000,
                 (cutMinOut_mm + cutDepth / 2) / 1000
               );
 } else {
+              // FIX: Use wall origin coordinates for left/right wall cutouts
+              // s0 and s1 are already in wall coordinates (0 to wall_length),
+              // so we add origin.z to convert to world coordinates.
+              // This matches how front/back walls work (origin.x + s0)
+              const cutoutLeftEdge = origin.z + s0;
+              const cutoutRightEdge = origin.z + s1;
+              const cutoutZ = origin.z + s0 + len / 2;
+              console.log(`[CUTOUT_Z] Wall=${wallId}, origin.z=${origin.z}, s0=${s0}, s1=${s1}, cutoutZ=${cutoutZ}, EDGES: Left=${cutoutLeftEdge} (origin.z + s0), Right=${cutoutRightEdge} (origin.z + s1)`);
               m = BABYLON.MeshBuilder.CreateBox(
                 name,
                 { width: cutDepth / 1000, height: hh / 1000, depth: len / 1000 },
@@ -954,23 +978,27 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
               m.position = new BABYLON.Vector3(
                 (cutMinOut_mm + cutDepth / 2) / 1000,
                 (Math.floor(Number(y0)) + hh / 2) / 1000,
-                (s0 + len / 2) / 1000
+                cutoutZ / 1000
               );
             }
 
             if (m) cutters.push(m);
           }
 
+console.log(`[CLADDING_CSG] Wall=${wallId}, Panel=${panelIndex}, PanelStart=${panelStart}, PanelLen=${panelLen}, Processing ${doors.length} doors for cutouts`);
 for (let i = 0; i < doors.length; i++) {
             const d = doors[i];
+            console.log(`[DOOR_CUTOUT] Wall=${wallId}, Panel=${panelIndex}, DoorID=${d.id}, d.x0=${d.x0}, d.x1=${d.x1}, calling addCutterSpan`);
             // Door cladding cut must use world coordinates (cladding is shifted by wallBottomPlateBottomY_mm)
             const y0 = wallBottomPlateBottomY_mm + plateY;
             const y1 = wallBottomPlateBottomY_mm + plateY + Math.max(1, Math.floor(Number(d.h || 0)));
             addCutterSpan(d.x0, d.x1, y0, y1);
           }
 
+console.log(`[WINDOW_CSG] Wall=${wallId}, Panel=${panelIndex}, Processing ${wins.length} windows for cutouts`);
 for (let i = 0; i < wins.length; i++) {
             const w = wins[i];
+            console.log(`[WINDOW_CUTOUT] Wall=${wallId}, Panel=${panelIndex}, WindowID=${w.id}, w.x0=${w.x0}, w.x1=${w.x1}, calling addCutterSpan`);
             // Match window framing Y calculation exactly:
             // Window framing uses wallTop which varies by position for sloped walls
             const isSlopeWallClad = isPent && isAlongX && (String(wallId) === "front" || String(wallId) === "back");
@@ -980,7 +1008,7 @@ for (let i = 0; i < wins.length; i++) {
             // Cladding is built in world coordinates (anchored to shifted plate mesh).
             // Window y values are in local wall coordinates, so we need to add the wall shift.
             const wallShiftY = wallBottomPlateBottomY_mm;
-            
+
             const y0WinLocal = plateY + Math.max(0, Math.floor(Number(w.y || 0)));
             const yTopWinLocal = y0WinLocal + Math.max(100, Math.floor(Number(w.h || 0)));
             const maxFeatureYLocal = Math.max(plateY, wallTopForWin - prof.studH);
@@ -1737,10 +1765,30 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
       const d = doorsAll[i];
       if (String(d.wall || "front") !== wallId) continue;
       const wGap = Math.max(100, Math.floor(d.width_mm || 800));
-      const x0 = Math.floor(d.x_mm ?? 0);
-      const x1 = x0 + wGap;
+      const x0_door = Math.floor(d.x_mm ?? 0);
+      const x1_door = x0_door + wGap;
       const h = Math.max(100, Math.floor(d.height_mm || 2000));
-      list.push({ id: String(d.id || ""), x0, x1, w: wGap, h });
+
+      // FIX: Reduce cutout height to match actual door boards height (door - 40mm)
+      const hActual = Math.max(100, h - 40);
+
+      // FIX: Cutout must match the APERTURE (opening between uprights), not the upright positions
+      // The aperture is the inside dimensions - from x0_door to x1_door
+      // This way the cladding covers the uprights (frame sits behind cladding)
+      const x0 = x0_door;  // Aperture left edge (inner edge of left upright)
+      const x1 = x1_door;  // Aperture right edge (inner edge of right upright)
+
+      console.log(`[DOOR_INTERVALS] Wall=${wallId}, DoorID=${d.id}, x0_door=${x0_door}, x1_door=${x1_door}, x0_cutout=${x0}, x1_cutout=${x1}, width=${wGap}, studW=${prof.studW}`);
+
+      list.push({
+        id: String(d.id || ""),
+        x0,           // Expanded cutout start
+        x1,           // Expanded cutout end
+        doorX0: x0_door,  // Original door start (for frame positioning)
+        doorX1: x1_door,  // Original door end (for frame positioning)
+        w: wGap,      // Original door width
+        h: hActual
+      });
     }
     return list;
   }
@@ -1751,12 +1799,30 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
       const w = winsAll[i];
       if (String(w.wall || "front") !== wallId) continue;
       const wGap = Math.max(100, Math.floor(w.width_mm || 600));
-      const x0 = Math.floor(w.x_mm ?? 0);
-      const x1 = x0 + wGap;
+      const x0_win = Math.floor(w.x_mm ?? 0);
+      const x1_win = x0_win + wGap;
 
       const y = Math.max(0, Math.floor(w.y_mm ?? 0));
       const h = Math.max(100, Math.floor(w.height_mm || 600));
-      list.push({ id: String(w.id || ""), x0, x1, w: wGap, y, h });
+
+      // FIX: Window cutout must match the window frame APERTURE
+      // Windows have DIFFERENT framing on different walls:
+      // Front/Back (alongX): Left upright at (x0 - studW), Right at x1 → aperture is x0 to x1 (like doors)
+      // Left/Right (alongZ): Left upright at (x0 - 2×studW), Right at (x1 - studW) → aperture is (x0 - studW) to (x1 - studW)
+      const isLeftRight = (wallId === "left" || wallId === "right");
+      const x0 = isLeftRight ? (x0_win - prof.studW) : x0_win;  // Aperture left edge
+      const x1 = isLeftRight ? (x1_win - prof.studW) : x1_win;  // Aperture right edge
+
+      list.push({
+        id: String(w.id || ""),
+        x0,           // Cutout start (matches aperture)
+        x1,           // Cutout end (matches aperture)
+        winX0: x0_win,  // Original window start (for frame positioning)
+        winX1: x1_win,  // Original window end (for frame positioning)
+        w: wGap,      // Original window width
+        y,
+        h
+      });
     }
     return list;
   }
@@ -1777,8 +1843,11 @@ function addDoorFramingAlongX(wallId, origin, door) {
     const useInvalid = invalidDoorSet.has(String(id));
     const mat = useInvalid && invalidMat ? invalidMat : materials.timber;
 
-    const doorX0 = door.x0;
-    const doorX1 = door.x1;
+    // Use original door coordinates for frame positioning, not expanded cutout coordinates
+    const doorX0 = door.doorX0 || door.x0;  // Fallback to x0 for backwards compatibility
+    const doorX1 = door.doorX1 || door.x1;
+
+    console.log(`[FRAME_X] Wall=${wallId}, DoorID=${id}, origin.x=${origin.x}, doorX0=${doorX0}, doorX1=${doorX1}, leftUpright=${origin.x + (doorX0 - prof.studW)}, rightUpright=${origin.x + doorX1}`);
 
     const isSlopeWall = isPent && (wallId === "front" || wallId === "back");
     const isApexGableWall = !isPent && (state && state.roof && String(state.roof.style || "") === "apex") && (wallId === "front" || wallId === "back");
@@ -1901,8 +1970,18 @@ function addDoorFramingAlongZ(wallId, origin, door) {
     const useInvalid = invalidDoorSet.has(String(id));
     const mat = useInvalid && invalidMat ? invalidMat : materials.timber;
 
-    const doorZ0 = door.x0;
-    const doorZ1 = door.x1;
+    // Use original door coordinates for frame positioning, not expanded cutout coordinates
+    const doorZ0 = door.doorX0 || door.x0;  // Fallback to x0 for backwards compatibility
+    const doorZ1 = door.doorX1 || door.x1;
+
+    const leftUprightPos = origin.z + (doorZ0 - prof.studW);
+    const rightUprightPos = origin.z + doorZ1;
+    const apertureLeft = origin.z + doorZ0;  // Inner edge of left upright = outer edge of aperture
+    const apertureRight = origin.z + doorZ1;  // Inner edge of right upright = outer edge of aperture
+    console.log(`[FRAME_Z] Wall=${wallId}, DoorID=${id}, origin.z=${origin.z}, doorZ0=${doorZ0}, doorZ1=${doorZ1}, prof.studW=${prof.studW}`);
+    console.log(`[FRAME_Z_DETAIL] leftUpright=${leftUprightPos} (origin.z + doorZ0 - prof.studW = ${origin.z} + ${doorZ0} - ${prof.studW})`);
+    console.log(`[FRAME_Z_DETAIL] rightUpright=${rightUprightPos} (origin.z + doorZ1 = ${origin.z} + ${doorZ1})`);
+    console.log(`[FRAME_Z_APERTURE] Aperture edges: Left=${apertureLeft}, Right=${apertureRight}`);
 
     const wallTop = isPent ? (wallId === "left" ? minH : maxH) : height;
     const studLenLocal = Math.max(1, wallTop - 2 * plateY);
@@ -1976,8 +2055,17 @@ function addDoorFramingAlongZ(wallId, origin, door) {
     const useInvalid = invalidWinSet.has(String(id));
     const mat = useInvalid && invalidMat ? invalidMat : materials.timber;
 
-    const x0 = win.x0;
-    const x1 = win.x1;
+    // Use original window coordinates for frame positioning, not expanded cutout coordinates
+    const x0 = win.winX0 || win.x0;  // Fallback to x0 for backwards compatibility
+    const x1 = win.winX1 || win.x1;
+
+    const leftUprightPos = origin.x + (x0 - prof.studW);
+    const rightUprightPos = origin.x + x1;
+    const apertureLeft = origin.x + x0;
+    const apertureRight = origin.x + x1;
+    const apertureCenter = origin.x + (x0 + x1) / 2;
+    console.log(`[WINDOW_FRAME_X] Wall=${wallId}, WindowID=${id}, origin.x=${origin.x}, x0=${x0}, x1=${x1}, prof.studW=${prof.studW}`);
+    console.log(`[WINDOW_FRAME_X_APERTURE] Aperture: Left=${apertureLeft}, Right=${apertureRight}, Center=${apertureCenter}`);
 
     const isSlopeWall = isPent && (wallId === "front" || wallId === "back");
     const centerX = origin.x + Math.floor((x0 + x1) / 2);
@@ -2041,8 +2129,17 @@ mkBox(
     const useInvalid = invalidWinSet.has(String(id));
     const mat = useInvalid && invalidMat ? invalidMat : materials.timber;
 
-    const z0 = win.x0;
-    const z1 = win.x1;
+    // Use original window coordinates for frame positioning, not expanded cutout coordinates
+    const z0 = win.winX0 || win.x0;  // Fallback to x0 for backwards compatibility
+    const z1 = win.winX1 || win.x1;
+
+    const leftUprightPos = origin.z + z0 - 2 * prof.studW;
+    const rightUprightPos = origin.z + z1 - prof.studW;
+    const apertureLeft = origin.z + z0 - prof.studW;   // Inner edge of left upright
+    const apertureRight = origin.z + z1 - prof.studW;  // Inner edge of right upright
+    console.log(`[WINDOW_FRAME_Z] Wall=${wallId}, WindowID=${id}, origin.z=${origin.z}, z0=${z0}, z1=${z1}, prof.studW=${prof.studW}`);
+    console.log(`[WINDOW_FRAME_Z_DETAIL] leftUpright=${leftUprightPos} (origin.z + z0 - 2×studW), rightUpright=${rightUprightPos} (origin.z + z1 - studW)`);
+    console.log(`[WINDOW_FRAME_Z_APERTURE] Aperture edges: Left=${apertureLeft}, Right=${apertureRight}`);
 
     const wallTop = isPent ? (wallId === "left" ? minH : maxH) : height;
     const studLenLocal = Math.max(1, wallTop - 2 * plateY);

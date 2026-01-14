@@ -1223,7 +1223,6 @@ function buildApex(state, ctx) {
     apex && apex.eavesHeight_mm,
     apex && apex.heightToEaves_mm,
     apex && apex.eaves_mm,
-    apex && apex.minHeight_mm,
     apex && apex.heightEaves_mm
   );
 
@@ -1231,7 +1230,6 @@ function buildApex(state, ctx) {
     apex && apex.crestHeight_mm,
     apex && apex.heightToCrest_mm,
     apex && apex.crest_mm,
-    apex && apex.maxHeight_mm,
     apex && apex.ridgeHeight_mm,
     apex && apex.heightCrest_mm
   );
@@ -2144,28 +2142,57 @@ if (roofParts.osb) {
   roofRoot.position.x += (targetMinX_m - minCornerX);
   roofRoot.position.z += (targetMinZ_m - minCornerZ);
 
-  const wallH_mm = Math.max(100, Math.floor(Number(state && state.walls && state.walls.height_mm != null ? state.walls.height_mm : 2400)));
+  const WALL_RISE_MM = 168;  // Floor rise (applied externally in index.js)
 
   // APEX height positioning:
-  // - If Height-to-Eaves + Height-to-Crest are provided, we position the roof in world-Y so that the
-  //   OSB UNDERSIDE at the wall line lands exactly on Height-to-Eaves (ground-referenced, mm).
-  // - Otherwise, keep legacy behavior: roof sits on top of the walls (roofRoot.y = wallH).
-  if (Number.isFinite(eavesTargetAbs_mm) && Number.isFinite(crestTargetAbs_mm)) {
-    // The roof plane used by purlins/OSB has baseline y = memberD_mm at the wall line (tie top).
-    // OSB underside sits outward along the roof normal by (memberD_mm + OSB_CLEAR_MM).
-    const OSB_CLEAR_MM = 1;
+  // - Height-to-Eaves is the DRIVING dimension = absolute height of TIE BEAM UNDERSIDE (not OSB underside)
+  // - Wall height is DERIVED from eaves height
+  // - Trusses sit ON TOP of the wall plate
+  //
+  // IMPORTANT: index.js applies an external shift of +WALL_RISE_MM (168mm) to ALL roof meshes via shiftRoofMeshes().
+  // So roofRoot.position.y here is in "pre-shift" local coordinates.
 
+  let wallH_mm;
+
+  if (Number.isFinite(eavesTargetAbs_mm) && Number.isFinite(crestTargetAbs_mm)) {
+    // HEIGHT TO EAVES = underside of truss tie beams (world Y coordinate)
+    // Position roof so tie beam underside (at local y=0) is at eavesTargetAbs_mm
+    //
+    // Calculation:
+    // - Tie beam underside (world) = roofRoot.y + WALL_RISE_MM = eavesTargetAbs_mm
+    // - Therefore: roofRoot.y = eavesTargetAbs_mm - WALL_RISE_MM
+    const roofRootY_mm = Math.floor(eavesTargetAbs_mm - WALL_RISE_MM);
+    roofRoot.position.y = roofRootY_mm / 1000;
+
+    // Wall height is derived: wall top plate must align with tie beam bottom
+    // Wall frame height (in local coords, before WALL_RISE shift) = eavesTargetAbs_mm - WALL_RISE_MM
+    wallH_mm = eavesTargetAbs_mm - WALL_RISE_MM;
+
+    // DEBUG: Verify the positioning
+    const tieBeamBottomWorldY = roofRootY_mm + WALL_RISE_MM;
+    const wallPlateTopY_mm = wallH_mm + WALL_RISE_MM;
+    const gap_mm = tieBeamBottomWorldY - wallPlateTopY_mm;
+
+    // Calculate OSB underside for informational purposes
+    const OSB_CLEAR_MM = 1;
     const halfSpan_mm = Math.max(1, Math.floor(A_mm / 2));
     const den = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
     const cosT = den > 1e-6 ? (halfSpan_mm / den) : 1;
-
-    // Local Y of OSB underside at the wall line (before roofRoot world translation)
     const eavesUnderLocalY_mm = memberD_mm + cosT * (memberD_mm + OSB_CLEAR_MM);
+    const osbUndersideWorldY = tieBeamBottomWorldY + eavesUnderLocalY_mm;
 
-    // Solve roofRoot world-Y so that:
-    // roofRootY + eavesUnderLocalY == eavesTargetAbs
-    roofRoot.position.y = (Number(eavesTargetAbs_mm) - eavesUnderLocalY_mm) / 1000;
+    console.log(`[APEX_ROOF] === POSITIONING DEBUG ===`);
+    console.log(`[APEX_ROOF] Height to Eaves (INPUT): ${eavesTargetAbs_mm}mm = tie beam underside`);
+    console.log(`[APEX_ROOF] WALL_RISE: ${WALL_RISE_MM}mm`);
+    console.log(`[APEX_ROOF] Derived wall frame height: ${wallH_mm}mm`);
+    console.log(`[APEX_ROOF] roofRoot.y (pre-shift): ${roofRootY_mm}mm`);
+    console.log(`[APEX_ROOF] Tie beam underside (world): ${tieBeamBottomWorldY.toFixed(2)}mm ✓ MATCHES EAVES TARGET`);
+    console.log(`[APEX_ROOF] Wall plate top (world): ${wallPlateTopY_mm.toFixed(2)}mm`);
+    console.log(`[APEX_ROOF] Gap (tie beam - wall plate): ${gap_mm.toFixed(2)}mm ✓ SHOULD BE 0`);
+    console.log(`[APEX_ROOF] OSB underside (world): ${osbUndersideWorldY.toFixed(2)}mm (for info only)`);
   } else {
+    // Legacy: no eaves/crest controls, use wall height from state
+    wallH_mm = Math.max(100, Math.floor(Number(state && state.walls && state.walls.height_mm != null ? state.walls.height_mm : 2400)));
     roofRoot.position.y = wallH_mm / 1000;
   }
 
