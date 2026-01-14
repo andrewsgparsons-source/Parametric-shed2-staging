@@ -12,8 +12,12 @@
 import { CONFIG, resolveDims } from "../params.js";
 
 export function build3D(state, ctx, sectionContext) {
+  console.log("[ROOF] build3D called", { state: !!state, ctx: !!ctx, sectionContext });
   const { scene, materials } = ctx || {};
-  if (!scene) return;
+  if (!scene) {
+    console.log("[ROOF] No scene, early return");
+    return;
+  }
 
   // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
   // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
@@ -23,6 +27,7 @@ export function build3D(state, ctx, sectionContext) {
   // Create section-aware mesh prefix
   const meshPrefix = sectionId ? `section-${sectionId}-` : "";
   const roofPrefix = meshPrefix + "roof-";
+  console.log("[ROOF] meshPrefix:", meshPrefix, "sectionPos:", sectionPos);
 
   // ---- Remove any prior APEX cladding-trim hooks/cutters (order-independent rebuild safety) ----
   try {
@@ -86,17 +91,21 @@ export function build3D(state, ctx, sectionContext) {
   }
 
   const style = String(state && state.roof && state.roof.style ? state.roof.style : "apex");
+  console.log("[ROOF] Roof style:", style);
 
   if (style === "pent") {
+    console.log("[ROOF] Building pent roof");
     buildPent(state, ctx, meshPrefix, sectionPos);
     return;
   }
 
   if (style === "apex") {
+    console.log("[ROOF] Building apex roof");
     buildApex(state, ctx, meshPrefix, sectionPos);
     return;
   }
 
+  console.log("[ROOF] Unsupported roof style:", style);
   // Unsupported styles: do nothing.
 }
 
