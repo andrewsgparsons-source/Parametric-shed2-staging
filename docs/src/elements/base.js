@@ -1,10 +1,15 @@
 // FILE: docs/src/elements/base.js
 import { CONFIG } from '../params.js';
 
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene } = ctx;
 
-  const shedRoot = getRoot(scene);
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: 0 } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
+
+  const shedRoot = getRoot(scene, sectionId, sectionPos);
   const meshes = getMeshes(scene);
 
   Object.values(meshes).flat().forEach(m => m.dispose());
@@ -455,10 +460,20 @@ function getLayout(state, gauge) {
   return { isWShort, rimLen, joistSpan, innerJoistLen, positions };
 }
 
-function getRoot(scene) {
-  if (!scene._shedRoot) scene._shedRoot = new BABYLON.TransformNode('root', scene);
-  scene._shedRoot.metadata = { dynamic: true };
-  return scene._shedRoot;
+function getRoot(scene, sectionId, sectionPos = { x: 0, y: 0, z: 0 }) {
+  const rootName = sectionId ? `section-${sectionId}-root` : 'root';
+  const rootKey = sectionId ? `_section${sectionId}Root` : '_shedRoot';
+
+  if (!scene[rootKey]) {
+    scene[rootKey] = new BABYLON.TransformNode(rootName, scene);
+    scene[rootKey].position = new BABYLON.Vector3(
+      sectionPos.x * 0.001,
+      sectionPos.y * 0.001,
+      sectionPos.z * 0.001
+    );
+  }
+  scene[rootKey].metadata = { dynamic: true };
+  return scene[rootKey];
 }
 
 function getMeshes(scene) {

@@ -5,15 +5,24 @@
  * - APEX: adds gable roof with repeated trusses + ridge + purlins + simple sheathing.
  *
  * All roof meshes:
- * - name prefix "roof-"
+ * - name prefix `${meshPrefix}roof-`
  * - metadata.dynamic === true
  */
 
 import { CONFIG, resolveDims } from "../params.js";
 
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
+
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
+
+  // Create section-aware mesh prefix
+  const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+  const roofPrefix = meshPrefix + "roof-";
 
   // ---- Remove any prior APEX cladding-trim hooks/cutters (order-independent rebuild safety) ----
   try {
@@ -21,7 +30,7 @@ export function build3D(state, ctx) {
       scene.onNewMeshAddedObservable.remove(scene._apexCladdingTrimObserver);
       scene._apexCladdingTrimObserver = null;
     }
-if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()) {
+    if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()) {
       scene._apexCladdingTrimCutter.dispose(false, false);
     }
     scene._apexCladdingTrimCutter = null;
@@ -29,6 +38,7 @@ if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()
   } catch (e) {}
 
   // ---- HARD DISPOSAL (meshes + transform nodes), children before parents ----
+  // Dispose only meshes for this section (or all roof meshes in legacy mode)
   const roofMeshes = [];
   const roofNodes = new Set();
 
@@ -36,7 +46,7 @@ if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()
     const m = scene.meshes[i];
     if (!m) continue;
     const nm = String(m.name || "");
-    const isRoof = nm.startsWith("roof-") && m.metadata && m.metadata.dynamic === true;
+    const isRoof = nm.startsWith(roofPrefix) && m.metadata && m.metadata.dynamic === true;
     if (isRoof) roofMeshes.push(m);
   }
 
@@ -44,7 +54,8 @@ if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()
     const n = scene.transformNodes[i];
     if (!n) continue;
     const nm = String(n.name || "");
-    if (nm === "roof-root" || nm.startsWith("roof-")) roofNodes.add(n);
+    const rootName = meshPrefix + "roof-root";
+    if (nm === rootName || nm.startsWith(roofPrefix)) roofNodes.add(n);
   }
 
   for (let i = 0; i < roofMeshes.length; i++) {
@@ -77,12 +88,12 @@ if (scene._apexCladdingTrimCutter && !scene._apexCladdingTrimCutter.isDisposed()
   const style = String(state && state.roof && state.roof.style ? state.roof.style : "apex");
 
   if (style === "pent") {
-    buildPent(state, ctx);
+    buildPent(state, ctx, meshPrefix, sectionPos);
     return;
   }
 
   if (style === "apex") {
-    buildApex(state, ctx);
+    buildApex(state, ctx, meshPrefix, sectionPos);
     return;
   }
 
@@ -112,7 +123,7 @@ export function updateBOM(state) {
 
 /* ----------------------------- PENT (existing) ----------------------------- */
 
-function buildPent(state, ctx) {
+function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
   if (!isPentEnabled(state)) return;
@@ -182,9 +193,9 @@ function buildPent(state, ctx) {
   }
 
   // ---- Build rigid roof assembly under roofRoot at identity (local underside y=0) ----
-  const roofRoot = new BABYLON.TransformNode("roof-root", scene);
+  const roofRoot = new BABYLON.TransformNode(`${meshPrefix}roof-root`, scene);
   roofRoot.metadata = { dynamic: true };
-  roofRoot.position = new BABYLON.Vector3(0, 0, 0);
+  roofRoot.position = new BABYLON.Vector3(sectionPos.x / 1000, sectionPos.y / 1000, sectionPos.z / 1000);
   roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
 
   // ---- NEW: slope (hypotenuse) correction so roof reaches high wall (pent only) ----
@@ -213,7 +224,7 @@ function buildPent(state, ctx) {
     {
       const m = mapABtoLocalXZ(0, 0, rimThkA_mm, rimRunB_mm, data.isWShort);
       mkBoxBottomLocal(
-        "roof-rim-front",
+        `${meshPrefix}roof-rim-front`,
         m.lenX,
         data.rafterD_mm,
         m.lenZ,
@@ -228,7 +239,7 @@ function buildPent(state, ctx) {
     {
       const m = mapABtoLocalXZ(rimBackA0_mm, 0, rimThkA_mm, rimRunB_mm, data.isWShort);
       mkBoxBottomLocal(
-        "roof-rim-back",
+        `${meshPrefix}roof-rim-back`,
         m.lenX,
         data.rafterD_mm,
         m.lenZ,
@@ -247,7 +258,7 @@ function buildPent(state, ctx) {
       const mapped = mapABtoLocalXZ(0, r.b0_mm, A_phys_mm, data.rafterW_mm, data.isWShort);
 
       mkBoxBottomLocal(
-        `roof-rafter-${i}`,
+        `${meshPrefix}roof-rafter-${i}`,
         mapped.lenX,
         data.rafterD_mm,
         mapped.lenZ,
@@ -282,7 +293,7 @@ function buildPent(state, ctx) {
       }
 
 const osbMesh = mkBoxBottomLocal(
-        `roof-osb-${i}`,
+        `${meshPrefix}roof-osb-${i}`,
         xLen_mm,
         data.osbThickness_mm,
         zLen_mm,
@@ -326,7 +337,7 @@ const osbMesh = mkBoxBottomLocal(
     
     // Main covering panel
     mkBoxBottomLocal(
-      "roof-covering",
+      `${meshPrefix}roof-covering`,
       coveringX_mm,
       COVERING_THK_MM,
       coveringZ_mm,
@@ -346,7 +357,7 @@ const osbMesh = mkBoxBottomLocal(
     if (data.isWShort) {
       // Slope runs along X, eaves at X=0
       mkBoxBottomLocal(
-        "roof-covering-eaves",
+        `${meshPrefix}roof-covering-eaves`,
         COVERING_THK_MM,
         FOLD_DOWN_MM,
         coveringZ_mm,
@@ -360,7 +371,7 @@ const osbMesh = mkBoxBottomLocal(
     } else {
       // Slope runs along Z, eaves at Z=0
       mkBoxBottomLocal(
-        "roof-covering-eaves",
+        `${meshPrefix}roof-covering-eaves`,
         coveringX_mm,
         FOLD_DOWN_MM,
         COVERING_THK_MM,
@@ -377,7 +388,7 @@ const osbMesh = mkBoxBottomLocal(
     if (data.isWShort) {
       // Slope runs along X, ridge at X=coveringX_mm
       mkBoxBottomLocal(
-        "roof-covering-ridge",
+        `${meshPrefix}roof-covering-ridge`,
         COVERING_THK_MM,
         FOLD_DOWN_MM,
         coveringZ_mm,
@@ -391,7 +402,7 @@ const osbMesh = mkBoxBottomLocal(
     } else {
       // Slope runs along Z, ridge at Z=coveringZ_mm
       mkBoxBottomLocal(
-        "roof-covering-ridge",
+        `${meshPrefix}roof-covering-ridge`,
         coveringX_mm,
         FOLD_DOWN_MM,
         COVERING_THK_MM,
@@ -408,7 +419,7 @@ const osbMesh = mkBoxBottomLocal(
     if (data.isWShort) {
       // Verge at Z=0, runs along X (sloped)
       mkBoxBottomLocal(
-        "roof-covering-verge-left",
+        `${meshPrefix}roof-covering-verge-left`,
         coveringX_mm,
         FOLD_DOWN_MM,
         COVERING_THK_MM,
@@ -422,7 +433,7 @@ const osbMesh = mkBoxBottomLocal(
     } else {
       // Verge at X=0, runs along Z (sloped)
       mkBoxBottomLocal(
-        "roof-covering-verge-left",
+        `${meshPrefix}roof-covering-verge-left`,
         COVERING_THK_MM,
         FOLD_DOWN_MM,
         coveringZ_mm,
@@ -439,7 +450,7 @@ const osbMesh = mkBoxBottomLocal(
     if (data.isWShort) {
       // Verge at Z=coveringZ_mm, runs along X (sloped)
       mkBoxBottomLocal(
-        "roof-covering-verge-right",
+        `${meshPrefix}roof-covering-verge-right`,
         coveringX_mm,
         FOLD_DOWN_MM,
         COVERING_THK_MM,
@@ -453,7 +464,7 @@ const osbMesh = mkBoxBottomLocal(
     } else {
       // Verge at X=coveringX_mm, runs along Z (sloped)
       mkBoxBottomLocal(
-        "roof-covering-verge-right",
+        `${meshPrefix}roof-covering-verge-right`,
         COVERING_THK_MM,
         FOLD_DOWN_MM,
         coveringZ_mm,
@@ -493,7 +504,7 @@ const osbMesh = mkBoxBottomLocal(
       // Slope runs along X
       // Eaves fascia (low edge at X=0, runs along Z)
       mkBoxBottomLocal(
-        "roof-fascia-eaves",
+        `${meshPrefix}roof-fascia-eaves`,
         FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         fasciaZ_mm + 2 * FASCIA_THK_MM, // extend to cover corners
@@ -507,7 +518,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Ridge fascia (high edge at X=fasciaX_mm, runs along Z)
       mkBoxBottomLocal(
-        "roof-fascia-ridge",
+        `${meshPrefix}roof-fascia-ridge`,
         FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         fasciaZ_mm + 2 * FASCIA_THK_MM,
@@ -521,7 +532,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Left verge fascia (at Z=0, runs along X slope)
       mkBoxBottomLocal(
-        "roof-fascia-verge-left",
+        `${meshPrefix}roof-fascia-verge-left`,
         fasciaX_mm,
         FASCIA_DEPTH_MM,
         FASCIA_THK_MM,
@@ -535,7 +546,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Right verge fascia (at Z=fasciaZ_mm, runs along X slope)
       mkBoxBottomLocal(
-        "roof-fascia-verge-right",
+        `${meshPrefix}roof-fascia-verge-right`,
         fasciaX_mm,
         FASCIA_DEPTH_MM,
         FASCIA_THK_MM,
@@ -550,7 +561,7 @@ const osbMesh = mkBoxBottomLocal(
       // Slope runs along Z
       // Eaves fascia (low edge at Z=0, runs along X)
       mkBoxBottomLocal(
-        "roof-fascia-eaves",
+        `${meshPrefix}roof-fascia-eaves`,
         fasciaX_mm + 2 * FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         FASCIA_THK_MM,
@@ -564,7 +575,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Ridge fascia (high edge at Z=fasciaZ_mm, runs along X)
       mkBoxBottomLocal(
-        "roof-fascia-ridge",
+        `${meshPrefix}roof-fascia-ridge`,
         fasciaX_mm + 2 * FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         FASCIA_THK_MM,
@@ -578,7 +589,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Left verge fascia (at X=0, runs along Z slope)
       mkBoxBottomLocal(
-        "roof-fascia-verge-left",
+        `${meshPrefix}roof-fascia-verge-left`,
         FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         fasciaZ_mm,
@@ -592,7 +603,7 @@ const osbMesh = mkBoxBottomLocal(
       
       // Right verge fascia (at X=fasciaX_mm, runs along Z slope)
       mkBoxBottomLocal(
-        "roof-fascia-verge-right",
+        `${meshPrefix}roof-fascia-verge-right`,
         FASCIA_THK_MM,
         FASCIA_DEPTH_MM,
         fasciaZ_mm,
@@ -749,8 +760,8 @@ const osbMesh = mkBoxBottomLocal(
       };
 
       // Visualize analytic bearing samples
-      if (lowW) mkDbgSphere("roof-dbg-bearing-low", lowW.x, lowW.y, lowW.z, true);
-      if (highW) mkDbgSphere("roof-dbg-bearing-high", highW.x, highW.y, highW.z, false);
+      if (lowW) mkDbgSphere(`${meshPrefix}roof-dbg-bearing-low`, lowW.x, lowW.y, lowW.z, true);
+      if (highW) mkDbgSphere(`${meshPrefix}roof-dbg-bearing-high`, highW.x, highW.y, highW.z, false);
     }
   } catch (e) {}
 }
@@ -1107,7 +1118,7 @@ function computeOsbPiecesNoStagger(A_mm, B_mm) {
 
 /* ------------------------------ APEX (new) ------------------------------ */
 
-function buildApex(state, ctx) {
+function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
 
@@ -1354,9 +1365,9 @@ function buildApex(state, ctx) {
 
   // Root at identity in local coords:
   // local X = span axis A, local Z = ridge axis B, local Y up.
-  const roofRoot = new BABYLON.TransformNode("roof-root", scene);
+  const roofRoot = new BABYLON.TransformNode(`${meshPrefix}roof-root`, scene);
   roofRoot.metadata = { dynamic: true };
-  roofRoot.position = new BABYLON.Vector3(0, 0, 0);
+  roofRoot.position = new BABYLON.Vector3(sectionPos.x / 1000, sectionPos.y / 1000, sectionPos.z / 1000);
   roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
 
   // Truss spacing along B:
@@ -1418,7 +1429,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
     // - tie beam should be cut around the door
     // - kingpost should be skipped (walls.js generates the door cripple instead)
     
-    const tr = new BABYLON.TransformNode(`roof-truss-${idx}`, scene);
+    const tr = new BABYLON.TransformNode(`${meshPrefix}roof-truss-${idx}`, scene);
     tr.metadata = { dynamic: true };
     tr.parent = roofRoot;
     tr.position = new BABYLON.Vector3(0, 0, z0_mm / 1000);
@@ -1443,7 +1454,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       const leftTieLen = Math.max(0, doorLeftEdge);
       if (leftTieLen > memberW_mm) {
         mkBoxBottomLocal(
-          `roof-truss-${idx}-tie-left`,
+          `${meshPrefix}roof-truss-${idx}-tie-left`,
           leftTieLen,
           memberD_mm,
           memberW_mm,
@@ -1461,7 +1472,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       const rightTieLen = Math.max(0, A_mm - rightTieStart);
       if (rightTieLen > memberW_mm) {
         mkBoxBottomLocal(
-          `roof-truss-${idx}-tie-right`,
+          `${meshPrefix}roof-truss-${idx}-tie-right`,
           rightTieLen,
           memberD_mm,
           memberW_mm,
@@ -1477,7 +1488,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       
       // Normal full tie beam
       mkBoxBottomLocal(
-        `roof-truss-${idx}-tie`,
+        `${meshPrefix}roof-truss-${idx}-tie`,
         A_mm,
         memberD_mm,
         memberW_mm,
@@ -1495,7 +1506,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       const cx = halfSpan_mm / 2;
       const cy = rise_mm / 2 + memberD_mm / 2;
       const r = mkBoxCenteredLocal(
-        `roof-truss-${idx}-rafter-L`,
+        `${meshPrefix}roof-truss-${idx}-rafter-L`,
         rafterLen_mm,
         memberD_mm,
         memberW_mm,
@@ -1514,7 +1525,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       const cx = halfSpan_mm + (halfSpan_mm / 2);
       const cy = rise_mm / 2 + memberD_mm / 2;
       const r = mkBoxCenteredLocal(
-        `roof-truss-${idx}-rafter-R`,
+        `${meshPrefix}roof-truss-${idx}-rafter-R`,
         rafterLen_mm,
         memberD_mm,
         memberW_mm,
@@ -1538,7 +1549,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       const bodyH_mm = Math.max(1, postH_mm - capH_mm);
 
       const post = BABYLON.MeshBuilder.CreateBox(
-        `roof-truss-${idx}-kingpost`,
+        `${meshPrefix}roof-truss-${idx}-kingpost`,
         { width: memberW_mm / 1000, height: bodyH_mm / 1000, depth: memberD_mm / 1000 },
         scene
       );
@@ -1555,7 +1566,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
 
       const halfRun_mm = Math.max(1, Math.round(capH_mm / Math.max(1e-6, Math.tan(slopeAng))));
       const cap = BABYLON.MeshBuilder.ExtrudeShape(
-        `roof-truss-${idx}-kingpost-cap`,
+        `${meshPrefix}roof-truss-${idx}-kingpost-cap`,
         {
           shape: [
             new BABYLON.Vector3(-halfRun_mm / 1000, 0, 0),
@@ -1600,7 +1611,7 @@ if (roofParts.structure) {
 
     // Ridge beam along B at (x=A/2, y=rise)
     mkBoxBottomLocal(
-      "roof-ridge",
+      `${meshPrefix}roof-ridge`,
       memberW_mm,
       memberD_mm,
       B_mm,
@@ -1628,7 +1639,7 @@ if (roofParts.structure) {
     const purlinOutOffset_mm = (memberD_mm / 2) + PURLIN_CLEAR_MM;
 
     function mkPurlin(side, idx, cx_mm, cy_mm) {
-      const name = `roof-purlin-${side}-${idx}`;
+      const name = `${meshPrefix}roof-purlin-${side}-${idx}`;
       const m = mkBoxCenteredLocal(
         name,
         memberW_mm,
@@ -1760,7 +1771,7 @@ if (roofParts.osb) {
       }
       
       const mesh = mkBoxCenteredLocal(
-        `roof-apex-osb-${side}-${idx}`,
+        `${meshPrefix}roof-apex-osb-${side}-${idx}`,
         aLen_mm,
         osbThk,
         bLen_mm,
@@ -1843,7 +1854,7 @@ if (roofParts.osb) {
       
       // Main sloped panel
       mkBoxCenteredLocal(
-        `roof-covering-${side}`,
+        `${meshPrefix}roof-covering-${side}`,
         coveringLen_mm,
         COVERING_THK_MM,
         coveringWidth_mm,
@@ -1873,7 +1884,7 @@ if (roofParts.osb) {
         const foldCenterX_mm = osbOuterX_mm + normalX * (COVERING_THK_MM / 2);
         
         mkBoxCenteredLocal(
-          `roof-covering-${side}-eaves`,
+          `${meshPrefix}roof-covering-${side}-eaves`,
           COVERING_THK_MM,
           FOLD_DOWN_MM,
           coveringWidth_mm,
@@ -1898,7 +1909,7 @@ if (roofParts.osb) {
         const foldCenterX_mm = cx - (FOLD_DOWN_MM / 2) * sinT * ((side === "L") ? -1 : 1);
         
         const vergeFront = mkBoxCenteredLocal(
-          `roof-covering-${side}-verge-front`,
+          `${meshPrefix}roof-covering-${side}-verge-front`,
           coveringLen_mm,
           FOLD_DOWN_MM,
           COVERING_THK_MM,
@@ -1920,7 +1931,7 @@ if (roofParts.osb) {
         const foldCenterX_mm = cx - (FOLD_DOWN_MM / 2) * sinT * ((side === "L") ? -1 : 1);
         
         const vergeBack = mkBoxCenteredLocal(
-          `roof-covering-${side}-verge-back`,
+          `${meshPrefix}roof-covering-${side}-verge-back`,
           coveringLen_mm,
           FOLD_DOWN_MM,
           COVERING_THK_MM,
@@ -1976,7 +1987,7 @@ if (roofParts.osb) {
         const fasciaCenterX_mm = eavesX_mm + normalX * (osbOutOffset_mm + OSB_THK_MM + FASCIA_THK_MM / 2);
         
         mkBoxCenteredLocal(
-          `roof-fascia-eaves-${side}`,
+          `${meshPrefix}roof-fascia-eaves-${side}`,
           FASCIA_THK_MM,
           FASCIA_DEPTH_MM,
           B_mm,
@@ -2009,7 +2020,7 @@ if (roofParts.osb) {
         
         // Front barge (z = 0)
         const bargeFront = mkBoxCenteredLocal(
-          `roof-fascia-barge-${side}-front`,
+          `${meshPrefix}roof-fascia-barge-${side}-front`,
           rafterLen_mm,
           FASCIA_DEPTH_MM,
           FASCIA_THK_MM,
@@ -2024,7 +2035,7 @@ if (roofParts.osb) {
         
         // Back barge (z = B_mm)
         const bargeBack = mkBoxCenteredLocal(
-          `roof-fascia-barge-${side}-back`,
+          `${meshPrefix}roof-fascia-barge-${side}-back`,
           rafterLen_mm,
           FASCIA_DEPTH_MM,
           FASCIA_THK_MM,
@@ -2059,7 +2070,7 @@ if (roofParts.osb) {
       
       // Front diamond (z = 0)
       const diamondFront = BABYLON.MeshBuilder.CreateBox(
-        "roof-fascia-diamond-front",
+        `${meshPrefix}roof-fascia-diamond-front`,
         { 
           width: DIAMOND_SIZE_MM / 1000, 
           height: DIAMOND_SIZE_MM / 1000, 
@@ -2079,7 +2090,7 @@ if (roofParts.osb) {
       
       // Back diamond (z = B_mm)
       const diamondBack = BABYLON.MeshBuilder.CreateBox(
-        "roof-fascia-diamond-back",
+        `${meshPrefix}roof-fascia-diamond-back`,
         { 
           width: DIAMOND_SIZE_MM / 1000, 
           height: DIAMOND_SIZE_MM / 1000, 
@@ -2570,7 +2581,7 @@ function isLikelyWallCladdingMesh(mesh) {
   try {
     const nm = String(mesh && mesh.name ? mesh.name : "");
     if (!nm) return false;
-    if (nm.startsWith("roof-")) return false;
+    if (nm.startsWith(`${meshPrefix}roof-`)) return false;
     const md = mesh.metadata && typeof mesh.metadata === "object" ? mesh.metadata : null;
 
     // Conservative defaults: adjust once you confirm the repo’s real cladding tags.
@@ -2632,12 +2643,12 @@ function buildApexUndersideCutter(scene, roofRoot, p) {
   };
 
   // Left slope normal after +slopeAng rotation: (-sinT, +cosT)
-  const left = mk("roof-apex-cutter-L", slopeAng, -sinT, cosT, 0);
+  const left = mk(`${meshPrefix}roof-apex-cutter-L`, slopeAng, -sinT, cosT, 0);
   // Right slope normal after -slopeAng rotation: (+sinT, +cosT)
-  const right = mk("roof-apex-cutter-R", -slopeAng, sinT, cosT, A_mm);
+  const right = mk(`${meshPrefix}roof-apex-cutter-R`, -slopeAng, sinT, cosT, A_mm);
 
   const csg = BABYLON.CSG.FromMesh(left).union(BABYLON.CSG.FromMesh(right));
-  const cutter = csg.toMesh("roof-apex-cladding-cutter", null, scene, true);
+  const cutter = csg.toMesh(`${meshPrefix}roof-apex-cladding-cutter`, null, scene, true);
   cutter.isVisible = false;
   cutter.setEnabled(false);
   cutter.metadata = { dynamic: true, roof: "apex", part: "cladding-cutter" };
