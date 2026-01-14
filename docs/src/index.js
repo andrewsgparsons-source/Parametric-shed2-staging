@@ -1016,9 +1016,12 @@ if (getWallsEnabled(state)) {
         }
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
+        var roofEnabled = getRoofEnabled(state);
+        console.log("[RENDER_LEGACY] Roof check:", { roofEnabled, roofStyle, visRoof: state?.vis?.roof });
 
         // Build roof for supported styles (pent + apex). (No behavior change for pent.)
-        if (getRoofEnabled(state) && (roofStyle === "pent" || roofStyle === "apex")) {
+        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+          console.log("[RENDER_LEGACY] Building roof...");
           var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
