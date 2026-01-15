@@ -95,13 +95,18 @@ export function build3D(state, ctx, sectionContext) {
 
   if (style === "pent") {
     console.log("[ROOF] Building pent roof");
-    buildPent(state, ctx, meshPrefix, sectionPos);
+    buildPent(state, ctx, meshPrefix, sectionPos, sectionId);
     return;
   }
 
   if (style === "apex") {
     console.log("[ROOF] Building apex roof");
-    buildApex(state, ctx, meshPrefix, sectionPos);
+    try {
+      buildApex(state, ctx, meshPrefix, sectionPos, sectionId);
+      console.log("[ROOF] Apex roof build COMPLETE");
+    } catch (e) {
+      console.error("[ROOF] Apex roof build FAILED:", e);
+    }
     return;
   }
 
@@ -132,7 +137,7 @@ export function updateBOM(state) {
 
 /* ----------------------------- PENT (existing) ----------------------------- */
 
-function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }) {
+function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }, sectionId = null) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
   if (!isPentEnabled(state)) return;
@@ -196,14 +201,14 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     );
 
     mesh.material = mat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     if (parentNode) mesh.parent = parentNode;
     return mesh;
   }
 
   // ---- Build rigid roof assembly under roofRoot at identity (local underside y=0) ----
   const roofRoot = new BABYLON.TransformNode(`${meshPrefix}roof-root`, scene);
-  roofRoot.metadata = { dynamic: true };
+  roofRoot.metadata = { dynamic: true, sectionId: sectionId || null };
   roofRoot.position = new BABYLON.Vector3(sectionPos.x / 1000, sectionPos.y / 1000, sectionPos.z / 1000);
   roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
 
@@ -742,7 +747,7 @@ const osbMesh = mkBoxBottomLocal(
       if (isGood) mat.emissiveColor = new BABYLON.Color3(0.1, 0.9, 0.1);
       else mat.emissiveColor = new BABYLON.Color3(0.9, 0.1, 0.1);
       s.material = mat;
-      s.metadata = { dynamic: true };
+      s.metadata = { dynamic: true, sectionId: sectionId || null };
       return s;
     } catch (e) {
       return null;
@@ -1127,7 +1132,7 @@ function computeOsbPiecesNoStagger(A_mm, B_mm) {
 
 /* ------------------------------ APEX (new) ------------------------------ */
 
-function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }) {
+function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }, sectionId = null) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
 
@@ -1354,7 +1359,7 @@ function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
       (z_mm + Lz_mm / 2) / 1000
     );
     mesh.material = mat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     if (parentNode) mesh.parent = parentNode;
     return mesh;
   }
@@ -1367,7 +1372,7 @@ function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     );
     mesh.position = new BABYLON.Vector3(cx_mm / 1000, cy_mm / 1000, cz_mm / 1000);
     mesh.material = mat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     if (parentNode) mesh.parent = parentNode;
     return mesh;
   }
@@ -1375,7 +1380,7 @@ function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
   // Root at identity in local coords:
   // local X = span axis A, local Z = ridge axis B, local Y up.
   const roofRoot = new BABYLON.TransformNode(`${meshPrefix}roof-root`, scene);
-  roofRoot.metadata = { dynamic: true };
+  roofRoot.metadata = { dynamic: true, sectionId: sectionId || null };
   roofRoot.position = new BABYLON.Vector3(sectionPos.x / 1000, sectionPos.y / 1000, sectionPos.z / 1000);
   roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
 
@@ -1439,7 +1444,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
     // - kingpost should be skipped (walls.js generates the door cripple instead)
     
     const tr = new BABYLON.TransformNode(`${meshPrefix}roof-truss-${idx}`, scene);
-    tr.metadata = { dynamic: true };
+    tr.metadata = { dynamic: true, sectionId: sectionId || null };
     tr.parent = roofRoot;
     tr.position = new BABYLON.Vector3(0, 0, z0_mm / 1000);
 
@@ -1570,7 +1575,7 @@ function buildTruss(idx, z0_mm, gableDoor) {
       );
 
       post.material = joistMat;
-      post.metadata = Object.assign({ dynamic: true }, { roof: "apex", part: "truss", member: "kingpost" });
+      post.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, { roof: "apex", part: "truss", member: "kingpost" });
       post.parent = tr;
 
       const halfRun_mm = Math.max(1, Math.round(capH_mm / Math.max(1e-6, Math.tan(slopeAng))));
@@ -2094,16 +2099,16 @@ if (roofParts.osb) {
       );
       diamondFront.rotation = new BABYLON.Vector3(0, 0, Math.PI / 4); // 45 degree rotation to make diamond
       diamondFront.material = fasciaMat;
-      diamondFront.metadata = { dynamic: true, roof: "apex", part: "fascia", edge: "diamond-front" };
+      diamondFront.metadata = { dynamic: true, sectionId: sectionId || null, roof: "apex", part: "fascia", edge: "diamond-front" };
       diamondFront.parent = roofRoot;
-      
+
       // Back diamond (z = B_mm)
       const diamondBack = BABYLON.MeshBuilder.CreateBox(
         `${meshPrefix}roof-fascia-diamond-back`,
-        { 
-          width: DIAMOND_SIZE_MM / 1000, 
-          height: DIAMOND_SIZE_MM / 1000, 
-          depth: DIAMOND_THK_MM / 1000 
+        {
+          width: DIAMOND_SIZE_MM / 1000,
+          height: DIAMOND_SIZE_MM / 1000,
+          depth: DIAMOND_THK_MM / 1000
         },
         scene
       );
@@ -2114,7 +2119,7 @@ if (roofParts.osb) {
       );
       diamondBack.rotation = new BABYLON.Vector3(0, 0, Math.PI / 4);
       diamondBack.material = fasciaMat;
-      diamondBack.metadata = { dynamic: true, roof: "apex", part: "fascia", edge: "diamond-back" };
+      diamondBack.metadata = { dynamic: true, sectionId: sectionId || null, roof: "apex", part: "fascia", edge: "diamond-back" };
       diamondBack.parent = roofRoot;
     }
   }
@@ -2568,9 +2573,14 @@ function installApexCladdingTrim(scene, roofRoot, params) {
     try {
       if (!m || m.isDisposed()) return;
       if (!isLikelyWallCladdingMesh(m)) return;
-      if (m.metadata && m.metadata.trimmedToRoofApex === true) return;
+      console.log('[ROOF_OBSERVER] Detected cladding mesh:', m.name, 'trimmedToRoofApex=', m.metadata?.trimmedToRoofApex);
+      if (m.metadata && m.metadata.trimmedToRoofApex === true) {
+        console.log('[ROOF_OBSERVER] Skipping - already trimmed');
+        return;
+      }
       if (!scene._apexCladdingTrimCutter || scene._apexCladdingTrimCutter.isDisposed()) return;
 
+      console.log('[ROOF_OBSERVER] Trimming mesh:', m.name);
       // Trim the mesh (this may replace internals / drop material)
       trimMeshByApexCutter(scene, m, scene._apexCladdingTrimCutter);
 
@@ -2673,12 +2683,12 @@ function trimMeshByApexCutter(scene, mesh, cutter) {
   if (mesh.isDisposed() || cutter.isDisposed()) return;
   if (!BABYLON.CSG) return;
 
-  // If your cladding is parented and expected to follow parent transforms, tell me;
-  // we’ll switch to a parent-space trim. For now, we avoid silently breaking parenting.
-  if (mesh.parent) return;
+  // Save parent reference so we can re-parent the trimmed mesh afterward
+  const originalParent = mesh.parent || null;
 
   let src = null;
   try {
+    // Clone with parent=null so we get world-space geometry for CSG
     src = mesh.clone(mesh.name + "__trimSrc", null, false, true);
   } catch (e) {
     src = null;
@@ -2687,33 +2697,51 @@ function trimMeshByApexCutter(scene, mesh, cutter) {
 
   src.isVisible = false;
   src.setEnabled(false);
+  src.parent = null; // Ensure clone is unparented for world-space CSG
 
+  // Bake the mesh's world transform into vertices for accurate CSG
   try {
+    // For parented meshes, we need to compute world matrix and bake it
+    if (originalParent) {
+      mesh.computeWorldMatrix(true);
+      src.computeWorldMatrix(true);
+    }
     src.bakeCurrentTransformIntoVertices();
     src.position = new BABYLON.Vector3(0, 0, 0);
     src.rotation = new BABYLON.Vector3(0, 0, 0);
     src.scaling = new BABYLON.Vector3(1, 1, 1);
     src.rotationQuaternion = null;
-  } catch (e) {}
+  } catch (e) {
+    console.warn("[trimMeshByApexCutter] Failed to bake transforms:", e);
+  }
 
   let out = null;
   try {
     const res = BABYLON.CSG.FromMesh(src).subtract(BABYLON.CSG.FromMesh(cutter));
-   out = res.toMesh(mesh.name, scene._claddingMatLight || mesh.material || null, scene, true);
-
+    out = res.toMesh(mesh.name, scene._claddingMatLight || mesh.material || null, scene, true);
   } catch (e) {
+    console.warn("[trimMeshByApexCutter] CSG operation failed:", e);
     out = null;
   }
 
   try { src.dispose(false, false); } catch (e) {}
   if (!out) return;
 
- out.material = scene._claddingMatLight || mesh.material || null;
+  out.material = scene._claddingMatLight || mesh.material || null;
 
   out.metadata = Object.assign({}, (mesh.metadata || {}), { trimmedToRoofApex: true });
   out.isVisible = mesh.isVisible;
   out.setEnabled(mesh.isEnabled());
   out.renderingGroupId = mesh.renderingGroupId;
+
+  // Re-parent the trimmed mesh to preserve hierarchy
+  if (originalParent) {
+    try {
+      out.parent = originalParent;
+    } catch (e) {
+      console.warn("[trimMeshByApexCutter] Failed to re-parent trimmed mesh:", e);
+    }
+  }
 
   try { mesh.dispose(false, false); } catch (e) {}
   // Re-apply wood texture in case CSG cleared it

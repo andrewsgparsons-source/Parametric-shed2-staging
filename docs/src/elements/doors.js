@@ -738,7 +738,7 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
     -panelWidth_mm / 2,
     panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
     frameWidth_mm, doorThickness_mm,
-    mats, index, "left"
+    mats, index, "left", meshPrefix
   );
 
   // Build right panel
@@ -747,7 +747,7 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
     panelWidth_mm / 2,
     panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
     frameWidth_mm, doorThickness_mm,
-    mats, index, "right"
+    mats, index, "right", meshPrefix
   );
 
   // Center stile (where doors meet)
@@ -785,7 +785,7 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
 /**
  * Build a single panel of a French door
  */
-function buildFrenchDoorPanel(scene, parent, xOffset, panelWidth, doorHeight, glassHeight, kickboardHeight, frameWidth, doorThickness, mats, index, side) {
+function buildFrenchDoorPanel(scene, parent, xOffset, panelWidth, doorHeight, glassHeight, kickboardHeight, frameWidth, doorThickness, mats, index, side, meshPrefix = "") {
   const innerWidth = panelWidth - frameWidth * 2 - 20;
 
   // Top rail

@@ -40,7 +40,7 @@ export function build3D(state, ctx, sectionContext) {
         b.position = new BABYLON.Vector3((x + bw / 2) * 0.001, yB * 0.001, (z + bd / 2) * 0.001);
         b.material = mat;
         b.parent = shedRoot;
-        b.metadata = { dynamic: true };
+        b.metadata = { dynamic: true, sectionId: sectionId || null };
         if (b.enableEdgesRendering) {
           b.enableEdgesRendering();
           b.edgesWidth = 1;
@@ -68,7 +68,7 @@ export function build3D(state, ctx, sectionContext) {
         : new BABYLON.Vector3((L.rimLen / 2) * 0.001, yF * 0.001, (o + (frameT / 2)) * 0.001);
       r.material = mat;
       r.parent = shedRoot;
-      r.metadata = { dynamic: true };
+      r.metadata = { dynamic: true, sectionId: sectionId || null };
       meshes.frame.push(r);
     });
 
@@ -84,7 +84,7 @@ export function build3D(state, ctx, sectionContext) {
         : new BABYLON.Vector3(p * 0.001, yF * 0.001, mid);
       j.material = mat;
       j.parent = shedRoot;
-      j.metadata = { dynamic: true };
+      j.metadata = { dynamic: true, sectionId: sectionId || null };
       meshes.frame.push(j);
     });
   }
@@ -109,7 +109,7 @@ export function build3D(state, ctx, sectionContext) {
           : new BABYLON.Vector3(mB, yI * 0.001, mS);
         ins.material = mat;
         ins.parent = shedRoot;
-        ins.metadata = { dynamic: true };
+        ins.metadata = { dynamic: true, sectionId: sectionId || null };
         meshes.ins.push(ins);
         ins.enableEdgesRendering();
         ins.edgesWidth = 2;
@@ -146,7 +146,7 @@ export function build3D(state, ctx, sectionContext) {
       );
       d.material = mat;
       d.parent = shedRoot;
-      d.metadata = { dynamic: true };
+      d.metadata = { dynamic: true, sectionId: sectionId || null };
       d.enableEdgesRendering();
       d.edgesWidth = 4;
       d.edgesColor = new BABYLON.Color4(0, 0, 0, 1);
@@ -472,7 +472,7 @@ function getRoot(scene, sectionId, sectionPos = { x: 0, y: 0, z: 0 }) {
       sectionPos.z * 0.001
     );
   }
-  scene[rootKey].metadata = { dynamic: true };
+  scene[rootKey].metadata = { dynamic: true, sectionId: sectionId || null };
   return scene[rootKey];
 }
 

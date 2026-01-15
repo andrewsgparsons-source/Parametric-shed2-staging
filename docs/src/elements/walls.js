@@ -261,7 +261,7 @@ if (isPent) {
       (pos.z + Lz / 2) / 1000
     );
     mesh.material = mat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     return mesh;
   }
 
@@ -335,7 +335,7 @@ if (isPent) {
     } catch (e) {}
 
     mesh.material = useMat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     return mesh;
   }
 
@@ -408,7 +408,10 @@ if (isPent) {
 
     // Calculate courses with extra padding to ensure we extend past the wall top
     // The roof trim will cut it back to the correct height
-    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + 2); // Add 2 extra courses
+    // For apex roofs, only front/back (gable) walls need extra courses - left/right stop at eaves
+    const isApexGableWall = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
+    const needsExtraCourses = roofStyle === "pent" || isApexGableWall;
+    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0));
     if (__DIAG_ONE_FRONT_ONE_BOARD) courses = 1;
     
     console.log("CLAD_DEBUG", {
@@ -1110,6 +1113,8 @@ console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
                 const yTop = Math.max(y0, y1) + 20000;
 
+                console.log('[WEDGE_DEBUG]', name, { x0, x1, y0, y1, yTop, z0r, z1r });
+
                 const positions = [
                   x0, y0, z0r,
                   x1, y1, z0r,
@@ -1207,6 +1212,8 @@ if (apexRoofModel) {
 
                   const yAt = (x_mm) => Math.floor(apexRoofModel.yUnderAtWorldX_mm(x_mm));
 
+                  console.log('[APEX_WEDGE_CALC] ridgeX=', ridgeX, 'yAt(xA0)=', yAt(xA0), 'yAt(ridgeX)=', yAt(ridgeX), 'yAt(xA1)=', yAt(xA1));
+
                   // Piecewise-linear: split at ridge if the span crosses it (slope flips).
                   if (Number.isFinite(ridgeX) && ridgeX > xA0 && ridgeX < xA1) {
                     wedges.push(
@@ -1234,25 +1241,19 @@ if (apexRoofModel) {
                   }
 
                   if (wedges.length) {
-                    console.log('DEBUG APEX: Creating cutterCSG from', wedges.length, 'wedges');
                     try {
                       cutterCSG = BABYLON.CSG.FromMesh(wedges[0]);
-                      console.log('DEBUG APEX: First wedge CSG created');
                       for (let wi = 1; wi < wedges.length; wi++) {
                         try {
                           cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[wi]));
-                          console.log('DEBUG APEX: Union with wedge', wi, 'complete');
                         } catch (e) {
-                          console.error('DEBUG APEX: Error in union with wedge', wi, ':', e);
+                          console.error('APEX CSG union error:', e);
                         }
                       }
-                      console.log('DEBUG APEX: cutterCSG final:', !!cutterCSG);
                     } catch (e) {
-                      console.error('DEBUG APEX: Error creating cutterCSG:', e);
+                      console.error('APEX CSG error:', e);
                       cutterCSG = null;
                     }
-                  } else {
-                    console.warn('DEBUG APEX: No wedges created!');
                   }
 
                   for (let wi = 0; wi < wedges.length; wi++) {
@@ -1309,6 +1310,22 @@ if (apexRoofModel) {
               console.log('DEBUG CSG: cutterCSG created, attempting clip for wall', wallId, 'panel', panelIndex);
               console.log('DEBUG CSG: merged mesh exists?', !!merged, 'isDisposed?', merged?.isDisposed?.());
               console.log('DEBUG CSG: merged mesh has geometry?', !!merged?.getTotalVertices?.(), 'vertices:', merged?.getTotalVertices?.());
+
+              // Log merged mesh bounding box BEFORE CSG
+              try {
+                merged.computeWorldMatrix(true);
+                merged.refreshBoundingInfo();
+                const bbBefore = merged.getBoundingInfo().boundingBox;
+                console.log('[CLAD_BBOX_BEFORE]', wallId, {
+                  minY: bbBefore.minimumWorld.y * 1000,
+                  maxY: bbBefore.maximumWorld.y * 1000,
+                  minX: bbBefore.minimumWorld.x * 1000,
+                  maxX: bbBefore.maximumWorld.x * 1000,
+                  minZ: bbBefore.minimumWorld.z * 1000,
+                  maxZ: bbBefore.maximumWorld.z * 1000
+                });
+              } catch (e) { console.warn('Could not get bbox before:', e); }
+
               let resMesh = null;
               try {
                 console.log('DEBUG CSG: Creating baseCSG from merged mesh...');
@@ -1329,7 +1346,24 @@ if (apexRoofModel) {
                   console.error('DEBUG CSG: Error disposing old mesh:', e);
                 }
                 merged = resMesh;
-                console.log('DEBUG CSG: Merged replaced with clipped mesh');
+                // Mark as already trimmed so roof.js observable doesn't re-trim
+                merged.metadata = Object.assign({}, merged.metadata || {}, { trimmedToRoofApex: true });
+                console.log('DEBUG CSG: Merged replaced with clipped mesh, marked trimmedToRoofApex=true');
+
+                // Log merged mesh bounding box AFTER CSG
+                try {
+                  merged.computeWorldMatrix(true);
+                  merged.refreshBoundingInfo();
+                  const bbAfter = merged.getBoundingInfo().boundingBox;
+                  console.log('[CLAD_BBOX_AFTER]', wallId, {
+                    minY: bbAfter.minimumWorld.y * 1000,
+                    maxY: bbAfter.maximumWorld.y * 1000,
+                    minX: bbAfter.minimumWorld.x * 1000,
+                    maxX: bbAfter.maximumWorld.x * 1000,
+                    minZ: bbAfter.minimumWorld.z * 1000,
+                    maxZ: bbAfter.maximumWorld.z * 1000
+                  });
+                } catch (e) { console.warn('Could not get bbox after:', e); }
               } else {
                 console.warn('DEBUG CSG: resMesh is null, keeping original merged mesh');
               }
@@ -1374,7 +1408,18 @@ merged.name = `${meshPrefix}clad-${wallId}-panel-${panelIndex}`;
   merged.material && merged.material.diffuseColor
 );
 
-      merged.metadata = Object.assign({ dynamic: true }, { wallId, panelIndex, type: "cladding" });
+      merged.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, merged.metadata || {}, { wallId, panelIndex, type: "cladding" });
+
+      // FINAL DEBUG: Log mesh state right before parenting
+      try {
+        merged.computeWorldMatrix(true);
+        merged.refreshBoundingInfo();
+        const bbFinal = merged.getBoundingInfo().boundingBox;
+        console.log('[CLAD_FINAL]', wallId, merged.name, {
+          maxY: bbFinal.maximumWorld.y * 1000,
+          vertices: merged.getTotalVertices()
+        });
+      } catch (e) {}
 
       if (plateParent) {
         try {
@@ -1511,7 +1556,7 @@ function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPe
       mesh.material = scene._claddingMatLight;
     }
     
-    mesh.metadata = { dynamic: true, part: "corner-board", wall: wallId, cladding: true };
+    mesh.metadata = { dynamic: true, sectionId: sectionId || null, part: "corner-board", wall: wallId, cladding: true };
     
     return mesh;
   }
@@ -1791,6 +1836,27 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
 
         // ALSO: run again on the next 2 frames to catch late Apex mesh replacements
         scheduleFollowUpFinalisers();
+
+        // DEBUG: Dump all cladding meshes after everything is done
+        setTimeout(() => {
+          try {
+            const cladMeshes = scene.meshes.filter(m => m.name && m.name.includes('clad'));
+            console.log('[CLAD_DUMP] Total cladding meshes:', cladMeshes.length);
+            for (const m of cladMeshes) {
+              try {
+                m.computeWorldMatrix(true);
+                m.refreshBoundingInfo();
+                const bb = m.getBoundingInfo().boundingBox;
+                console.log('[CLAD_DUMP]', m.name, {
+                  maxY: bb.maximumWorld.y * 1000,
+                  minY: bb.minimumWorld.y * 1000,
+                  vertices: m.getTotalVertices(),
+                  trimmed: m.metadata?.trimmedToRoofApex
+                });
+              } catch (e) {}
+            }
+          } catch (e) {}
+        }, 500);
       });
     }
   } catch (e) {}
@@ -3533,7 +3599,6 @@ function computeApexRoofUndersideModelMm(state) {
     const cosT = den > 1e-6 ? (halfSpan_mm / den) : 1;
 
     const OSB_CLEAR_MM = 1;
-    const eavesUnderLocalY_mm = memberD_mm + cosT * (memberD_mm + OSB_CLEAR_MM);
 
     // roof.js placement rule (APEX):
     // - If BOTH eaves+crest controls provided => solve roofRootY so OSB underside at the roof edge hits eavesTargetAbs.
@@ -3546,11 +3611,37 @@ function computeApexRoofUndersideModelMm(state) {
     const wallH_mm = Math.max(100, Math.floor(Number(state && state.walls && state.walls.height_mm != null ? state.walls.height_mm : 2400)));
 
     const WALL_RISE_MM = 168;
-    let roofRootY_mm = wallH_mm + WALL_RISE_MM;
-if (hasControls) {
-      // Use the same corrected eaves target as roof.js (crest correction handled inside rise solver).
+    let roofRootY_mm;
+    if (hasControls) {
+      // Match roof.js exactly: roofRootY = eavesTargetAbs - WALL_RISE_MM
+      // The tie beam underside is at eavesTargetAbs_mm
+      // roofRoot.position.y = (eavesTargetAbs_mm - WALL_RISE_MM) / 1000 in roof.js
+      // But index.js then adds WALL_RISE_MM shift to all roof meshes
+      // So effective world Y of roofRoot = eavesTargetAbs_mm - WALL_RISE_MM + WALL_RISE_MM = eavesTargetAbs_mm
+      // Wait no - let's trace more carefully:
+      // roof.js: roofRoot.position.y = (eavesTargetAbs_mm - WALL_RISE_MM) / 1000
+      // This is in mm: roofRootY_mm = eavesTargetAbs_mm - WALL_RISE_MM
+      // Then index.js shifts by +WALL_RISE_MM, so final world Y = eavesTargetAbs_mm
+      // The tie beam underside in local coords is at y=0
+      // So tie beam underside world = roofRootY_mm + WALL_RISE_MM = eavesTargetAbs_mm ✓
+      //
+      // For OSB underside, we need to add the local offset which is eavesUnderLocalY_mm at eaves
+      // OSB underside at eaves (world) = eavesTargetAbs_mm + eavesUnderLocalY_mm
+      //
+      // But wait - for the cladding CSG we want to cut at the OSB underside
+      // yUnderAtLocalX gives the LOCAL offset above the tie beam (which is at y=0 locally)
+      // So world Y of OSB underside = tie beam world Y + yUnderAtLocalX
+      // = eavesTargetAbs_mm + yUnderAtLocalX(x)
+      //
+      // In yUnderAtWorldX_mm we do: roofRootY_mm + yUnderAtLocalX_mm(xLocal)
+      // So we want roofRootY_mm = eavesTargetAbs_mm (the tie beam underside world Y)
       const eavesTargetAbs_mm = Math.max(0, Math.floor(eCtl));
-      roofRootY_mm = Math.floor(eavesTargetAbs_mm - eavesUnderLocalY_mm + WALL_RISE_MM);
+      roofRootY_mm = eavesTargetAbs_mm;
+    } else {
+      // Legacy: no controls, roof sits on top of wall
+      // Wall top plate is at wallH_mm + WALL_RISE_MM (with floor rise)
+      // Tie beam underside = wall top plate = wallH_mm + WALL_RISE_MM
+      roofRootY_mm = wallH_mm + WALL_RISE_MM;
     }
 
     // roofRoot X aligns local min corner to world -l (yaw=0), so: localX = worldX + l
@@ -3559,17 +3650,42 @@ if (hasControls) {
     const ridgeWorldX_mm = roofRootX_mm + ridgeLocalX_mm;
 
     const yUnderAtLocalX_mm = (xLocal_mm) => {
+      // Match roof.js formula exactly:
+      // yUnderLocal_mm = memberD_mm + tanT * distFromEaves + offsetAlongY_atFixedX_mm
+      // where offsetAlongY_atFixedX_mm = (memberD_mm + OSB_CLEAR_MM) / cosT
+      //
+      // At eaves (x=0 or x=A_mm): distFromEaves = 0, height is lowest
+      // At ridge (x=halfSpan): distFromEaves = halfSpan, height is highest
       const x = Math.max(0, Math.min(A_mm, Math.floor(Number(xLocal_mm))));
-      const dx = Math.abs(x - ridgeLocalX_mm);
-      const t = Math.max(0, Math.min(1, 1 - (dx / halfSpan_mm)));
-      const ySurf_mm = memberD_mm + Math.floor(rise_mm * t);
-      return ySurf_mm + cosT * (memberD_mm + OSB_CLEAR_MM);
+      const tanT = rise_mm / Math.max(1, halfSpan_mm);
+      const offsetAlongY_mm = (memberD_mm + OSB_CLEAR_MM) / Math.max(0.001, cosT);
+
+      // Distance from nearest eave - 0 at eaves, halfSpan at ridge
+      const distFromNearestEave = x <= halfSpan_mm ? x : (A_mm - x);
+      return memberD_mm + tanT * distFromNearestEave + offsetAlongY_mm;
     };
 
     const yUnderAtWorldX_mm = (xWorld_mm) => {
       const xLocal_mm = Math.floor(Number(xWorld_mm)) - roofRootX_mm; // == xWorld + l
       return roofRootY_mm + yUnderAtLocalX_mm(xLocal_mm);
     };
+
+    console.log('[APEX_MODEL_DEBUG]', {
+      roofRootY_mm,
+      roofRootX_mm,
+      halfSpan_mm,
+      rise_mm,
+      memberD_mm,
+      cosT,
+      wallH_mm,
+      WALL_RISE_MM,
+      hasControls,
+      eCtl,
+      cCtl,
+      l_mm,
+      yAtEaves: yUnderAtLocalX_mm(0),
+      yAtRidge: yUnderAtLocalX_mm(halfSpan_mm)
+    });
 
     return {
       yUnderAtWorldX_mm,

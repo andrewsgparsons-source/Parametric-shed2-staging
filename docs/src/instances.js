@@ -9,6 +9,7 @@
 
 import { DEFAULTS } from "./params.js";
 import { getBuiltInPresets, getDefaultBuiltInPresetId, findBuiltInPresetById } from "../instances.js";
+import { copyViewerUrlToClipboard, isViewerMode } from "./profiles.js";
 
 export function initInstancesUI({ store, ids, dbg }) {
   function $(id) { return document.getElementById(id); }
@@ -21,6 +22,7 @@ export function initInstancesUI({ store, ids, dbg }) {
   var devModeCheckEl = $(ids.devModeCheck);
   var devPanelEl = $(ids.devPanel);
   var copyStateBtnEl = $(ids.copyStateBtn);
+  var copyViewerLinkBtnEl = $("copyViewerLinkBtn");
   var hintEl = $(ids.hint || ids.instancesHint);
 
   // Hidden file input for import
@@ -382,12 +384,37 @@ function applyState(stateObj) {
         copyStateToClipboard();
       });
     }
+
+    // Copy viewer link button
+    if (copyViewerLinkBtnEl) {
+      copyViewerLinkBtnEl.addEventListener("click", function() {
+        var state = store.getState();
+        copyViewerUrlToClipboard(
+          state,
+          function(url) {
+            setHint("Viewer link copied to clipboard!");
+            console.log("[instances] Viewer URL:", url);
+          },
+          function(err) {
+            setHint("Failed to copy link");
+            console.error("[instances] Failed to copy viewer URL:", err);
+          }
+        );
+      });
+    }
   }
 
   // ---- Initialize ----
   function init() {
     populatePresetSelect();
     wireEvents();
+
+    // Skip loading default preset if in viewer mode (state comes from URL)
+    if (isViewerMode()) {
+      console.log("[instances] Viewer mode - skipping default preset load");
+      setHint("Viewing shared design");
+      return;
+    }
 
     // Load default preset on startup
     var defaultId = getDefaultBuiltInPresetId();

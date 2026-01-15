@@ -94,6 +94,32 @@ export const DEFAULTS = {
   frame: {
     thickness_mm: 50,
     depth_mm: 75
+  },
+  // Multi-section support (lean-to, L-wing, etc.)
+  sections: {
+    enabled: false,  // When false, legacy single-building mode is used
+    main: {
+      id: "main",
+      type: "rectangular",
+      dimensions: null,  // Uses state.dim when null
+      roof: null,        // Uses state.roof when null
+      walls: null        // Uses state.walls when null
+    },
+    attachments: []  // Array of attachment objects
+  },
+  // Internal divider panels
+  dividers: {
+    items: []  // Array of divider objects
+    // Divider object structure:
+    // {
+    //   id: "div1",
+    //   enabled: true,
+    //   axis: "x",              // "x" = front-to-back, "z" = left-to-right
+    //   position_mm: 1200,      // Position along perpendicular axis
+    //   coveringLeft: "none",   // "osb" | "cladding" | "none"
+    //   coveringRight: "none",  // "osb" | "cladding" | "none"
+    //   openings: []            // Array of door openings within divider
+    // }
   }
 };
 

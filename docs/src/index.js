@@ -29,6 +29,7 @@ import { DEFAULTS, resolveDims, CONFIG } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js";
+import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js";
 import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js";
@@ -37,6 +38,7 @@ import * as Windows from "./elements/windows.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
+import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard } from "./profiles.js";
 
 function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
@@ -45,33 +47,73 @@ function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", Stri
 var WALL_OVERHANG_MM = 25;
 var WALL_RISE_MM = 168;
 
-function shiftWallMeshes(scene, dx_mm, dy_mm, dz_mm) {
+function shiftWallMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
   if (!scene || !scene.meshes) return;
   var dx = (dx_mm || 0) / 1000;
   var dy = (dy_mm || 0) / 1000;
   var dz = (dz_mm || 0) / 1000;
+  var sectionId = sectionContext && sectionContext.sectionId;
 
   for (var i = 0; i < scene.meshes.length; i++) {
     var m = scene.meshes[i];
     if (!m || !m.metadata || m.metadata.dynamic !== true) continue;
     if (typeof m.name !== "string") continue;
-if (m.name.indexOf("wall-") !== 0 && m.name.indexOf("clad-") !== 0) continue;
+    if (m.name.indexOf("wall-") !== 0 && m.name.indexOf("clad-") !== 0) continue;
+    // If section context provided, only shift meshes belonging to this section
+    if (sectionId) {
+      if (m.metadata.sectionId !== sectionId) continue;
+      // In multi-section mode, skip meshes that have already been shifted
+      if (m.metadata.__shifted) continue;
+      m.metadata.__shifted = true;
+    }
     m.position.x += dx;
     m.position.y += dy;
     m.position.z += dz;
   }
 }
 
-function shiftRoofMeshes(scene, dx_mm, dy_mm, dz_mm) {
+function shiftRoofMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
   if (!scene || !scene.meshes) return;
   var dx = (dx_mm || 0) / 1000;
   var dy = (dy_mm || 0) / 1000;
   var dz = (dz_mm || 0) / 1000;
+  var sectionId = sectionContext && sectionContext.sectionId;
 
   for (var i = 0; i < scene.meshes.length; i++) {
     var m = scene.meshes[i];
     if (!m || !m.metadata || m.metadata.dynamic !== true) continue;
     if (typeof m.name !== "string" || m.name.indexOf("roof-") !== 0) continue;
+    // If section context provided, only shift meshes belonging to this section
+    if (sectionId) {
+      if (m.metadata.sectionId !== sectionId) continue;
+      // In multi-section mode, skip meshes that have already been shifted
+      if (m.metadata.__shifted) continue;
+      m.metadata.__shifted = true;
+    }
+    m.position.x += dx;
+    m.position.y += dy;
+    m.position.z += dz;
+  }
+}
+
+function shiftDividerMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
+  if (!scene || !scene.meshes) return;
+  var dx = (dx_mm || 0) / 1000;
+  var dy = (dy_mm || 0) / 1000;
+  var dz = (dz_mm || 0) / 1000;
+  var sectionId = sectionContext && sectionContext.sectionId;
+
+  for (var i = 0; i < scene.meshes.length; i++) {
+    var m = scene.meshes[i];
+    if (!m || !m.metadata || m.metadata.dynamic !== true) continue;
+    if (typeof m.name !== "string" || m.name.indexOf("divider-") === -1) continue;
+    // If section context provided, only shift meshes belonging to this section
+    if (sectionId) {
+      if (m.metadata.sectionId !== sectionId) continue;
+      // In multi-section mode, skip meshes that have already been shifted
+      if (m.metadata.__shifted) continue;
+      m.metadata.__shifted = true;
+    }
     m.position.x += dx;
     m.position.y += dy;
     m.position.z += dz;
@@ -210,12 +252,31 @@ function initApp() {
       ? deepMerge(DEFAULTS, defaultPreset.state)
       : DEFAULTS;
 
+    // Check for viewer mode - merge URL parameters into state
+    var viewerMode = isViewerMode();
+    if (viewerMode) {
+      console.log("[INIT] Viewer mode detected - parsing URL state");
+      var urlState = parseUrlState();
+      console.log("[INIT] URL state:", urlState);
+      initialState = deepMerge(initialState, urlState);
+      console.log("[INIT] State after URL merge:", initialState);
+    }
+
     console.log("[INIT] initialState.vis after deepMerge:", initialState.vis);
 
     var store = createStateStore(initialState);
     window.__dbg.store = store; // Expose for debugging
+    window.__dbg.viewerMode = viewerMode; // Track viewer mode
 
     console.log("[INIT] store.getState().vis after createStateStore:", store.getState().vis);
+
+    // Apply viewer profile UI changes after DOM is ready
+    if (viewerMode) {
+      // Defer to ensure DOM is fully ready
+      setTimeout(function() {
+        applyViewerProfile();
+      }, 0);
+    }
 
     var vWallsEl = $("vWalls");
     var vRoofEl = $("vRoof");
@@ -291,6 +352,21 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var addWindowBtnEl = $("addWindowBtn");
     var removeAllWindowsBtnEl = $("removeAllWindowsBtn");
     var windowsListEl = $("windowsList");
+
+    // Attachment controls
+    var attachmentTypeEl = $("attachmentType");
+    var attachmentWallEl = $("attachmentWall");
+    var attachmentWidthEl = $("attachmentWidth");
+    var attachmentDepthEl = $("attachmentDepth");
+    var attachmentOffsetEl = $("attachmentOffset");
+    var addAttachmentBtnEl = $("addAttachmentBtn");
+    var removeAllAttachmentsBtnEl = $("removeAllAttachmentsBtn");
+    var attachmentsListEl = $("attachmentsList");
+
+    // Divider controls
+    var addDividerBtnEl = $("addDividerBtn");
+    var removeAllDividersBtnEl = $("removeAllDividersBtn");
+    var dividersListEl = $("dividersList");
 
     var instanceSelectEl = $("instanceSelect");
     var saveInstanceBtnEl = $("saveInstanceBtn");
@@ -981,9 +1057,8 @@ function render(state) {
         }
 
         // NEW CODE PATH - only executes when sections.enabled === true AND attachments exist
-        // TODO: Phase 1.3 - Multi-section rendering (will be implemented after legacy path is verified)
-        // For now, fall back to legacy mode
-        renderLegacyMode(state);
+        // Phase 1.3 - Multi-section rendering
+        renderMultiSectionMode(state);
 
       } catch (e) {
         window.__dbg.lastError = "render() failed: " + String(e && e.message ? e.message : e);
@@ -1019,6 +1094,12 @@ function render(state) {
 if (getWallsEnabled(state)) {
           if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
           shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+        }
+
+        // Build internal dividers (always build if they exist)
+        if (Dividers && typeof Dividers.build3D === "function") {
+          Dividers.build3D(wallState, ctx, undefined);
+          shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
         }
 
         // Build door and window geometry into openings (always build regardless of wall visibility)
@@ -1068,6 +1149,150 @@ if (getWallsEnabled(state)) {
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           });
         } catch (e2) {}
+    }
+
+    // Multi-section render path - renders main building + all attachments
+    function renderMultiSectionMode(state) {
+      console.log("[RENDER_MULTI] Starting multi-section render...");
+
+      // Get all sections (main + attachments)
+      var allSections = Sections.getAllSections(state);
+      console.log("[RENDER_MULTI] Sections to render:", allSections.length);
+
+      // Dispose all existing meshes first
+      safeDispose();
+
+      // Render each section
+      for (var i = 0; i < allSections.length; i++) {
+        var section = allSections[i];
+        var sectionId = section.id || ("section-" + i);
+        console.log("[RENDER_MULTI] Rendering section:", sectionId, section.type);
+
+        // Get world position for this section
+        var worldPos = Sections.getSectionWorldPosition(state, sectionId);
+        console.log("[RENDER_MULTI] Section position:", worldPos);
+
+        // Create section-specific state
+        var sectionState = Sections.createSectionState(state, section);
+
+        // Create section context for mesh naming/grouping
+        var sectionContext = {
+          sectionId: sectionId,
+          sectionType: section.type || "rectangular",
+          position: worldPos
+        };
+
+        // Resolve dimensions for this section
+        var R = resolveDims(sectionState);
+        var baseState = Object.assign({}, sectionState, { w: R.base.w_mm, d: R.base.d_mm });
+
+        var wallDims = getWallOuterDimsFromState(sectionState);
+        var wallState = Object.assign({}, sectionState, { w: wallDims.w_mm, d: wallDims.d_mm });
+
+        // Apply wall flags from section config (which walls to build)
+        if (section.walls && section.walls.enabled) {
+          wallState = Object.assign({}, wallState, {
+            walls: Object.assign({}, wallState.walls || {}, {
+              enabled: section.walls.enabled
+            })
+          });
+        }
+
+        // Build base (only for main section for now)
+        if (sectionId === "main" && getBaseEnabled(state)) {
+          if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, sectionContext);
+        }
+
+        // Build walls for this section
+        if (getWallsEnabled(state)) {
+          if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, sectionContext);
+        }
+
+        // Build internal dividers (only for main section for now)
+        if (sectionId === "main") {
+          if (Dividers && typeof Dividers.build3D === "function") Dividers.build3D(wallState, ctx, sectionContext);
+        }
+
+        // Build doors/windows (only for main section for now)
+        if (sectionId === "main") {
+          if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, sectionContext);
+          if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, sectionContext);
+        }
+
+        // Build roof for this section
+        var roofStyle = (sectionState.roof && sectionState.roof.style) ? String(sectionState.roof.style) : "apex";
+        // Attachments default to pent roof
+        if (sectionId !== "main" && section.roof && section.roof.style) {
+          roofStyle = section.roof.style;
+        } else if (sectionId !== "main") {
+          roofStyle = "pent";
+        }
+
+        var roofEnabled = getRoofEnabled(state);
+        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+          var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
+          var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
+          var roofState = Object.assign({}, sectionState, {
+            w: roofW,
+            d: roofD,
+            roof: Object.assign({}, sectionState.roof || {}, { style: roofStyle })
+          });
+
+          if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, sectionContext);
+        }
+
+        // Shift meshes for this section to correct position
+        // Main section uses standard offsets, attachments use their calculated world position
+        if (sectionId === "main") {
+          shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
+          shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
+          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
+        } else {
+          // Attachment sections: shift by world position + standard offsets
+          var shiftX = (worldPos.x || 0) - WALL_OVERHANG_MM;
+          var shiftY = WALL_RISE_MM;
+          var shiftZ = (worldPos.z || 0) - WALL_OVERHANG_MM;
+          shiftWallMeshes(ctx.scene, shiftX, shiftY, shiftZ, sectionContext);
+          shiftRoofMeshes(ctx.scene, shiftX, shiftY, shiftZ, sectionContext);
+        }
+      }
+
+      // Update BOM for main section
+      var mainSectionState = Sections.createSectionState(state, allSections[0]);
+      var mainR = resolveDims(mainSectionState);
+      var mainWallDims = getWallOuterDimsFromState(mainSectionState);
+      var mainWallState = Object.assign({}, mainSectionState, { w: mainWallDims.w_mm, d: mainWallDims.d_mm });
+      var mainRoofW = mainR.roof ? mainR.roof.w_mm : mainR.base.w_mm;
+      var mainRoofD = mainR.roof ? mainR.roof.d_mm : mainR.base.d_mm;
+      var mainRoofState = Object.assign({}, mainSectionState, { w: mainRoofW, d: mainRoofD });
+      var mainBaseState = Object.assign({}, mainSectionState, { w: mainR.base.w_mm, d: mainR.base.d_mm });
+
+      if (Walls && typeof Walls.updateBOM === "function") {
+        var wallsBom = Walls.updateBOM(mainWallState);
+        if (wallsBom && wallsBom.sections) renderBOM(wallsBom.sections);
+      }
+
+      if (Roof && typeof Roof.updateBOM === "function") Roof.updateBOM(mainRoofState);
+      if (Base && typeof Base.updateBOM === "function") Base.updateBOM(mainBaseState);
+
+      // Apply visibility settings
+      try {
+        var _cladOn = getCladdingEnabled(state);
+        applyCladdingVisibility(ctx.scene, _cladOn);
+        requestAnimationFrame(function () {
+          try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+        });
+      } catch (e1) {}
+
+      try {
+        var _openOn = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
+        applyOpeningsVisibility(ctx.scene, _openOn);
+        requestAnimationFrame(function () {
+          try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
+        });
+      } catch (e2) {}
+
+      console.log("[RENDER_MULTI] Multi-section render complete.");
     }
 
     function getOpeningsFromState(state) {
@@ -1253,6 +1478,152 @@ if (getWallsEnabled(state)) {
       Object.keys(res.invalidById).forEach(function (k) { res.invalidIds.push(k); });
       return res;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DIVIDER STATE HELPERS & VALIDATION
+    // ─────────────────────────────────────────────────────────────────────────
+
+    var __dividerSeq = 1;
+
+    function getDividersFromState(state) {
+      return (state && state.dividers && Array.isArray(state.dividers.items)) ? state.dividers.items : [];
+    }
+
+    function setDividers(nextDividers) {
+      store.setState({ dividers: { items: nextDividers } });
+    }
+
+    function patchDividerById(dividerId, patch) {
+      var cur = getDividersFromState(store.getState());
+      var next = cur.map(function(d) {
+        if (d && String(d.id || "") === String(dividerId)) {
+          return Object.assign({}, d, patch);
+        }
+        return d;
+      });
+      setDividers(next);
+    }
+
+    function addDividerOpening(dividerId, opening) {
+      var cur = getDividersFromState(store.getState());
+      var next = cur.map(function(d) {
+        if (d && String(d.id || "") === String(dividerId)) {
+          var openings = Array.isArray(d.openings) ? d.openings.slice() : [];
+          openings.push(opening);
+          return Object.assign({}, d, { openings: openings });
+        }
+        return d;
+      });
+      setDividers(next);
+    }
+
+    function removeDividerOpening(dividerId, openingId) {
+      var cur = getDividersFromState(store.getState());
+      var next = cur.map(function(d) {
+        if (d && String(d.id || "") === String(dividerId)) {
+          var openings = Array.isArray(d.openings) ? d.openings.filter(function(o) {
+            return o && String(o.id || "") !== String(openingId);
+          }) : [];
+          return Object.assign({}, d, { openings: openings });
+        }
+        return d;
+      });
+      setDividers(next);
+    }
+
+    function patchDividerOpening(dividerId, openingId, patch) {
+      var cur = getDividersFromState(store.getState());
+      var next = cur.map(function(d) {
+        if (d && String(d.id || "") === String(dividerId)) {
+          var openings = Array.isArray(d.openings) ? d.openings.map(function(o) {
+            if (o && String(o.id || "") === String(openingId)) {
+              return Object.assign({}, o, patch);
+            }
+            return o;
+          }) : [];
+          return Object.assign({}, d, { openings: openings });
+        }
+        return d;
+      });
+      setDividers(next);
+    }
+
+    function getInternalDimensions(state) {
+      var dims = resolveDims(state);
+      var variant = (state && state.walls && state.walls.variant) || "basic";
+      var wallThk = variant === "insulated" ? 100 : 75;
+      return {
+        internalW: Math.max(1, dims.frame.w_mm - 2 * wallThk),
+        internalD: Math.max(1, dims.frame.d_mm - 2 * wallThk),
+        wallThk: wallThk
+      };
+    }
+
+    function validateDividers(state) {
+      var res = { invalidById: {}, invalidIds: [] };
+      var dividers = getDividersFromState(state);
+      if (!dividers.length) return res;
+
+      var internal = getInternalDimensions(state);
+      var MIN_GAP = 50;
+      var MIN_DIVIDER_GAP = 200;
+
+      for (var i = 0; i < dividers.length; i++) {
+        var d = dividers[i];
+        if (!d) continue;
+        var axis = d.axis || "x";
+        var pos = Math.floor(Number(d.position_mm || 0));
+
+        // Boundary validation
+        var maxPos = axis === "x" ? internal.internalW : internal.internalD;
+        var minPos = MIN_GAP;
+        var maxAllowed = Math.max(minPos, maxPos - MIN_GAP);
+
+        if (pos < minPos || pos > maxAllowed) {
+          res.invalidById[String(d.id)] = "Position must be between " + minPos + "mm and " + maxAllowed + "mm";
+          res.invalidIds.push(String(d.id));
+          continue;
+        }
+
+        // Overlap validation (check against other dividers on same axis)
+        for (var j = 0; j < dividers.length; j++) {
+          if (i === j) continue;
+          var other = dividers[j];
+          if (!other || other.axis !== axis) continue;
+          var otherPos = Math.floor(Number(other.position_mm || 0));
+          if (Math.abs(pos - otherPos) < MIN_DIVIDER_GAP) {
+            if (!res.invalidById[String(d.id)]) {
+              res.invalidById[String(d.id)] = "Too close to divider " + other.id + " (min " + MIN_DIVIDER_GAP + "mm gap)";
+              res.invalidIds.push(String(d.id));
+            }
+            break;
+          }
+        }
+
+        // Validate openings within divider
+        var dividerLength = axis === "x" ? internal.internalD : internal.internalW;
+        var openings = Array.isArray(d.openings) ? d.openings : [];
+        for (var k = 0; k < openings.length; k++) {
+          var opening = openings[k];
+          if (!opening || opening.enabled === false) continue;
+          var openingPos = Math.floor(Number(opening.position_mm || 0));
+          var openingWidth = Math.floor(Number(opening.width_mm || 800));
+          var openingEnd = openingPos + openingWidth;
+
+          if (openingPos < MIN_GAP || openingEnd > dividerLength - MIN_GAP) {
+            if (!res.invalidById[String(d.id)]) {
+              res.invalidById[String(d.id)] = "Opening \"" + opening.id + "\" extends outside divider bounds";
+              res.invalidIds.push(String(d.id));
+            }
+            break;
+          }
+        }
+      }
+
+      return res;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     function subtractIntervals(base, forb) {
       var out = base.slice();
@@ -2505,10 +2876,395 @@ function parseOverhangInput(val) {
       });
     }
 
+    // ==================== ATTACHMENT HANDLERS ====================
+
+    /** Generate unique attachment ID */
+    function generateAttachmentId() {
+      return "att-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    }
+
+    /** Get current attachments from state */
+    function getAttachmentsFromState(s) {
+      if (!s || !s.sections || !s.sections.attachments) return [];
+      return s.sections.attachments.slice();
+    }
+
+    /** Update attachments in state */
+    function setAttachments(attachments) {
+      var s = store.getState();
+      var enabled = attachments.length > 0;
+      store.setState({
+        sections: Object.assign({}, s.sections || {}, {
+          enabled: enabled,
+          main: (s.sections && s.sections.main) || {
+            id: "main",
+            type: "rectangular",
+            dimensions: null,
+            roof: null,
+            walls: null
+          },
+          attachments: attachments
+        })
+      });
+    }
+
+    /** Render the attachments list UI */
+    function renderAttachmentsList() {
+      if (!attachmentsListEl) return;
+      var s = store.getState();
+      var attachments = getAttachmentsFromState(s);
+
+      if (attachments.length === 0) {
+        attachmentsListEl.innerHTML = '<div class="hint">(No attachments added)</div>';
+        return;
+      }
+
+      var html = "";
+      for (var i = 0; i < attachments.length; i++) {
+        var att = attachments[i];
+        var label = (att.type || "lean-to") + " on " + (att.attachTo?.wall || "?") + " wall";
+        var dims = (att.dimensions?.w_mm || "?") + " x " + (att.dimensions?.d_mm || "?") + " mm";
+        html += '<div class="attachment-item" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee;">';
+        html += '<span style="font-size:12px;"><strong>' + label + '</strong><br/><span style="color:#666;">' + dims + '</span></span>';
+        html += '<button type="button" class="remove-attachment-btn" data-id="' + att.id + '" style="padding:2px 8px;">Remove</button>';
+        html += '</div>';
+      }
+      attachmentsListEl.innerHTML = html;
+
+      // Wire up remove buttons
+      var removeBtns = attachmentsListEl.querySelectorAll(".remove-attachment-btn");
+      for (var j = 0; j < removeBtns.length; j++) {
+        (function(btn) {
+          btn.addEventListener("click", function() {
+            var attId = btn.getAttribute("data-id");
+            var currentAtts = getAttachmentsFromState(store.getState());
+            var filtered = currentAtts.filter(function(a) { return a.id !== attId; });
+            setAttachments(filtered);
+          });
+        })(removeBtns[j]);
+      }
+    }
+
+    // Add attachment button handler
+    if (addAttachmentBtnEl) {
+      addAttachmentBtnEl.addEventListener("click", function() {
+        var attType = attachmentTypeEl ? attachmentTypeEl.value : "lean-to";
+        var attWall = attachmentWallEl ? attachmentWallEl.value : "left";
+        var attWidth = attachmentWidthEl ? parseInt(attachmentWidthEl.value, 10) || 1800 : 1800;
+        var attDepth = attachmentDepthEl ? parseInt(attachmentDepthEl.value, 10) || 1200 : 1200;
+        var attOffset = attachmentOffsetEl ? parseInt(attachmentOffsetEl.value, 10) || 0 : 0;
+
+        var newAttachment = {
+          id: generateAttachmentId(),
+          type: attType,
+          dimensions: {
+            w_mm: attWidth,
+            d_mm: attDepth
+          },
+          attachTo: {
+            sectionId: "main",
+            wall: attWall,
+            offset_mm: attOffset
+          },
+          roof: {
+            style: "pent"  // Lean-tos typically have pent roofs
+          },
+          walls: {
+            enabled: { front: true, back: true, left: true, right: true }
+          }
+        };
+
+        // Disable the wall that connects to the main building
+        if (attWall === "left") newAttachment.walls.enabled.right = false;
+        else if (attWall === "right") newAttachment.walls.enabled.left = false;
+        else if (attWall === "front") newAttachment.walls.enabled.back = false;
+        else if (attWall === "back") newAttachment.walls.enabled.front = false;
+
+        var currentAtts = getAttachmentsFromState(store.getState());
+        currentAtts.push(newAttachment);
+        setAttachments(currentAtts);
+      });
+    }
+
+    // Remove all attachments button handler
+    if (removeAllAttachmentsBtnEl) {
+      removeAllAttachmentsBtnEl.addEventListener("click", function() {
+        setAttachments([]);
+      });
+    }
+
+    // Render attachments list when state changes
+    store.onChange(function(s) {
+      renderAttachmentsList();
+    });
+
+    // Initial render of attachments list
+    renderAttachmentsList();
+
+    // ==================== END ATTACHMENT HANDLERS ====================
+
+    // ==================== DIVIDER HANDLERS ====================
+
+    /** Render the dividers list UI */
+    function renderDividersUi(state, validation) {
+      if (!dividersListEl) return;
+      var dividers = getDividersFromState(state);
+      var divVal = validation && validation.dividers ? validation.dividers : { invalidById: {} };
+
+      if (dividers.length === 0) {
+        dividersListEl.innerHTML = '<div class="hint">(No dividers added)</div>';
+        return;
+      }
+
+      dividersListEl.innerHTML = "";
+      var internal = getInternalDimensions(state);
+
+      for (var i = 0; i < dividers.length; i++) {
+        (function(div, idx) {
+          var divId = String(div.id || "");
+          var isInvalid = !!divVal.invalidById[divId];
+          var errorMsg = divVal.invalidById[divId] || "";
+
+          var item = document.createElement("div");
+          item.className = "dividerItem" + (isInvalid ? " invalid" : "");
+          item.style.cssText = "border:1px solid " + (isInvalid ? "#c00" : "#ccc") + ";padding:8px;margin-bottom:8px;border-radius:4px;background:" + (isInvalid ? "#fff0f0" : "#fafafa") + ";";
+
+          // Header row with title and delete button
+          var header = document.createElement("div");
+          header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;";
+          header.innerHTML = '<strong>Divider #' + (idx + 1) + '</strong>';
+          var deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.style.cssText = "padding:2px 8px;font-size:11px;";
+          deleteBtn.addEventListener("click", function() {
+            var cur = getDividersFromState(store.getState());
+            var next = cur.filter(function(d) { return d.id !== divId; });
+            setDividers(next);
+          });
+          header.appendChild(deleteBtn);
+          item.appendChild(header);
+
+          // Axis selector row
+          var axisRow = document.createElement("div");
+          axisRow.className = "row";
+          axisRow.style.cssText = "margin-bottom:6px;";
+          var axisLabel = document.createElement("label");
+          axisLabel.innerHTML = "Orientation ";
+          var axisSelect = document.createElement("select");
+          axisSelect.innerHTML = '<option value="x"' + (div.axis === "x" ? " selected" : "") + '>X-axis (front-to-back)</option>' +
+                                 '<option value="z"' + (div.axis === "z" ? " selected" : "") + '>Z-axis (left-to-right)</option>';
+          axisSelect.addEventListener("change", function() {
+            patchDividerById(divId, { axis: this.value });
+          });
+          axisLabel.appendChild(axisSelect);
+          axisRow.appendChild(axisLabel);
+          item.appendChild(axisRow);
+
+          // Position row
+          var posRow = document.createElement("div");
+          posRow.className = "row";
+          posRow.style.cssText = "margin-bottom:6px;";
+          var posLabel = document.createElement("label");
+          var maxPos = div.axis === "x" ? internal.internalW : internal.internalD;
+          posLabel.innerHTML = "Position (mm) <span style='color:#666;font-size:10px;'>(max: " + maxPos + ")</span> ";
+          var posInput = document.createElement("input");
+          posInput.type = "number";
+          posInput.min = "50";
+          posInput.max = String(maxPos - 50);
+          posInput.step = "10";
+          posInput.value = String(div.position_mm || 500);
+          posInput.style.width = "100px";
+          posInput.addEventListener("change", function() {
+            patchDividerById(divId, { position_mm: parseInt(this.value, 10) || 500 });
+          });
+          posLabel.appendChild(posInput);
+          posRow.appendChild(posLabel);
+          item.appendChild(posRow);
+
+          // Covering row
+          var coverRow = document.createElement("div");
+          coverRow.className = "row";
+          coverRow.style.cssText = "margin-bottom:6px;";
+
+          var leftLabel = document.createElement("label");
+          leftLabel.innerHTML = "Left side ";
+          var leftSelect = document.createElement("select");
+          leftSelect.innerHTML = '<option value="none"' + (div.coveringLeft === "none" ? " selected" : "") + '>None</option>' +
+                                 '<option value="osb"' + (div.coveringLeft === "osb" ? " selected" : "") + '>OSB</option>' +
+                                 '<option value="cladding"' + (div.coveringLeft === "cladding" ? " selected" : "") + '>Cladding</option>';
+          leftSelect.addEventListener("change", function() {
+            patchDividerById(divId, { coveringLeft: this.value });
+          });
+          leftLabel.appendChild(leftSelect);
+          coverRow.appendChild(leftLabel);
+
+          var rightLabel = document.createElement("label");
+          rightLabel.innerHTML = "Right side ";
+          var rightSelect = document.createElement("select");
+          rightSelect.innerHTML = '<option value="none"' + (div.coveringRight === "none" ? " selected" : "") + '>None</option>' +
+                                  '<option value="osb"' + (div.coveringRight === "osb" ? " selected" : "") + '>OSB</option>' +
+                                  '<option value="cladding"' + (div.coveringRight === "cladding" ? " selected" : "") + '>Cladding</option>';
+          rightSelect.addEventListener("change", function() {
+            patchDividerById(divId, { coveringRight: this.value });
+          });
+          rightLabel.appendChild(rightSelect);
+          coverRow.appendChild(rightLabel);
+          item.appendChild(coverRow);
+
+          // Openings section
+          var openingsSection = document.createElement("div");
+          openingsSection.style.cssText = "border-top:1px solid #ddd;padding-top:6px;margin-top:6px;";
+
+          var openingsHeader = document.createElement("div");
+          openingsHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;";
+          openingsHeader.innerHTML = '<span style="font-size:12px;font-weight:bold;">Door Openings</span>';
+          var addDoorBtn = document.createElement("button");
+          addDoorBtn.type = "button";
+          addDoorBtn.textContent = "+ Add Door";
+          addDoorBtn.style.cssText = "padding:2px 6px;font-size:10px;";
+          addDoorBtn.addEventListener("click", function() {
+            var dividerLength = div.axis === "x" ? internal.internalD : internal.internalW;
+            var newOpening = {
+              id: divId + "-door" + (__dividerSeq++),
+              type: "door",
+              enabled: true,
+              position_mm: Math.floor((dividerLength - 800) / 2),
+              width_mm: 800,
+              height_mm: 1900
+            };
+            addDividerOpening(divId, newOpening);
+          });
+          openingsHeader.appendChild(addDoorBtn);
+          openingsSection.appendChild(openingsHeader);
+
+          // List existing openings
+          var openings = Array.isArray(div.openings) ? div.openings : [];
+          if (openings.length === 0) {
+            var noOpenings = document.createElement("div");
+            noOpenings.className = "hint";
+            noOpenings.style.cssText = "font-size:11px;color:#666;";
+            noOpenings.textContent = "(No doors)";
+            openingsSection.appendChild(noOpenings);
+          } else {
+            for (var j = 0; j < openings.length; j++) {
+              (function(opening) {
+                var openingId = String(opening.id || "");
+                var openingRow = document.createElement("div");
+                openingRow.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:11px;";
+
+                // Position input
+                var posLab = document.createElement("label");
+                posLab.textContent = "Pos ";
+                var posInp = document.createElement("input");
+                posInp.type = "number";
+                posInp.min = "50";
+                posInp.step = "10";
+                posInp.value = String(opening.position_mm || 0);
+                posInp.style.width = "60px";
+                posInp.addEventListener("change", function() {
+                  patchDividerOpening(divId, openingId, { position_mm: parseInt(this.value, 10) || 0 });
+                });
+                posLab.appendChild(posInp);
+                openingRow.appendChild(posLab);
+
+                // Width input
+                var widLab = document.createElement("label");
+                widLab.textContent = "W ";
+                var widInp = document.createElement("input");
+                widInp.type = "number";
+                widInp.min = "400";
+                widInp.step = "10";
+                widInp.value = String(opening.width_mm || 800);
+                widInp.style.width = "60px";
+                widInp.addEventListener("change", function() {
+                  patchDividerOpening(divId, openingId, { width_mm: parseInt(this.value, 10) || 800 });
+                });
+                widLab.appendChild(widInp);
+                openingRow.appendChild(widLab);
+
+                // Height input
+                var hgtLab = document.createElement("label");
+                hgtLab.textContent = "H ";
+                var hgtInp = document.createElement("input");
+                hgtInp.type = "number";
+                hgtInp.min = "400";
+                hgtInp.step = "10";
+                hgtInp.value = String(opening.height_mm || 1900);
+                hgtInp.style.width = "60px";
+                hgtInp.addEventListener("change", function() {
+                  patchDividerOpening(divId, openingId, { height_mm: parseInt(this.value, 10) || 1900 });
+                });
+                hgtLab.appendChild(hgtInp);
+                openingRow.appendChild(hgtLab);
+
+                // Remove button
+                var remBtn = document.createElement("button");
+                remBtn.type = "button";
+                remBtn.textContent = "X";
+                remBtn.style.cssText = "padding:1px 5px;font-size:10px;";
+                remBtn.addEventListener("click", function() {
+                  removeDividerOpening(divId, openingId);
+                });
+                openingRow.appendChild(remBtn);
+
+                openingsSection.appendChild(openingRow);
+              })(openings[j]);
+            }
+          }
+          item.appendChild(openingsSection);
+
+          // Error message
+          if (isInvalid) {
+            var errDiv = document.createElement("div");
+            errDiv.style.cssText = "color:#c00;font-size:11px;margin-top:4px;";
+            errDiv.textContent = errorMsg;
+            item.appendChild(errDiv);
+          }
+
+          dividersListEl.appendChild(item);
+        })(dividers[i], i);
+      }
+    }
+
+    // Add Divider button handler
+    if (addDividerBtnEl) {
+      addDividerBtnEl.addEventListener("click", function() {
+        var s = store.getState();
+        var internal = getInternalDimensions(s);
+        var existing = getDividersFromState(s);
+
+        var newDivider = {
+          id: "div" + (__dividerSeq++),
+          enabled: true,
+          axis: "x",
+          position_mm: Math.floor(internal.internalW / 2),
+          coveringLeft: "none",
+          coveringRight: "none",
+          openings: []
+        };
+
+        existing.push(newDivider);
+        setDividers(existing);
+      });
+    }
+
+    // Remove All Dividers button handler
+    if (removeAllDividersBtnEl) {
+      removeAllDividersBtnEl.addEventListener("click", function() {
+        setDividers([]);
+      });
+    }
+
+    // ==================== END DIVIDER HANDLERS ====================
+
     store.onChange(function (s) {
       var v = syncInvalidOpeningsIntoState();
+      // Add divider validation to v
+      v.dividers = validateDividers(s);
       syncUiFromState(s, v);
       applyWallHeightUiLock(s);
+      renderDividersUi(s, v);
       render(s);
     });
 
@@ -2530,8 +3286,11 @@ function parseOverhangInput(val) {
       dbg: window.__dbg
     });
 // Commit HTML default apex heights to state on init (ensures cladding trim works on first load)
-  commitApexHeightsFromInputs();
-    commitPentHeightsFromInputs();
+    // Skip in viewer mode - state already has correct values from URL parameters
+    if (!viewerMode) {
+      commitApexHeightsFromInputs();
+      commitPentHeightsFromInputs();
+    }
     // Wire up camera snap view buttons
     // Wire up camera snap view buttons
     var snapPlanBtn = document.getElementById('snapPlanBtn');

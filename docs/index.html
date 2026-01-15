@@ -137,6 +137,14 @@
                   <button id="removeAllWindowsBtn" type="button">Remove All</button>
                 </div>
                 <div id="windowsList"></div>
+
+                <div class="boSubhead" style="margin-top:10px;">Internal Dividers</div>
+                <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
+                <div class="row">
+                  <button id="addDividerBtn" type="button">+ Add Divider</button>
+                  <button id="removeAllDividersBtn" type="button">Remove All</button>
+                </div>
+                <div id="dividersList"></div>
               </div>
             </details>
 
@@ -254,6 +262,58 @@
             </details>
 
             <details open class="boSection">
+              <summary>Building Attachments</summary>
+              <div class="boBox">
+                <div class="hint" style="margin:0 0 10px 0;">Add lean-to extensions or other secondary building sections</div>
+
+                <div class="boSubhead">Add New Attachment</div>
+                <div class="row">
+                  <label>
+                    Type
+                    <select id="attachmentType" aria-label="Attachment type">
+                      <option value="lean-to" selected>Lean-to</option>
+                    </select>
+                  </label>
+                  <label>
+                    Attach to Wall
+                    <select id="attachmentWall" aria-label="Wall to attach to">
+                      <option value="left" selected>Left</option>
+                      <option value="right">Right</option>
+                      <option value="front">Front</option>
+                      <option value="back">Back</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>
+                    Width (mm)
+                    <input id="attachmentWidth" type="number" min="500" step="100" value="1800" />
+                  </label>
+                  <label>
+                    Depth (mm)
+                    <input id="attachmentDepth" type="number" min="500" step="100" value="1200" />
+                  </label>
+                </div>
+                <div class="row">
+                  <label>
+                    Offset from corner (mm)
+                    <input id="attachmentOffset" type="number" min="0" step="100" value="0" />
+                  </label>
+                  <div></div>
+                </div>
+                <div class="row">
+                  <button id="addAttachmentBtn" type="button">+ Add Attachment</button>
+                  <button id="removeAllAttachmentsBtn" type="button">Remove All</button>
+                </div>
+
+                <div class="boSubhead" style="margin-top:10px;">Current Attachments</div>
+                <div id="attachmentsList">
+                  <div class="hint">(No attachments added)</div>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
               <summary>Appearance</summary>
               <div class="boBox">
                 <div class="hint">(Cladding, finishes, colours — future)</div>
@@ -312,6 +372,9 @@
                 <div class="row">
                   <button id="exportBtn" type="button">Export Design</button>
                   <button id="importBtn" type="button">Import Design</button>
+                </div>
+                <div class="row">
+                  <button id="copyViewerLinkBtn" type="button">Copy Viewer Link</button>
                 </div>
 
                 <p id="instancesHint" class="hint"></p>
