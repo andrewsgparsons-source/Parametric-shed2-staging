@@ -13,6 +13,7 @@
  * @param {{scene: BABYLON.Scene, materials: object}} ctx - Babylon context
  */
 export function build3D(state, ctx, sectionContext) {
+  console.log("[WINDOWS] build3D called", { state: !!state, ctx: !!ctx, sectionContext });
   const { scene, materials } = ctx;
 
   // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
@@ -33,7 +34,12 @@ export function build3D(state, ctx, sectionContext) {
   const openings = Array.isArray(state.walls?.openings) ? state.walls.openings : [];
   const windows = openings.filter((o) => o && o.type === "window" && o.enabled !== false);
 
-  if (windows.length === 0) return;
+  console.log("[WINDOWS] Found windows:", windows.length, windows);
+
+  if (windows.length === 0) {
+    console.log("[WINDOWS] No windows to build");
+    return;
+  }
 
   // Get frame dimensions
   const dims = {
@@ -70,8 +76,10 @@ export function build3D(state, ctx, sectionContext) {
     // Calculate window position based on wall (with section offset)
     const pos = getWindowPosition(wallId, dims, wallThk, adjustedWinX, winWidth, winHeight, winY, plateY, WALL_RISE_MM, sectionPos);
 
+    console.log("[WINDOWS] Building window", index, "at position", pos);
     buildWindow(scene, win, pos, winWidth, winHeight, index, materials, meshPrefix);
   });
+  console.log("[WINDOWS] Finished building all windows");
 }
 
 /**

@@ -371,8 +371,8 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   lowerBrace.metadata = { dynamic: true, doorId: door.id };
 
   // T-Hinges
-  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top");
-  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom");
+  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom", meshPrefix);
 
   // Handle open state
   if (isOpen) {
@@ -415,7 +415,9 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
     clearanceX,
     clearanceZ,
     mats,
-    door.id
+    door.id,
+    meshPrefix,
+    index
   );
 
   // Build RIGHT door (hinged on RIGHT EDGE of opening)
@@ -433,7 +435,9 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
     clearanceX,
     clearanceZ,
     mats,
-    door.id
+    door.id,
+    meshPrefix,
+    index
   );
 }
 
@@ -442,7 +446,7 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
  * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
  * @param doorWidth - Width of this single panel (half the opening width)
  */
-function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId) {
+function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0) {
   console.log(`[DOUBLE_DOOR] Building ${name}: doorWidth=${doorWidth}mm, offsetX=${offsetX}mm, hingeSide=${hingeSide}, isLeftRightWall=${isLeftRightWall}`);
 
   // Dimensions in mm
@@ -627,8 +631,8 @@ function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide
   // For left door: hinge at left edge (x = -doorWidth/2 from panel center)
   // For right door: hinge at right edge (x = +doorWidth/2 from panel center)
   const hingeX = hingeSide === "left" ? -doorWidth / 2 : doorWidth / 2;
-  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, name, "top");
-  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, name, "bottom");
+  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom", meshPrefix);
 
   // Handle open state
   if (isOpen) {
@@ -641,7 +645,7 @@ function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide
 /**
  * Build a T-hinge
  */
-function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, material, doorIndex, position) {
+function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, material, doorIndex, position, meshPrefix = "") {
   const hingeWidth_mm = 150;
   const hingeBarWidth_mm = 20;
   const hingeThickness_mm = 3;
@@ -765,10 +769,10 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
   const hingeY_top = doorHeight / 2 - 150;
   const hingeY_bottom = -doorHeight / 2 + 150;
 
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_left");
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_left");
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_right");
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_right");
+  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_left", meshPrefix);
+  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_left", meshPrefix);
+  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_right", meshPrefix);
+  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_right", meshPrefix);
 
   if (isOpen) {
     const openAngle = handleSide === "left" ? -Math.PI / 2 : Math.PI / 2;
@@ -923,7 +927,7 @@ function buildFrenchDoorPanel(scene, parent, xOffset, panelWidth, doorHeight, gl
 /**
  * Build a French door hinge (simple cylinder)
  */
-function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, position) {
+function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, position, meshPrefix = "") {
   const hinge = BABYLON.MeshBuilder.CreateCylinder(
     `${meshPrefix}door-${index}-french-hinge-${position}`,
     {
@@ -1194,8 +1198,8 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   const topLedgeY = doorHeight / 2 - 150;
   const bottomLedgeY = -doorHeight / 2 + 150;
 
-  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top");
-  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom");
+  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom", meshPrefix);
 
   if (isOpen) {
     const openAngle = hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;
@@ -1209,7 +1213,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
  * Build double mortise-tenon doors
  * Creates two mortise-tenon door panels hinged on opposite sides
  */
-function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index) {
+function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const isOpen = door.isOpen || false;
 
   // Each door is half the total width minus a small center gap
@@ -1268,7 +1272,7 @@ function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index)
  * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
  * @param doorWidth - Width of this single panel (half the opening width)
  */
-function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, doorIndex) {
+function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, doorIndex, meshPrefix = "") {
   // Dimensions in mm
   const doorThickness_mm = 35;
   const boardWidth_mm = 100;
@@ -1520,8 +1524,8 @@ function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight,
   // For left door: hinge at left edge (x = -doorWidth/2 from panel center)
   // For right door: hinge at right edge (x = +doorWidth/2 from panel center)
   const hingeX = hingeSide === "left" ? -doorWidth / 2 : doorWidth / 2;
-  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top");
-  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom");
+  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom", meshPrefix);
 
   if (isOpen) {
     const openAngle = hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;

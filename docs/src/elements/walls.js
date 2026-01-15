@@ -1234,12 +1234,25 @@ if (apexRoofModel) {
                   }
 
                   if (wedges.length) {
+                    console.log('DEBUG APEX: Creating cutterCSG from', wedges.length, 'wedges');
                     try {
                       cutterCSG = BABYLON.CSG.FromMesh(wedges[0]);
+                      console.log('DEBUG APEX: First wedge CSG created');
                       for (let wi = 1; wi < wedges.length; wi++) {
-                        try { cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[wi])); } catch (e) {}
+                        try {
+                          cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[wi]));
+                          console.log('DEBUG APEX: Union with wedge', wi, 'complete');
+                        } catch (e) {
+                          console.error('DEBUG APEX: Error in union with wedge', wi, ':', e);
+                        }
                       }
-                    } catch (e) { cutterCSG = null; }
+                      console.log('DEBUG APEX: cutterCSG final:', !!cutterCSG);
+                    } catch (e) {
+                      console.error('DEBUG APEX: Error creating cutterCSG:', e);
+                      cutterCSG = null;
+                    }
+                  } else {
+                    console.warn('DEBUG APEX: No wedges created!');
                   }
 
                   for (let wi = 0; wi < wedges.length; wi++) {
@@ -1293,19 +1306,33 @@ if (apexRoofModel) {
             }
 
             if (cutterCSG) {
+              console.log('DEBUG CSG: cutterCSG created, attempting clip for wall', wallId, 'panel', panelIndex);
               let resMesh = null;
               try {
+                console.log('DEBUG CSG: Creating baseCSG from merged mesh...');
                 const baseCSG = BABYLON.CSG.FromMesh(merged);
+                console.log('DEBUG CSG: baseCSG created, performing subtract...');
                 const resCSG = baseCSG.subtract(cutterCSG);
+                console.log('DEBUG CSG: subtract complete, converting to mesh...');
                 resMesh = resCSG.toMesh(`${meshPrefix}clad-${wallId}-panel-${panelIndex}-roofclip`, mat, scene, false);
+                console.log('DEBUG CSG: resMesh created successfully:', !!resMesh);
               } catch (e) {
+                console.error('DEBUG CSG: ERROR during CSG operations:', e);
                 resMesh = null;
               }
 
               if (resMesh) {
-                try { if (merged && !merged.isDisposed()) merged.dispose(false, true); } catch (e) {}
+                console.log('DEBUG CSG: Disposing old merged mesh and replacing with clipped version');
+                try { if (merged && !merged.isDisposed()) merged.dispose(false, true); } catch (e) {
+                  console.error('DEBUG CSG: Error disposing old mesh:', e);
+                }
                 merged = resMesh;
+                console.log('DEBUG CSG: Merged replaced with clipped mesh');
+              } else {
+                console.warn('DEBUG CSG: resMesh is null, keeping original merged mesh');
               }
+            } else {
+              console.log('DEBUG CSG: No cutterCSG created for wall', wallId, 'panel', panelIndex);
             }
           }
         }

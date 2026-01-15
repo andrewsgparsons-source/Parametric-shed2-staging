@@ -1019,11 +1019,11 @@ function render(state) {
 if (getWallsEnabled(state)) {
           if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
           shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
-
-          // Build door and window geometry into openings
-          if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
-          if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
         }
+
+        // Build door and window geometry into openings (always build regardless of wall visibility)
+        if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
+        if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
         var roofEnabled = getRoofEnabled(state);
