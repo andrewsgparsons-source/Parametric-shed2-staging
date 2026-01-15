@@ -1307,6 +1307,8 @@ if (apexRoofModel) {
 
             if (cutterCSG) {
               console.log('DEBUG CSG: cutterCSG created, attempting clip for wall', wallId, 'panel', panelIndex);
+              console.log('DEBUG CSG: merged mesh exists?', !!merged, 'isDisposed?', merged?.isDisposed?.());
+              console.log('DEBUG CSG: merged mesh has geometry?', !!merged?.getTotalVertices?.(), 'vertices:', merged?.getTotalVertices?.());
               let resMesh = null;
               try {
                 console.log('DEBUG CSG: Creating baseCSG from merged mesh...');
