@@ -9,6 +9,22 @@
 </head>
 
 <body data-view="3d">
+  <!-- Access restriction: require valid profile parameter -->
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var profile = params.get("profile");
+      // Allow: viewer mode, admin bypass, or localhost development
+      var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      var isFileProtocol = window.location.protocol === "file:";
+      var hasValidProfile = profile === "viewer" || profile === "admin";
+
+      if (!isLocalhost && !isFileProtocol && !hasValidProfile) {
+        document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#f5f5f5;"><div style="text-align:center;padding:40px;background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"><h1 style="color:#333;margin-bottom:10px;">Link Invalid</h1><p style="color:#666;">This link has expired or is invalid.</p><p style="color:#999;font-size:14px;">Please contact the sender for a new link.</p></div></div>';
+        throw new Error("Access denied - no valid profile");
+      }
+    })();
+  </script>
   <canvas id="renderCanvas" tabindex="0" aria-hidden="false"></canvas>
   <div id="statusOverlay">status...</div>
 

@@ -23,6 +23,7 @@ export function isViewerMode() {
 
 /**
  * Parse URL parameters into a state object for viewer mode
+ * Supports both Base64 encoded config (new) and legacy individual params
  * @returns {object} Partial state object from URL params
  */
 export function parseUrlState() {
@@ -31,11 +32,35 @@ export function parseUrlState() {
 
   console.log("[profiles] Parsing URL state from:", window.location.search);
 
+  // Check for Base64 encoded config first (new cleaner format)
+  if (params.has("c")) {
+    try {
+      var base64 = params.get("c");
+      var json = atob(base64);
+      state = JSON.parse(json);
+      console.log("[profiles] Decoded Base64 config:", state);
+
+      // Ensure dim object has frameW_mm and frameD_mm set
+      if (state.w && !state.dim) {
+        state.dim = { frameW_mm: state.w, frameD_mm: state.d };
+      }
+      if (state.dim && state.w) {
+        state.dim.frameW_mm = state.dim.frameW_mm || state.w;
+        state.dim.frameD_mm = state.dim.frameD_mm || state.d;
+      }
+
+      return state;
+    } catch (e) {
+      console.warn("[profiles] Failed to decode Base64 config:", e);
+      // Fall through to legacy parsing
+    }
+  }
+
+  // Legacy individual parameter parsing (for backwards compatibility)
   // Basic dimensions - set both root level and canonical dim object
   if (params.has("w")) {
     var w = parseInt(params.get("w"), 10);
     state.w = w;
-    // Also set the canonical dimension
     state.dim = state.dim || {};
     state.dim.frameW_mm = w;
     console.log("[profiles] Set width:", w);
@@ -43,7 +68,6 @@ export function parseUrlState() {
   if (params.has("d")) {
     var d = parseInt(params.get("d"), 10);
     state.d = d;
-    // Also set the canonical dimension
     state.dim = state.dim || {};
     state.dim.frameD_mm = d;
     console.log("[profiles] Set depth:", d);
@@ -75,15 +99,12 @@ export function parseUrlState() {
     state.roof.apex = state.roof.apex || {};
     if (params.has("roofApexEaveHeight")) {
       state.roof.apex.heightToEaves_mm = parseInt(params.get("roofApexEaveHeight"), 10);
-      console.log("[profiles] Set apex eave height:", state.roof.apex.heightToEaves_mm);
     }
     if (params.has("roofApexCrestHeight")) {
       state.roof.apex.heightToCrest_mm = parseInt(params.get("roofApexCrestHeight"), 10);
-      console.log("[profiles] Set apex crest height:", state.roof.apex.heightToCrest_mm);
     }
     if (params.has("roofApexTrussCount")) {
       state.roof.apex.trussCount = parseInt(params.get("roofApexTrussCount"), 10);
-      console.log("[profiles] Set apex truss count:", state.roof.apex.trussCount);
     }
   }
 
@@ -139,7 +160,6 @@ export function parseUrlState() {
     state.walls.variant = params.get("wallsVariant");
   }
   if (params.has("wallSection")) {
-    // Parse "50x75" or "50x100" into frame object
     var section = params.get("wallSection");
     var parts = section.split("x");
     if (parts.length === 2) {
@@ -183,133 +203,127 @@ export function parseUrlState() {
 
 /**
  * Generate a viewer URL from the current state
+ * Uses Base64 encoding for cleaner, shorter URLs
  * @param {object} state - Current application state
- * @returns {string} Full URL with viewer profile and state params
+ * @returns {string} Full URL with viewer profile and encoded state
  */
 export function generateViewerUrl(state) {
-  var params = new URLSearchParams();
-  params.set("profile", "viewer");
+  // Build a compact state object with only the needed fields
+  var compact = {};
 
-  // Basic dimensions - prefer dim.frameW_mm/frameD_mm over legacy w/d
+  // Basic dimensions
   var width = (state.dim && state.dim.frameW_mm) || state.w;
   var depth = (state.dim && state.dim.frameD_mm) || state.d;
-  if (width) params.set("w", String(width));
-  if (depth) params.set("d", String(depth));
-
-  if (state.dimMode) {
-    params.set("dimMode", state.dimMode);
-  }
+  if (width) compact.w = width;
+  if (depth) compact.d = depth;
+  if (state.dimMode) compact.dimMode = state.dimMode;
 
   // Roof
   if (state.roof) {
-    if (state.roof.style) {
-      params.set("roofStyle", state.roof.style);
-    }
+    compact.roof = {};
+    if (state.roof.style) compact.roof.style = state.roof.style;
 
     // Apex params
     if (state.roof.apex) {
+      compact.roof.apex = {};
       if (state.roof.apex.heightToEaves_mm != null) {
-        params.set("roofApexEaveHeight", String(state.roof.apex.heightToEaves_mm));
+        compact.roof.apex.heightToEaves_mm = state.roof.apex.heightToEaves_mm;
       }
       if (state.roof.apex.heightToCrest_mm != null) {
-        params.set("roofApexCrestHeight", String(state.roof.apex.heightToCrest_mm));
+        compact.roof.apex.heightToCrest_mm = state.roof.apex.heightToCrest_mm;
       }
       if (state.roof.apex.trussCount != null) {
-        params.set("roofApexTrussCount", String(state.roof.apex.trussCount));
+        compact.roof.apex.trussCount = state.roof.apex.trussCount;
       }
     }
 
     // Pent params
     if (state.roof.pent) {
+      compact.roof.pent = {};
       if (state.roof.pent.minHeight_mm != null) {
-        params.set("roofPentMinHeight", String(state.roof.pent.minHeight_mm));
+        compact.roof.pent.minHeight_mm = state.roof.pent.minHeight_mm;
       }
       if (state.roof.pent.maxHeight_mm != null) {
-        params.set("roofPentMaxHeight", String(state.roof.pent.maxHeight_mm));
+        compact.roof.pent.maxHeight_mm = state.roof.pent.maxHeight_mm;
       }
     }
 
     // Hipped params
     if (state.roof.hipped) {
+      compact.roof.hipped = {};
       if (state.roof.hipped.heightToEaves_mm != null) {
-        params.set("roofHippedEaveHeight", String(state.roof.hipped.heightToEaves_mm));
+        compact.roof.hipped.heightToEaves_mm = state.roof.hipped.heightToEaves_mm;
       }
       if (state.roof.hipped.heightToCrest_mm != null) {
-        params.set("roofHippedCrestHeight", String(state.roof.hipped.heightToCrest_mm));
+        compact.roof.hipped.heightToCrest_mm = state.roof.hipped.heightToCrest_mm;
       }
     }
   }
 
   // Overhangs
   if (state.overhang) {
-    if (state.overhang.uniform_mm != null) {
-      params.set("overhangUniform", String(state.overhang.uniform_mm));
-    }
-    if (state.overhang.front_mm != null) {
-      params.set("overhangFront", String(state.overhang.front_mm));
-    }
-    if (state.overhang.back_mm != null) {
-      params.set("overhangBack", String(state.overhang.back_mm));
-    }
-    if (state.overhang.left_mm != null) {
-      params.set("overhangLeft", String(state.overhang.left_mm));
-    }
-    if (state.overhang.right_mm != null) {
-      params.set("overhangRight", String(state.overhang.right_mm));
-    }
+    compact.overhang = {};
+    if (state.overhang.uniform_mm != null) compact.overhang.uniform_mm = state.overhang.uniform_mm;
+    if (state.overhang.front_mm != null) compact.overhang.front_mm = state.overhang.front_mm;
+    if (state.overhang.back_mm != null) compact.overhang.back_mm = state.overhang.back_mm;
+    if (state.overhang.left_mm != null) compact.overhang.left_mm = state.overhang.left_mm;
+    if (state.overhang.right_mm != null) compact.overhang.right_mm = state.overhang.right_mm;
   }
 
-  // Walls
+  // Walls variant
   if (state.walls && state.walls.variant) {
-    params.set("wallsVariant", state.walls.variant);
+    compact.walls = compact.walls || {};
+    compact.walls.variant = state.walls.variant;
   }
 
   // Frame section
   if (state.frame && state.frame.thickness_mm && state.frame.depth_mm) {
-    params.set("wallSection", state.frame.thickness_mm + "x" + state.frame.depth_mm);
+    compact.frame = {
+      thickness_mm: state.frame.thickness_mm,
+      depth_mm: state.frame.depth_mm
+    };
   }
 
-  // Openings (JSON-encoded)
+  // Openings (cleaned)
   if (state.walls && state.walls.openings && state.walls.openings.length > 0) {
-    // Filter out computed/transient fields
-    var cleanOpenings = state.walls.openings.map(function(o) {
+    compact.walls = compact.walls || {};
+    compact.walls.openings = state.walls.openings.map(function(o) {
       var opening = {
         id: o.id,
         wall: o.wall,
         type: o.type,
-        enabled: o.enabled !== false,
         x_mm: o.x_mm,
         y_mm: o.y_mm,
         width_mm: o.width_mm,
         height_mm: o.height_mm,
         style: o.style
       };
-      // Door-specific fields
       if (o.type === "door") {
         opening.handleSide = o.handleSide || "left";
         opening.isOpen = !!o.isOpen;
       }
       return opening;
     });
-    params.set("openings", encodeURIComponent(JSON.stringify(cleanOpenings)));
   }
 
-  // Dividers (JSON-encoded)
+  // Dividers (cleaned)
   if (state.dividers && state.dividers.items && state.dividers.items.length > 0) {
-    var cleanDividers = state.dividers.items.map(function(d) {
-      return {
-        id: d.id,
-        enabled: d.enabled !== false,
-        axis: d.axis,
-        position_mm: d.position_mm,
-        coveringLeft: d.coveringLeft,
-        coveringRight: d.coveringRight
-      };
-    });
-    params.set("dividers", encodeURIComponent(JSON.stringify(cleanDividers)));
+    compact.dividers = {
+      items: state.dividers.items.map(function(d) {
+        return {
+          id: d.id,
+          axis: d.axis,
+          position_mm: d.position_mm
+        };
+      })
+    };
   }
 
-  return window.location.origin + window.location.pathname + "?" + params.toString();
+  // Encode as Base64
+  var json = JSON.stringify(compact);
+  var base64 = btoa(json);
+
+  return window.location.origin + window.location.pathname + "?profile=viewer&c=" + base64;
 }
 
 /**
