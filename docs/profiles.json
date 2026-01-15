@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "profiles": {
+    "viewer": {
+      "label": "Viewer",
+      "description": "Read-only view for sharing designs - no editing, only visibility toggles and camera controls",
+      "sections": {
+        "sizeShape": { "visible": false },
+        "wallsOpenings": { "visible": false },
+        "roof": { "visible": false },
+        "buildingAttachments": { "visible": false },
+        "visibility": { "visible": true },
+        "saveLoad": { "visible": false },
+        "developer": { "visible": false }
+      }
+    },
+    "customer": {
+      "label": "Customer",
+      "description": "Simplified view for end customers - basic dimensions and openings only",
+      "sections": {
+        "sizeShape": {
+          "visible": true,
+          "controls": {
+            "unitModeMetric": { "visible": false },
+            "unitModeImperial": { "visible": false },
+            "dimMode": { "visible": false, "default": "frame" },
+            "wallsVariant": { "visible": false, "default": "insulated" },
+            "wallSection": { "visible": false, "default": "50x100" }
+          }
+        },
+        "wallsOpenings": {
+          "visible": true,
+          "controls": {
+            "addDoorBtn": { "visible": true },
+            "removeAllDoorsBtn": { "visible": false },
+            "doorWall": { "visible": true },
+            "doorStyle": { "visible": false, "default": "standard" },
+            "doorHinge": { "visible": true },
+            "doorOpen": { "visible": true },
+            "doorX": { "visible": false },
+            "doorWidth": { "visible": true },
+            "doorHeight": { "visible": true },
+            "doorSnapBtn": { "visible": true },
+            "doorRemoveBtn": { "visible": true },
+            "addWindowBtn": { "visible": true },
+            "removeAllWindowsBtn": { "visible": false },
+            "windowWall": { "visible": true },
+            "windowX": { "visible": false },
+            "windowY": { "visible": false },
+            "windowWidth": { "visible": true },
+            "windowHeight": { "visible": true },
+            "windowSnapBtn": { "visible": true },
+            "windowRemoveBtn": { "visible": true },
+            "addDividerBtn": { "visible": false },
+            "removeAllDividersBtn": { "visible": false }
+          }
+        },
+        "roof": { "visible": false },
+        "buildingAttachments": { "visible": false },
+        "visibility": { "visible": false },
+        "saveLoad": {
+          "visible": true,
+          "controls": {
+            "instanceSelect": { "visible": false },
+            "loadInstanceBtn": { "visible": false },
+            "copyViewerLinkBtn": { "visible": false }
+          }
+        },
+        "developer": { "visible": false }
+      }
+    },
+    "builder": {
+      "label": "Builder",
+      "description": "Full access to construction parameters except attachments and developer tools",
+      "sections": {
+        "sizeShape": {
+          "visible": true,
+          "controls": {}
+        },
+        "wallsOpenings": {
+          "visible": true,
+          "controls": {
+            "doorX": { "visible": true },
+            "doorWidth": { "visible": true },
+            "doorHeight": { "visible": true },
+            "windowX": { "visible": true },
+            "windowY": { "visible": true },
+            "windowWidth": { "visible": true },
+            "windowHeight": { "visible": true }
+          }
+        },
+        "roof": {
+          "visible": true,
+          "controls": {}
+        },
+        "buildingAttachments": { "visible": false },
+        "visibility": { "visible": false },
+        "developer": { "visible": false }
+      }
+    }
+  },
+  "defaultProfile": null
+}

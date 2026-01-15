@@ -38,7 +38,9 @@ import * as Windows from "./elements/windows.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
-import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard } from "./profiles.js";
+import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault } from "./profiles.js";
+import { initProfileEditor } from "./profile-editor.js";
+import { initPanelResize } from "./ui/panel-resize.js";
 
 function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
@@ -260,6 +262,18 @@ function initApp() {
       console.log("[INIT] URL state:", urlState);
       initialState = deepMerge(initialState, urlState);
       console.log("[INIT] State after URL merge:", initialState);
+    }
+
+    // Check for profile links with state parameter (e.g., ?profile=customer&state=...)
+    // This allows sharing specific models with profile-restricted controls
+    var urlProfile = getProfileFromUrl();
+    var hasStateParam = new URLSearchParams(window.location.search).has("state");
+    if (!viewerMode && urlProfile && hasStateParam) {
+      console.log("[INIT] Profile link detected - parsing URL state for profile:", urlProfile);
+      var profileUrlState = parseUrlState();
+      console.log("[INIT] Profile URL state:", profileUrlState);
+      initialState = deepMerge(initialState, profileUrlState);
+      console.log("[INIT] State after profile URL merge:", initialState);
     }
 
     console.log("[INIT] initialState.vis after deepMerge:", initialState.vis);
@@ -1759,6 +1773,41 @@ function wireCommitOnly(inputEl, onCommit) {
       });
     }
 
+    /**
+     * Apply profile field restrictions to a DOM element
+     * @param {HTMLElement} element - The element (or its parent label)
+     * @param {string} fieldKey - e.g., "door.wall", "window.x"
+     */
+    function applyFieldRestriction(element, fieldKey) {
+      if (!element) return;
+
+      // Check visibility
+      if (!isFieldVisible(fieldKey)) {
+        // Hide the element or its parent label
+        var parent = element.closest("label") || element;
+        parent.style.display = "none";
+        return;
+      }
+
+      // Check if disabled
+      if (isFieldDisabled(fieldKey)) {
+        element.disabled = true;
+        element.style.opacity = "0.6";
+      }
+
+      // Apply default if specified and no value set
+      var defaultVal = getFieldDefault(fieldKey);
+      if (defaultVal !== undefined) {
+        if (element.type === "checkbox") {
+          if (!element.hasAttribute("data-user-set")) {
+            element.checked = !!defaultVal;
+          }
+        } else if (element.value === "" || element.value === undefined) {
+          element.value = defaultVal;
+        }
+      }
+    }
+
     function renderDoorsUi(state, validation) {
       if (!doorsListEl) return;
       doorsListEl.innerHTML = "";
@@ -1888,6 +1937,17 @@ var unitMode = getUnitMode(state);
           row.appendChild(xField.lab);
           row.appendChild(wField.lab);
           row.appendChild(hField.lab);
+
+          // Apply profile field restrictions
+          applyFieldRestriction(wallSel, "door.wall");
+          applyFieldRestriction(styleSel, "door.style");
+          applyFieldRestriction(hingeSel, "door.hinge");
+          applyFieldRestriction(openCheck, "door.open");
+          applyFieldRestriction(xField.inp, "door.x");
+          applyFieldRestriction(wField.inp, "door.width");
+          applyFieldRestriction(hField.inp, "door.height");
+          applyFieldRestriction(snapBtn, "door.snapBtn");
+          applyFieldRestriction(rmBtn, "door.removeBtn");
 
           var msg = document.createElement("div");
           msg.className = "doorMsg";
@@ -2067,6 +2127,15 @@ var unitMode = getUnitMode(state);
           row.appendChild(yField.lab);
           row.appendChild(wField.lab);
           row.appendChild(hField.lab);
+
+          // Apply profile field restrictions for windows
+          applyFieldRestriction(wallSel, "window.wall");
+          applyFieldRestriction(xField.inp, "window.x");
+          applyFieldRestriction(yField.inp, "window.y");
+          applyFieldRestriction(wField.inp, "window.width");
+          applyFieldRestriction(hField.inp, "window.height");
+          applyFieldRestriction(snapBtn, "window.snapBtn");
+          applyFieldRestriction(rmBtn, "window.removeBtn");
 
           var msg = document.createElement("div");
           msg.className = "windowMsg";
@@ -2935,6 +3004,9 @@ function parseOverhangInput(val) {
       var removeBtns = attachmentsListEl.querySelectorAll(".remove-attachment-btn");
       for (var j = 0; j < removeBtns.length; j++) {
         (function(btn) {
+          // Apply profile field restrictions
+          applyFieldRestriction(btn, "attachment.removeBtn");
+
           btn.addEventListener("click", function() {
             var attId = btn.getAttribute("data-id");
             var currentAtts = getAttachmentsFromState(store.getState());
@@ -3222,6 +3294,11 @@ function parseOverhangInput(val) {
             item.appendChild(errDiv);
           }
 
+          // Apply profile field restrictions for dividers
+          applyFieldRestriction(axisSelect, "divider.axis");
+          applyFieldRestriction(posInput, "divider.position");
+          applyFieldRestriction(deleteBtn, "divider.removeBtn");
+
           dividersListEl.appendChild(item);
         })(dividers[i], i);
       }
@@ -3285,6 +3362,24 @@ function parseOverhangInput(val) {
       },
       dbg: window.__dbg
     });
+
+    // Initialize profile system (Developer Dashboard)
+    // This handles named profiles like customer, builder, admin
+    var urlProfile = getProfileFromUrl();
+    if (!viewerMode && urlProfile && urlProfile !== "admin") {
+      // Load profiles.json and apply the requested profile
+      loadProfiles().then(function() {
+        applyProfile(urlProfile, store);
+        console.log("[index] Applied profile from URL:", urlProfile);
+      });
+    }
+
+    // Initialize Profile Editor UI (only relevant in dev mode, but we set it up anyway)
+    initProfileEditor({ store: store });
+
+    // Initialize panel resize functionality
+    initPanelResize();
+
 // Commit HTML default apex heights to state on init (ensures cladding trim works on first load)
     // Skip in viewer mode - state already has correct values from URL parameters
     if (!viewerMode) {

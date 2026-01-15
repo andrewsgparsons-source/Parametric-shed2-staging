@@ -5,7 +5,6 @@ export function initViews() {
   var wallsPage = document.getElementById("wallsBomPage");
   var roofPage = document.getElementById("roofBomPage");
   var viewSelect = document.getElementById("viewSelect");
-  var topbar = document.getElementById("topbar");
   var controls = document.getElementById("controls");
   var controlPanel = document.getElementById("controlPanel");
   var uiLayer = document.getElementById("ui-layer");
@@ -18,7 +17,7 @@ export function initViews() {
   var snapRightBtn = document.getElementById("snapRightBtn");
 
   // Roof page is optional at init; required only when selecting roof view.
-  if (!canvas || !basePage || !wallsPage || !viewSelect || !topbar) return;
+  if (!canvas || !basePage || !wallsPage || !viewSelect) return;
 
   function readHashView() {
     try {
@@ -88,7 +87,6 @@ export function initViews() {
   function isProtected(el) {
     if (!el) return false;
     if (el === canvas || canvas.contains(el) || el.contains(canvas)) return true;
-    if (el === topbar || topbar.contains(el) || el.contains(topbar)) return true;
     if (controls && (el === controls || controls.contains(el) || el.contains(controls))) return true;
     if (controlPanel && (el === controlPanel || controlPanel.contains(el) || el.contains(controlPanel))) return true;
     if (uiLayer && (el === uiLayer || uiLayer.contains(el) || el.contains(uiLayer))) return true;
