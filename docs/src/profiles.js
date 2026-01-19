@@ -1410,7 +1410,21 @@ export function applyProfile(profileName, store) {
   var profile = getProfileByName(profileName);
   if (!profile) {
     console.warn("[profiles] Profile not found:", profileName);
-    _currentProfileName = null;
+    // If we came from a profile URL but profile doesn't exist (e.g., custom profile not in profiles.json),
+    // fall back to admin but still hide developer section for security
+    var urlProfile = getProfileFromUrl();
+    if (urlProfile) {
+      console.log("[profiles] Profile from URL not found, applying admin with hidden developer section");
+      _currentProfileName = "admin";
+      showAllControls();
+      enableAllControls();
+      // Hide developer section since this is from a shared link
+      hideSection("developer");
+      // Also hide display section for shared links
+      hideSection("display");
+    } else {
+      _currentProfileName = null;
+    }
     return;
   }
 
