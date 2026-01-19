@@ -38,7 +38,7 @@ import * as Windows from "./elements/windows.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
-import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault } from "./profiles.js";
+import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";
 import { initPanelResize } from "./ui/panel-resize.js";
 
@@ -262,27 +262,28 @@ function initApp() {
       console.log("[INIT] URL state:", urlState);
       initialState = deepMerge(initialState, urlState);
       console.log("[INIT] State after URL merge:", initialState);
+      console.log("[INIT] State vis object:", initialState.vis);
+      console.log("[INIT] State dim object:", initialState.dim);
     }
 
     // Check for profile links with state parameter (e.g., ?profile=customer&state=...)
     // This allows sharing specific models with profile-restricted controls
     var urlProfile = getProfileFromUrl();
     var hasStateParam = new URLSearchParams(window.location.search).has("state");
+    console.log("[INIT] Profile URL check - urlProfile:", urlProfile, "hasStateParam:", hasStateParam, "viewerMode:", viewerMode);
     if (!viewerMode && urlProfile && hasStateParam) {
-      console.log("[INIT] Profile link detected - parsing URL state for profile:", urlProfile);
+      console.log("[INIT] Profile link with state detected - parsing URL state");
       var profileUrlState = parseUrlState();
-      console.log("[INIT] Profile URL state:", profileUrlState);
+      console.log("[INIT] Parsed profile URL state:", profileUrlState);
+      console.log("[INIT] Parsed state.dim:", profileUrlState.dim);
+      console.log("[INIT] Parsed state.w:", profileUrlState.w);
       initialState = deepMerge(initialState, profileUrlState);
-      console.log("[INIT] State after profile URL merge:", initialState);
+      console.log("[INIT] State after profile URL merge - dim:", initialState.dim);
     }
-
-    console.log("[INIT] initialState.vis after deepMerge:", initialState.vis);
 
     var store = createStateStore(initialState);
     window.__dbg.store = store; // Expose for debugging
     window.__dbg.viewerMode = viewerMode; // Track viewer mode
-
-    console.log("[INIT] store.getState().vis after createStateStore:", store.getState().vis);
 
     // Apply viewer profile UI changes after DOM is ready
     if (viewerMode) {
@@ -1059,6 +1060,9 @@ function applyOpeningsVisibility(scene, on) {
     }
 
 function render(state) {
+      console.log("[RENDER] render() called");
+      console.log("[RENDER] state:", state ? "exists" : "null/undefined");
+      console.log("[RENDER] state.sections:", state ? state.sections : "N/A");
       try {
         window.__dbg.buildCalls += 1;
 
@@ -1066,22 +1070,33 @@ function render(state) {
         // This ensures zero impact on existing functionality
         if (!state.sections || !state.sections.enabled || !state.sections.attachments || state.sections.attachments.length === 0) {
           // LEGACY PATH - existing code runs exactly as before
+          console.log("[RENDER] Taking LEGACY path -> renderLegacyMode");
           renderLegacyMode(state);
           return;
         }
 
         // NEW CODE PATH - only executes when sections.enabled === true AND attachments exist
         // Phase 1.3 - Multi-section rendering
+        console.log("[RENDER] Taking MULTI-SECTION path");
         renderMultiSectionMode(state);
 
       } catch (e) {
+        console.error("[RENDER] render() threw:", e);
         window.__dbg.lastError = "render() failed: " + String(e && e.message ? e.message : e);
       }
     }
 
     // Legacy single-building render path - preserved unchanged from original render()
     function renderLegacyMode(state) {
+        console.log("[RENDER_DEBUG] renderLegacyMode called");
+        console.log("[RENDER_DEBUG] ctx:", ctx ? "exists" : "null/undefined");
+        console.log("[RENDER_DEBUG] ctx.scene:", ctx && ctx.scene ? "exists" : "null/undefined");
+        console.log("[RENDER_DEBUG] state.dim:", state.dim);
+        console.log("[RENDER_DEBUG] state.vis:", state.vis);
+
         var R = resolveDims(state);
+        console.log("[RENDER_DEBUG] R (resolved dims):", R);
+
         var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
         var wallDims = getWallOuterDimsFromState(state);
@@ -1101,12 +1116,29 @@ function render(state) {
 
         safeDispose();
 
+        console.log("[RENDER_DEBUG] getBaseEnabled:", getBaseEnabled(state));
+        console.log("[RENDER_DEBUG] getWallsEnabled:", getWallsEnabled(state));
+        console.log("[RENDER_DEBUG] Base module:", Base ? "exists" : "null");
+        console.log("[RENDER_DEBUG] Walls module:", Walls ? "exists" : "null");
+
         if (getBaseEnabled(state)) {
-          if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, undefined);
+          console.log("[RENDER_DEBUG] Building base with baseState.w/d:", baseState.w, baseState.d);
+          try {
+            if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, undefined);
+            console.log("[RENDER_DEBUG] Base.build3D complete, meshes:", ctx.scene.meshes.length);
+          } catch (baseError) {
+            console.error("[RENDER_DEBUG] Base.build3D threw:", baseError);
+          }
         }
 
 if (getWallsEnabled(state)) {
-          if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
+          console.log("[RENDER_DEBUG] Building walls with wallState.w/d:", wallState.w, wallState.d);
+          try {
+            if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
+            console.log("[RENDER_DEBUG] Walls.build3D complete, meshes:", ctx.scene.meshes.length);
+          } catch (wallError) {
+            console.error("[RENDER_DEBUG] Walls.build3D threw:", wallError);
+          }
           shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
         }
 
@@ -1706,11 +1738,18 @@ if (getWallsEnabled(state)) {
     var _invalidSyncGuard = false;
 
     function syncInvalidOpeningsIntoState() {
-      if (_invalidSyncGuard) return;
+      console.log("[syncInvalidOpeningsIntoState] Called");
+      if (_invalidSyncGuard) {
+        console.log("[syncInvalidOpeningsIntoState] Guard active, returning early");
+        return { doors: { invalidById: {}, invalidIds: [] }, windows: { invalidById: {}, invalidIds: [] } };
+      }
 
       var s = store.getState();
+      console.log("[syncInvalidOpeningsIntoState] Got state, calling validateDoors...");
       var dv = validateDoors(s);
+      console.log("[syncInvalidOpeningsIntoState] validateDoors returned, calling validateWindows...");
       var wv = validateWindows(s);
+      console.log("[syncInvalidOpeningsIntoState] validateWindows returned");
 
       var curDoors = (s && s.walls && Array.isArray(s.walls.invalidDoorIds)) ? s.walls.invalidDoorIds.map(String) : [];
       var curWins = (s && s.walls && Array.isArray(s.walls.invalidWindowIds)) ? s.walls.invalidWindowIds.map(String) : [];
@@ -1754,16 +1793,39 @@ if (getWallsEnabled(state)) {
 
 function wireCommitOnly(inputEl, onCommit) {
       var lastValue = inputEl.value;
-      
-      function doCommit() {
+      var inputId = inputEl.id || "unknown";
+      var userHasTyped = false; // Track if user has interacted
+      console.log("[wireCommitOnly] Wiring input:", inputId, "initial lastValue:", lastValue);
+
+      // Track input events - this means user is typing
+      inputEl.addEventListener("input", function() {
+        userHasTyped = true;
+        console.log("[wireCommitOnly]", inputId, "input event. value now:", inputEl.value, "lastValue still:", lastValue, "userHasTyped:", userHasTyped);
+      });
+
+      // Track focus to know when user starts editing
+      inputEl.addEventListener("focus", function() {
+        // When user focuses, capture the current value as lastValue
+        // This ensures we compare against what was showing when they started editing
+        lastValue = inputEl.value;
+        userHasTyped = false;
+        console.log("[wireCommitOnly]", inputId, "focus. Set lastValue to:", lastValue);
+      });
+
+      function doCommit(eventType) {
+        console.log("[wireCommitOnly]", inputId, eventType, "fired. currentValue:", inputEl.value, "lastValue:", lastValue, "userHasTyped:", userHasTyped);
         if (inputEl.value !== lastValue) {
+          console.log("[wireCommitOnly]", inputId, "value changed, calling onCommit");
           lastValue = inputEl.value;
           onCommit();
+        } else {
+          console.log("[wireCommitOnly]", inputId, "value unchanged, skipping onCommit");
         }
+        userHasTyped = false;
       }
-      
-      inputEl.addEventListener("blur", doCommit);
-      inputEl.addEventListener("change", doCommit);
+
+      inputEl.addEventListener("blur", function() { doCommit("blur"); });
+      // Skip change events - blur is sufficient and more reliable
       inputEl.addEventListener("keydown", function (e) {
         if (!e) return;
         if (e.key === "Enter") {
@@ -1781,6 +1843,19 @@ function wireCommitOnly(inputEl, onCommit) {
     function applyFieldRestriction(element, fieldKey) {
       if (!element) return;
 
+      // Admin profile = no restrictions at all
+      var currentProfile = getCurrentProfile();
+      console.log("[applyFieldRestriction] currentProfile:", currentProfile, "fieldKey:", fieldKey);
+      if (!currentProfile || currentProfile === "admin") {
+        // Make sure element is visible and enabled (reset any prior restrictions)
+        element.style.display = "";
+        element.disabled = false;
+        element.style.opacity = "";
+        var parent = element.closest("label");
+        if (parent) parent.style.display = "";
+        return;
+      }
+
       // Check visibility
       if (!isFieldVisible(fieldKey)) {
         // Hide the element or its parent label
@@ -1793,6 +1868,35 @@ function wireCommitOnly(inputEl, onCommit) {
       if (isFieldDisabled(fieldKey)) {
         element.disabled = true;
         element.style.opacity = "0.6";
+      }
+
+      // Apply option-level restrictions for SELECT elements
+      if (element.tagName === "SELECT") {
+        var optionRestrictions = getFieldOptionRestrictions(fieldKey);
+        if (optionRestrictions) {
+          var options = element.querySelectorAll("option");
+          options.forEach(function(opt) {
+            var optValue = opt.value;
+            var optConfig = optionRestrictions[optValue];
+            if (optConfig) {
+              if (optConfig.visible === false) {
+                // Hide the option completely
+                opt.style.display = "none";
+                opt.disabled = true;
+              } else if (optConfig.editable === false) {
+                // Show but grey out (not selectable)
+                opt.style.display = "";
+                opt.disabled = true;
+                opt.style.color = "#999";
+              } else {
+                // Fully enabled
+                opt.style.display = "";
+                opt.disabled = false;
+                opt.style.color = "";
+              }
+            }
+          });
+        }
       }
 
       // Apply default if specified and no value set
@@ -2279,25 +2383,38 @@ function syncUiFromState(state, validations) {
         if (dimModeEl) dimModeEl.value = (state && state.dimMode) ? state.dimMode : "base";
 
 if (wInputEl && dInputEl) {
-          var m0 = (state && state.dimMode) ? String(state.dimMode) : "base";
-          try {
-            var R0 = resolveDims(state || {});
-            var wMm, dMm;
-            if (m0 === "frame") {
-              wMm = R0.frame.w_mm;
-              dMm = R0.frame.d_mm;
-            } else if (m0 === "roof") {
-              wMm = R0.roof.w_mm;
-              dMm = R0.roof.d_mm;
-            } else {
-              wMm = R0.base.w_mm;
-              dMm = R0.base.d_mm;
+          // Skip updating dimension inputs if either one has focus (user is editing)
+          // This prevents the input from being overwritten while user is typing
+          var wHasFocus = document.activeElement === wInputEl;
+          var dHasFocus = document.activeElement === dInputEl;
+          console.log("[syncUiFromState] wHasFocus:", wHasFocus, "dHasFocus:", dHasFocus);
+          console.log("[syncUiFromState] state.dim:", state.dim);
+
+          if (!wHasFocus && !dHasFocus) {
+            var m0 = (state && state.dimMode) ? String(state.dimMode) : "base";
+            try {
+              var R0 = resolveDims(state || {});
+              console.log("[syncUiFromState] resolveDims returned frame:", R0.frame);
+              var wMm, dMm;
+              if (m0 === "frame") {
+                wMm = R0.frame.w_mm;
+                dMm = R0.frame.d_mm;
+              } else if (m0 === "roof") {
+                wMm = R0.roof.w_mm;
+                dMm = R0.roof.d_mm;
+              } else {
+                wMm = R0.base.w_mm;
+                dMm = R0.base.d_mm;
+              }
+              console.log("[syncUiFromState] Setting inputs to wMm:", wMm, "dMm:", dMm, "mode:", m0);
+              wInputEl.value = formatDimension(wMm, unitMode);
+              dInputEl.value = formatDimension(dMm, unitMode);
+            } catch (e0) {
+              if (wInputEl && state && state.w != null) wInputEl.value = formatDimension(state.w, unitMode);
+              if (dInputEl && state && state.d != null) dInputEl.value = formatDimension(state.d, unitMode);
             }
-            wInputEl.value = formatDimension(wMm, unitMode);
-            dInputEl.value = formatDimension(dMm, unitMode);
-          } catch (e0) {
-            if (wInputEl && state && state.w != null) wInputEl.value = formatDimension(state.w, unitMode);
-            if (dInputEl && state && state.d != null) dInputEl.value = formatDimension(state.d, unitMode);
+          } else {
+            console.log("[syncUiFromState] Skipping dimension input update - one has focus");
           }
         }
 
@@ -2545,6 +2662,16 @@ if (state && state.overhang) {
       }
     }
 
+    // Expose a function to refresh dynamic controls after profile changes
+    // This is called by the Profile Editor after applying a profile
+    window.__dbg.refreshDynamicControls = function() {
+      var state = store.getState();
+      var validations = syncInvalidOpeningsIntoState();
+      renderDoorsUi(state, validations && validations.doors ? validations.doors : null);
+      renderWindowsUi(state, validations && validations.windows ? validations.windows : null);
+      console.log("[index] Refreshed dynamic controls for profile change");
+    };
+
     function updateOverlay() {
       if (!statusOverlayEl) return;
 
@@ -2759,7 +2886,7 @@ function writeActiveDims() {
       var s = store.getState();
       var unitMode = getUnitMode(s);
       var w, d;
-      
+
 if (unitMode === "imperial") {
         // Input is in decimal inches
         var wInches = parseFloat(wInputEl ? wInputEl.value : 0) || 0;
@@ -2814,6 +2941,7 @@ if (unitMode === "imperial") {
       var roofW = Math.max(1, Math.floor(frameW + sumX));
       var roofD = Math.max(1, Math.floor(frameD + sumZ));
 
+      console.log("[writeActiveDims] Updating store with frameW_mm:", frameW, "frameD_mm:", frameD);
       store.setState({
         dim: { frameW_mm: frameW, frameD_mm: frameD },
         dimInputs: {
@@ -2825,6 +2953,7 @@ if (unitMode === "imperial") {
           roofD_mm: roofD
         }
       });
+      console.log("[writeActiveDims] Store updated. New state.dim:", store.getState().dim);
     }
 if (wInputEl) wireCommitOnly(wInputEl, writeActiveDims);
     if (dInputEl) wireCommitOnly(dInputEl, writeActiveDims);
@@ -3336,18 +3465,22 @@ function parseOverhangInput(val) {
     // ==================== END DIVIDER HANDLERS ====================
 
     store.onChange(function (s) {
-      var v = syncInvalidOpeningsIntoState();
+      console.log("[store.onChange] State changed, dim:", s.dim);
+      var v = syncInvalidOpeningsIntoState() || { doors: { invalidById: {}, invalidIds: [] }, windows: { invalidById: {}, invalidIds: [] } };
       // Add divider validation to v
       v.dividers = validateDividers(s);
       syncUiFromState(s, v);
       applyWallHeightUiLock(s);
       renderDividersUi(s, v);
+      console.log("[store.onChange] About to call render()");
       render(s);
+      console.log("[store.onChange] render() completed");
     });
 
     setInterval(updateOverlay, 1000);
     updateOverlay();
 
+   console.log("[INIT] Before initInstancesUI");
    initInstancesUI({
       store: store,
       ids: {
@@ -3362,60 +3495,154 @@ function parseOverhangInput(val) {
       },
       dbg: window.__dbg
     });
+    console.log("[INIT] After initInstancesUI");
 
     // Initialize profile system (Developer Dashboard)
     // This handles named profiles like customer, builder, admin
     var urlProfile = getProfileFromUrl();
-    if (!viewerMode && urlProfile && urlProfile !== "admin") {
-      // Load profiles.json and apply the requested profile
-      loadProfiles().then(function() {
-        applyProfile(urlProfile, store);
-        console.log("[index] Applied profile from URL:", urlProfile);
-      });
-    }
+    console.log("[INIT] urlProfile:", urlProfile, "viewerMode:", viewerMode);
 
-    // Initialize Profile Editor UI (only relevant in dev mode, but we set it up anyway)
-    initProfileEditor({ store: store });
+    // IMPORTANT: For non-viewer mode, we need to load and apply profiles BEFORE syncUiFromState
+    // because profile application shows/hides controls that syncUiFromState might otherwise leave in wrong state
+    var profileLoadPromise = null;
+    if (!viewerMode) {
+      profileLoadPromise = loadProfiles().then(function() {
+        var profileToApply = (urlProfile && urlProfile !== "admin") ? urlProfile : "admin";
+        applyProfile(profileToApply, store);
+        console.log("[index] Applied profile:", profileToApply);
+
+        // Initialize Profile Editor UI AFTER profiles are loaded and applied
+        // Pass skipLoadProfiles=true since we just loaded them
+        console.log("[INIT] Before initProfileEditor (inside profile promise)");
+        initProfileEditor({ store: store, skipLoadProfiles: true });
+        console.log("[INIT] After initProfileEditor");
+      });
+    } else {
+      // Viewer mode - no profile editor needed, but initialize if needed
+      console.log("[INIT] Viewer mode - skipping initProfileEditor");
+    }
 
     // Initialize panel resize functionality
+    console.log("[INIT] Before initPanelResize");
     initPanelResize();
+    console.log("[INIT] After initPanelResize");
 
-// Commit HTML default apex heights to state on init (ensures cladding trim works on first load)
-    // Skip in viewer mode - state already has correct values from URL parameters
-    if (!viewerMode) {
-      commitApexHeightsFromInputs();
-      commitPentHeightsFromInputs();
-    }
-    // Wire up camera snap view buttons
-    // Wire up camera snap view buttons
-    var snapPlanBtn = document.getElementById('snapPlanBtn');
-    var snapFrontBtn = document.getElementById('snapFrontBtn');
-    var snapBackBtn = document.getElementById('snapBackBtn');
-    var snapLeftBtn = document.getElementById('snapLeftBtn');
-    var snapRightBtn = document.getElementById('snapRightBtn');
-    if (snapPlanBtn) snapPlanBtn.addEventListener('click', function() { snapCameraToView('plan'); });
-    if (snapFrontBtn) snapFrontBtn.addEventListener('click', function() { snapCameraToView('front'); });
-    if (snapBackBtn) snapBackBtn.addEventListener('click', function() { snapCameraToView('back'); });
-    if (snapLeftBtn) snapLeftBtn.addEventListener('click', function() { snapCameraToView('left'); });
-    if (snapRightBtn) snapRightBtn.addEventListener('click', function() { snapCameraToView('right'); });
-    try {
-      var s0 = store.getState();
-      if (s0 && s0.roof && s0.roof.pent && s0.roof.pent.minHeight_mm != null && s0.roof.pent.maxHeight_mm != null) {
+    // Helper function to complete initialization after profile is applied
+    function completeInit() {
+      // Commit HTML default apex heights to state on init (ensures cladding trim works on first load)
+      // Skip when loading state from URL (viewer mode or profile links with state param)
+      // because the state already has correct values from URL parameters
+      var hasUrlState = viewerMode || (urlProfile && hasStateParam);
+      if (!hasUrlState) {
+        try {
+          console.log("[INIT] Calling commitApexHeightsFromInputs...");
+          commitApexHeightsFromInputs();
+          console.log("[INIT] commitApexHeightsFromInputs done");
+        } catch (eApex) {
+          console.error("[INIT] commitApexHeightsFromInputs error:", eApex);
+        }
+        try {
+          console.log("[INIT] Calling commitPentHeightsFromInputs...");
+          commitPentHeightsFromInputs();
+          console.log("[INIT] commitPentHeightsFromInputs done");
+        } catch (ePent) {
+          console.error("[INIT] commitPentHeightsFromInputs error:", ePent);
+        }
       } else {
-        var baseH = (s0 && s0.walls && s0.walls.height_mm != null) ? clampHeightMm(s0.walls.height_mm, 2400) : 2400;
-        store.setState({ roof: { pent: { minHeight_mm: baseH, maxHeight_mm: baseH } } });
+        console.log("[INIT] Skipping commitHeights - state loaded from URL parameters");
       }
-    } catch (e0) {}
+      console.log("[INIT] After commit heights");
 
-    syncUiFromState(store.getState(), syncInvalidOpeningsIntoState());
-    applyWallHeightUiLock(store.getState());
-    render(store.getState());
-    resume3D();
+      // Wire up camera snap view buttons
+      var snapPlanBtn = document.getElementById('snapPlanBtn');
+      var snapFrontBtn = document.getElementById('snapFrontBtn');
+      var snapBackBtn = document.getElementById('snapBackBtn');
+      var snapLeftBtn = document.getElementById('snapLeftBtn');
+      var snapRightBtn = document.getElementById('snapRightBtn');
+      if (snapPlanBtn) snapPlanBtn.addEventListener('click', function() { snapCameraToView('plan'); });
+      if (snapFrontBtn) snapFrontBtn.addEventListener('click', function() { snapCameraToView('front'); });
+      if (snapBackBtn) snapBackBtn.addEventListener('click', function() { snapCameraToView('back'); });
+      if (snapLeftBtn) snapLeftBtn.addEventListener('click', function() { snapCameraToView('left'); });
+      if (snapRightBtn) snapRightBtn.addEventListener('click', function() { snapCameraToView('right'); });
+      console.log("[INIT] After snap buttons");
 
-    // Initialize view switching (3D / cutting lists)
-    initViews();
+      try {
+        var s0 = store.getState();
+        if (s0 && s0.roof && s0.roof.pent && s0.roof.pent.minHeight_mm != null && s0.roof.pent.maxHeight_mm != null) {
+        } else {
+          var baseH = (s0 && s0.walls && s0.walls.height_mm != null) ? clampHeightMm(s0.walls.height_mm, 2400) : 2400;
+          store.setState({ roof: { pent: { minHeight_mm: baseH, maxHeight_mm: baseH } } });
+        }
+      } catch (e0) {}
+      console.log("[INIT] After pent heights check");
 
-    window.__dbg.initFinished = true;
+      console.log("[INIT] Before syncUiFromState");
+      window.__dbg.syncUiStart = Date.now();
+
+      // Heartbeat to detect if we get stuck
+      var heartbeatId = setTimeout(function() {
+        console.error("[INIT] HEARTBEAT: syncUiFromState appears stuck! No completion after 5 seconds.");
+        console.error("[INIT] Check window.__dbg for state:", window.__dbg);
+      }, 5000);
+
+      try {
+        console.log("[INIT] Calling syncInvalidOpeningsIntoState...");
+        var validationsResult = syncInvalidOpeningsIntoState();
+        console.log("[INIT] syncInvalidOpeningsIntoState took:", (Date.now() - window.__dbg.syncUiStart) + "ms");
+        console.log("[INIT] syncInvalidOpeningsIntoState returned:", validationsResult);
+        console.log("[INIT] Calling syncUiFromState...");
+        syncUiFromState(store.getState(), validationsResult);
+        console.log("[INIT] syncUiFromState returned");
+        console.log("[INIT] Total sync time:", (Date.now() - window.__dbg.syncUiStart) + "ms");
+        clearTimeout(heartbeatId); // Clear heartbeat on success
+      } catch (eSyncUi) {
+        clearTimeout(heartbeatId); // Clear heartbeat on error
+        console.error("[INIT] ERROR in syncUiFromState or syncInvalidOpeningsIntoState:", eSyncUi);
+        console.error("[INIT] Stack:", eSyncUi && eSyncUi.stack ? eSyncUi.stack : "no stack");
+        console.log("[INIT] Error occurred at:", (Date.now() - window.__dbg.syncUiStart) + "ms");
+      }
+      console.log("[INIT] After syncUiFromState");
+
+      try {
+        applyWallHeightUiLock(store.getState());
+      } catch (eWallLock) {
+        console.error("[INIT] ERROR in applyWallHeightUiLock:", eWallLock);
+      }
+
+      console.log("[INIT] About to call render()...");
+      try {
+        render(store.getState());
+        console.log("[INIT] render() returned successfully");
+      } catch (eRender) {
+        console.error("[INIT] ERROR in render():", eRender);
+        console.error("[INIT] Render stack:", eRender && eRender.stack ? eRender.stack : "no stack");
+      }
+      resume3D();
+
+      // Initialize view switching (3D / cutting lists)
+      initViews();
+
+      // Refresh dynamic controls after everything is set up
+      if (window.__dbg && typeof window.__dbg.refreshDynamicControls === "function") {
+        window.__dbg.refreshDynamicControls();
+      }
+
+      window.__dbg.initFinished = true;
+    }
+
+    // Wait for profile to load before completing init (so controls are properly visible/enabled)
+    if (profileLoadPromise) {
+      profileLoadPromise.then(function() {
+        console.log("[INIT] Profile loaded, completing initialization...");
+        completeInit();
+      }).catch(function(err) {
+        console.error("[INIT] Profile load failed, completing initialization anyway:", err);
+        completeInit();
+      });
+    } else {
+      // Viewer mode or no profile system - complete immediately
+      completeInit();
+    }
 
   } catch (e) {
     window.__dbg.lastError = "initApp() failed: " + String(e && e.message ? e.message : e);

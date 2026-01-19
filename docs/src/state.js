@@ -10,19 +10,7 @@ export function createStateStore(initial) {
   }
 
   function setState(patch) {
-    // Debug logging for vis updates
-    if (patch && patch.vis) {
-      console.log("[setState] BEFORE merge - state.vis:", JSON.parse(JSON.stringify(state.vis)));
-      console.log("[setState] Patch.vis:", JSON.parse(JSON.stringify(patch.vis)));
-      console.log("[setState] BEFORE merge - state keys:", Object.keys(state));
-    }
-    const oldState = state;
     state = deepMerge(state, patch);
-    if (patch && patch.vis) {
-      console.log("[setState] AFTER merge - state.vis:", JSON.parse(JSON.stringify(state.vis)));
-      console.log("[setState] AFTER merge - state === oldState?", state === oldState);
-      console.log("[setState] AFTER merge - state.vis === oldState.vis?", state.vis === oldState.vis);
-    }
     subs.forEach((fn) => fn(state));
     return state;
   }
@@ -44,12 +32,6 @@ export function deepMerge(target, patch, depth = 0) {
   if (Array.isArray(patch)) return patch.map((v) => deepMerge(undefined, v, depth + 1));
   const out = { ...(target || {}) };
 
-  // Debug: log when merging vis object
-  if (depth === 1 && target && target.roof !== undefined) {
-    console.log("[deepMerge] Merging vis object - target keys:", Object.keys(target));
-    console.log("[deepMerge] Merging vis object - patch keys:", Object.keys(patch));
-  }
-
   for (const k of Object.keys(patch)) {
     const pv = patch[k];
     const tv = out[k];
@@ -58,11 +40,6 @@ export function deepMerge(target, patch, depth = 0) {
     } else {
       out[k] = deepMerge(tv, pv, depth + 1);
     }
-  }
-
-  // Debug: log result when merging vis object
-  if (depth === 1 && out && out.roof !== undefined) {
-    console.log("[deepMerge] Result vis object keys:", Object.keys(out));
   }
 
   return out;

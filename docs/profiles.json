@@ -1,6 +1,20 @@
 {
-  "version": 1,
+  "version": 3,
   "profiles": {
+    "admin": {
+      "label": "Admin",
+      "description": "Full access to all controls - the default editing mode",
+      "sections": {
+        "sizeShape": { "visible": true },
+        "wallsOpenings": { "visible": true },
+        "roof": { "visible": true },
+        "buildingAttachments": { "visible": true },
+        "appearance": { "visible": true },
+        "visibility": { "visible": true },
+        "saveLoad": { "visible": true },
+        "developer": { "visible": true }
+      }
+    },
     "viewer": {
       "label": "Viewer",
       "description": "Read-only view for sharing designs - no editing, only visibility toggles and camera controls",
@@ -9,6 +23,7 @@
         "wallsOpenings": { "visible": false },
         "roof": { "visible": false },
         "buildingAttachments": { "visible": false },
+        "appearance": { "visible": false },
         "visibility": { "visible": true },
         "saveLoad": { "visible": false },
         "developer": { "visible": false }
@@ -21,49 +36,73 @@
         "sizeShape": {
           "visible": true,
           "controls": {
-            "unitModeMetric": { "visible": false },
-            "unitModeImperial": { "visible": false },
-            "dimMode": { "visible": false, "default": "frame" },
-            "wallsVariant": { "visible": false, "default": "insulated" },
-            "wallSection": { "visible": false, "default": "50x100" }
+            "unitModeMetric": { "visible": false, "editable": false },
+            "unitModeImperial": { "visible": false, "editable": false },
+            "dimMode": { "visible": false, "editable": false },
+            "wInput": { "visible": true, "editable": true },
+            "dInput": { "visible": true, "editable": true },
+            "roofStyle": {
+              "visible": true,
+              "editable": true,
+              "options": {
+                "apex": { "visible": true, "editable": true },
+                "pent": { "visible": true, "editable": true },
+                "hipped": { "visible": true, "editable": false }
+              }
+            },
+            "wallsVariant": { "visible": false, "editable": false },
+            "wallSection": { "visible": false, "editable": false }
           }
         },
         "wallsOpenings": {
           "visible": true,
           "controls": {
-            "addDoorBtn": { "visible": true },
-            "removeAllDoorsBtn": { "visible": false },
-            "doorWall": { "visible": true },
-            "doorStyle": { "visible": false, "default": "standard" },
-            "doorHinge": { "visible": true },
-            "doorOpen": { "visible": true },
-            "doorX": { "visible": false },
-            "doorWidth": { "visible": true },
-            "doorHeight": { "visible": true },
-            "doorSnapBtn": { "visible": true },
-            "doorRemoveBtn": { "visible": true },
-            "addWindowBtn": { "visible": true },
-            "removeAllWindowsBtn": { "visible": false },
-            "windowWall": { "visible": true },
-            "windowX": { "visible": false },
-            "windowY": { "visible": false },
-            "windowWidth": { "visible": true },
-            "windowHeight": { "visible": true },
-            "windowSnapBtn": { "visible": true },
-            "windowRemoveBtn": { "visible": true },
-            "addDividerBtn": { "visible": false },
-            "removeAllDividersBtn": { "visible": false }
+            "addDoorBtn": { "visible": true, "editable": true },
+            "removeAllDoorsBtn": { "visible": false, "editable": false },
+            "doorWall": { "visible": true, "editable": true },
+            "doorStyle": {
+              "visible": true,
+              "editable": true,
+              "options": {
+                "standard": { "visible": true, "editable": true },
+                "double-standard": { "visible": true, "editable": true },
+                "mortise-tenon": { "visible": true, "editable": false },
+                "double-mortise-tenon": { "visible": false, "editable": false },
+                "french": { "visible": true, "editable": true }
+              }
+            },
+            "doorHinge": { "visible": true, "editable": true },
+            "doorOpen": { "visible": true, "editable": true },
+            "doorX": { "visible": false, "editable": false },
+            "doorWidth": { "visible": true, "editable": true },
+            "doorHeight": { "visible": true, "editable": true },
+            "doorSnapBtn": { "visible": true, "editable": true },
+            "doorRemoveBtn": { "visible": true, "editable": true },
+            "addWindowBtn": { "visible": true, "editable": true },
+            "removeAllWindowsBtn": { "visible": false, "editable": false },
+            "windowWall": { "visible": true, "editable": true },
+            "windowX": { "visible": false, "editable": false },
+            "windowY": { "visible": false, "editable": false },
+            "windowWidth": { "visible": true, "editable": true },
+            "windowHeight": { "visible": true, "editable": true },
+            "windowSnapBtn": { "visible": true, "editable": true },
+            "windowRemoveBtn": { "visible": true, "editable": true },
+            "addDividerBtn": { "visible": false, "editable": false },
+            "removeAllDividersBtn": { "visible": false, "editable": false }
           }
         },
         "roof": { "visible": false },
         "buildingAttachments": { "visible": false },
+        "appearance": { "visible": false },
         "visibility": { "visible": false },
         "saveLoad": {
           "visible": true,
           "controls": {
-            "instanceSelect": { "visible": false },
-            "loadInstanceBtn": { "visible": false },
-            "copyViewerLinkBtn": { "visible": false }
+            "instanceSelect": { "visible": false, "editable": false },
+            "loadInstanceBtn": { "visible": false, "editable": false },
+            "shareLinkProfileSelect": { "visible": false, "editable": false },
+            "copyShareLinkBtn": { "visible": false, "editable": false },
+            "copyShedDescriptionBtn": { "visible": true, "editable": true }
           }
         },
         "developer": { "visible": false }
@@ -80,13 +119,13 @@
         "wallsOpenings": {
           "visible": true,
           "controls": {
-            "doorX": { "visible": true },
-            "doorWidth": { "visible": true },
-            "doorHeight": { "visible": true },
-            "windowX": { "visible": true },
-            "windowY": { "visible": true },
-            "windowWidth": { "visible": true },
-            "windowHeight": { "visible": true }
+            "doorX": { "visible": true, "editable": true },
+            "doorWidth": { "visible": true, "editable": true },
+            "doorHeight": { "visible": true, "editable": true },
+            "windowX": { "visible": true, "editable": true },
+            "windowY": { "visible": true, "editable": true },
+            "windowWidth": { "visible": true, "editable": true },
+            "windowHeight": { "visible": true, "editable": true }
           }
         },
         "roof": {
@@ -94,6 +133,7 @@
           "controls": {}
         },
         "buildingAttachments": { "visible": false },
+        "appearance": { "visible": false },
         "visibility": { "visible": false },
         "developer": { "visible": false }
       }

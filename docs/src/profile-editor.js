@@ -10,20 +10,19 @@ import {
   getProfileByName,
   applyProfile,
   showAllControls,
+  enableAllControls,
   hideSection,
   showSection,
   createProfile,
   deleteProfile,
   renameProfile,
   updateProfileControl,
+  updateProfileControlOption,
   updateProfileSection,
   exportProfilesToJson,
   importProfilesFromJson,
   copyProfileUrlToClipboard
 } from "./profiles.js";
-
-// Live toggle state (temporary, not persisted)
-var liveToggleState = {};
 
 // Current selected profile in editor
 var currentEditorProfile = null;
@@ -31,169 +30,129 @@ var currentEditorProfile = null;
 // Store reference for applying defaults
 var _store = null;
 
-// Preview mode state
-var isPreviewMode = false;
-
 /**
  * Initialize the Profile Editor and Live Toggles
- * @param {object} options - { store }
+ * @param {object} options - { store, skipLoadProfiles }
  */
 export function initProfileEditor(options) {
   _store = options && options.store;
 
-  // Load profiles first
-  loadProfiles().then(function() {
-    renderLiveTogglesUI();
+  // If profiles are already loaded (skipLoadProfiles=true), just render the UI
+  // Otherwise load profiles first (for standalone initialization)
+  if (options && options.skipLoadProfiles) {
+    console.log("[profile-editor] Skipping loadProfiles - using already loaded data");
     renderProfileEditorUI();
     renderProfileLinkButtons();
     wireEditorEvents();
-  });
+  } else {
+    // Load profiles first
+    loadProfiles().then(function() {
+      renderProfileEditorUI();
+      renderProfileLinkButtons();
+      wireEditorEvents();
+    });
+  }
 }
 
 /**
- * Render "Copy [Profile] Link" buttons for each profile
- * These allow sharing links with specific profile controls
+ * Populate the share link dropdown with available profiles
  */
 function renderProfileLinkButtons() {
-  var container = document.getElementById("profileLinksContainer");
-  if (!container) return;
+  var select = document.getElementById("shareLinkProfileSelect");
+  if (!select) {
+    console.warn("[profile-editor] shareLinkProfileSelect not found");
+    return;
+  }
 
-  container.innerHTML = "";
+  // Clear existing options except the first (viewer)
+  select.innerHTML = '<option value="viewer">Viewer (read-only)</option>';
 
   var profileNames = getProfileNames();
-  if (profileNames.length === 0) return;
+  console.log("[profile-editor] renderProfileLinkButtons - profileNames:", profileNames);
 
   for (var i = 0; i < profileNames.length; i++) {
     var profileName = profileNames[i];
 
-    // Skip "viewer" - it has a dedicated button with different URL format
+    // Skip "viewer" - already added as first option
     if (profileName === "viewer") continue;
 
     var profile = getProfileByName(profileName);
     var label = profile && profile.label ? profile.label : profileName;
 
-    var row = document.createElement("div");
-    row.className = "row";
-    row.style.marginTop = "4px";
-
-    var button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Copy " + label + " Link";
-    button.dataset.profileName = profileName;
-    button.addEventListener("click", handleCopyProfileLink);
-
-    row.appendChild(button);
-    container.appendChild(row);
+    var option = document.createElement("option");
+    option.value = profileName;
+    option.textContent = label;
+    select.appendChild(option);
   }
+
+  // Wire up the copy button
+  var copyBtn = document.getElementById("copyShareLinkBtn");
+  if (copyBtn && !copyBtn._wired) {
+    copyBtn._wired = true;
+    copyBtn.addEventListener("click", handleCopyShareLink);
+  }
+
+  console.log("[profile-editor] Populated share link dropdown with", profileNames.length, "profiles");
 }
 
 /**
- * Handle click on "Copy [Profile] Link" button
+ * Handle click on "Copy Link" button - copies link for selected profile
  */
-function handleCopyProfileLink(e) {
-  var profileName = e.target.dataset.profileName;
-  if (!profileName || !_store) return;
+function handleCopyShareLink() {
+  var select = document.getElementById("shareLinkProfileSelect");
+  if (!select || !_store) {
+    console.error("[profile-editor] handleCopyShareLink: select or _store missing");
+    return;
+  }
 
+  var profileName = select.value;
   var state = _store.getState();
+
   var profile = getProfileByName(profileName);
   var label = profile && profile.label ? profile.label : profileName;
 
-  copyProfileUrlToClipboard(
-    profileName,
-    state,
-    function(url) {
-      // Show success in hint area
-      var hintEl = document.getElementById("instancesHint");
-      if (hintEl) {
-        hintEl.textContent = label + " link copied to clipboard!";
-        hintEl.style.color = "#2a7d2a";
-        setTimeout(function() {
-          hintEl.textContent = "";
-          hintEl.style.color = "";
-        }, 3000);
+  // Use viewer URL format for "viewer" profile, profile URL for others
+  if (profileName === "viewer") {
+    copyViewerUrlToClipboard(
+      state,
+      function(url) {
+        showShareLinkHint(label + " link copied!", "#2a7d2a");
+        console.log("[profile-editor] Copied viewer URL:", url);
+      },
+      function(err) {
+        showShareLinkHint("Failed to copy link", "#d32f2f");
+        console.error("[profile-editor] Failed to copy viewer URL:", err);
       }
-      console.log("[profile-editor] Copied " + label + " URL:", url);
-    },
-    function(err) {
-      var hintEl = document.getElementById("instancesHint");
-      if (hintEl) {
-        hintEl.textContent = "Failed to copy link";
-        hintEl.style.color = "#d32f2f";
+    );
+  } else {
+    copyProfileUrlToClipboard(
+      profileName,
+      state,
+      function(url) {
+        showShareLinkHint(label + " link copied!", "#2a7d2a");
+        console.log("[profile-editor] Copied " + label + " URL:", url);
+      },
+      function(err) {
+        showShareLinkHint("Failed to copy link", "#d32f2f");
+        console.error("[profile-editor] Failed to copy " + label + " URL:", err);
       }
-      console.error("[profile-editor] Failed to copy " + label + " URL:", err);
-    }
-  );
-}
-
-/**
- * Render Live Toggles UI
- */
-function renderLiveTogglesUI() {
-  var container = document.getElementById("liveTogglesPanel");
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  // Create a checkbox for each section in the registry
-  var sectionKeys = Object.keys(CONTROL_REGISTRY);
-
-  for (var i = 0; i < sectionKeys.length; i++) {
-    var sectionKey = sectionKeys[i];
-    var section = CONTROL_REGISTRY[sectionKey];
-
-    // Skip developer section from live toggles (would hide the panel itself)
-    if (sectionKey === "developer") continue;
-
-    var row = document.createElement("div");
-    row.className = "row";
-    row.style.margin = "4px 0";
-
-    var label = document.createElement("label");
-    label.className = "check";
-
-    var checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = true; // Default to visible
-    checkbox.dataset.sectionKey = sectionKey;
-
-    checkbox.addEventListener("change", function(e) {
-      var key = e.target.dataset.sectionKey;
-      var visible = e.target.checked;
-      liveToggleState[key] = visible;
-
-      if (visible) {
-        showSection(key);
-      } else {
-        hideSection(key);
-      }
-    });
-
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(" " + section.label));
-    row.appendChild(label);
-    container.appendChild(row);
-
-    // Initialize state
-    liveToggleState[sectionKey] = true;
+    );
   }
 }
 
 /**
- * Reset all live toggles to visible
+ * Show a hint message in the share link area
  */
-function resetLiveToggles() {
-  var container = document.getElementById("liveTogglesPanel");
-  if (!container) return;
-
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(function(cb) {
-    cb.checked = true;
-    var key = cb.dataset.sectionKey;
-    if (key) {
-      liveToggleState[key] = true;
-      showSection(key);
-    }
-  });
+function showShareLinkHint(message, color) {
+  var hintEl = document.getElementById("instancesHint");
+  if (hintEl) {
+    hintEl.textContent = message;
+    hintEl.style.color = color || "";
+    setTimeout(function() {
+      hintEl.textContent = "";
+      hintEl.style.color = "";
+    }, 3000);
+  }
 }
 
 /**
@@ -231,11 +190,25 @@ function populateProfileSelect() {
       select.appendChild(opt);
     }
 
-    // Select first profile
+    // Select admin profile by default, or first profile if admin doesn't exist
     if (!currentEditorProfile || profileNames.indexOf(currentEditorProfile) < 0) {
-      currentEditorProfile = profileNames[0];
+      if (profileNames.indexOf("admin") >= 0) {
+        currentEditorProfile = "admin";
+      } else {
+        currentEditorProfile = profileNames[0];
+      }
     }
     select.value = currentEditorProfile;
+
+    // Show which profile is active
+    var activeHint = document.getElementById("profileActiveHint");
+    if (activeHint && currentEditorProfile) {
+      var profile = getProfileByName(currentEditorProfile);
+      var label = profile && profile.label ? profile.label : currentEditorProfile;
+      activeHint.textContent = "Active: " + label;
+      activeHint.style.color = "#1976d2";
+      activeHint.style.fontWeight = "bold";
+    }
   }
 }
 
@@ -312,7 +285,7 @@ function renderProfileControls() {
     for (var j = 0; j < controlKeys.length; j++) {
       var controlKey = controlKeys[j];
       var registryControl = registrySection.controls[controlKey];
-      var profileControl = (profileSection.controls || {})[controlKey] || { visible: true };
+      var profileControl = (profileSection.controls || {})[controlKey] || { visible: true, editable: true };
 
       var controlRow = document.createElement("div");
       controlRow.style.display = "flex";
@@ -321,210 +294,130 @@ function renderProfileControls() {
       controlRow.style.marginBottom = "4px";
       controlRow.style.fontSize = "12px";
 
-      var controlLabel = document.createElement("label");
-      controlLabel.className = "check";
-      controlLabel.style.flex = "1";
+      // Control label
+      var labelSpan = document.createElement("span");
+      labelSpan.style.flex = "1";
+      labelSpan.textContent = registryControl.label;
+      controlRow.appendChild(labelSpan);
 
-      var controlCheckbox = document.createElement("input");
-      controlCheckbox.type = "checkbox";
-      controlCheckbox.checked = profileControl.visible !== false;
-      controlCheckbox.dataset.sectionKey = sectionKey;
-      controlCheckbox.dataset.controlKey = controlKey;
-      controlCheckbox.addEventListener("change", handleControlVisibilityChange);
+      // Visible checkbox
+      var visibleLabel = document.createElement("label");
+      visibleLabel.className = "check";
+      visibleLabel.style.marginRight = "12px";
+      visibleLabel.style.fontSize = "11px";
 
-      controlLabel.appendChild(controlCheckbox);
-      controlLabel.appendChild(document.createTextNode(" " + registryControl.label));
-      controlRow.appendChild(controlLabel);
+      var visibleCheckbox = document.createElement("input");
+      visibleCheckbox.type = "checkbox";
+      visibleCheckbox.checked = profileControl.visible !== false;
+      visibleCheckbox.dataset.sectionKey = sectionKey;
+      visibleCheckbox.dataset.controlKey = controlKey;
+      visibleCheckbox.dataset.field = "visible";
+      visibleCheckbox.addEventListener("change", handleControlVisibilityChange);
 
-      // Default value input (for non-button controls)
-      // Include dynamic-field controls that have meaningful defaults (not buttons)
-      var skipTypes = ["button", "button-group", "dynamic-container"];
-      var isButtonField = registryControl.type === "dynamic-field" &&
-          (registryControl.fieldKey && (registryControl.fieldKey.endsWith(".snapBtn") ||
-           registryControl.fieldKey.endsWith(".removeBtn")));
+      visibleLabel.appendChild(visibleCheckbox);
+      visibleLabel.appendChild(document.createTextNode(" Visible"));
+      controlRow.appendChild(visibleLabel);
 
-      if (skipTypes.indexOf(registryControl.type) < 0 && !isButtonField) {
-        var defaultInput = createDefaultInput(registryControl, profileControl, sectionKey, controlKey);
-        if (defaultInput) {
-          controlRow.appendChild(defaultInput);
-        }
-      }
+      // Editable checkbox
+      var editableLabel = document.createElement("label");
+      editableLabel.className = "check";
+      editableLabel.style.fontSize = "11px";
+
+      var editableCheckbox = document.createElement("input");
+      editableCheckbox.type = "checkbox";
+      editableCheckbox.checked = profileControl.editable !== false;
+      editableCheckbox.disabled = profileControl.visible === false; // Disable if not visible
+      editableCheckbox.dataset.sectionKey = sectionKey;
+      editableCheckbox.dataset.controlKey = controlKey;
+      editableCheckbox.dataset.field = "editable";
+      editableCheckbox.addEventListener("change", handleControlEditableChange);
+
+      editableLabel.appendChild(editableCheckbox);
+      editableLabel.appendChild(document.createTextNode(" Editable"));
+      controlRow.appendChild(editableLabel);
 
       content.appendChild(controlRow);
+
+      // If this control has options (select/dropdown), show option-level controls
+      if (registryControl.options && registryControl.options.length > 0) {
+        var optionsContainer = document.createElement("div");
+        optionsContainer.style.marginLeft = "20px";
+        optionsContainer.style.marginBottom = "8px";
+        optionsContainer.style.paddingLeft = "10px";
+        optionsContainer.style.borderLeft = "2px solid #ddd";
+
+        var optionsHeader = document.createElement("div");
+        optionsHeader.style.fontSize = "11px";
+        optionsHeader.style.color = "#666";
+        optionsHeader.style.marginBottom = "4px";
+        optionsHeader.textContent = "Options:";
+        optionsContainer.appendChild(optionsHeader);
+
+        // Get profile options config
+        var profileOptions = profileControl.options || {};
+
+        for (var k = 0; k < registryControl.options.length; k++) {
+          var opt = registryControl.options[k];
+          var profileOpt = profileOptions[opt.value] || { visible: true, editable: true };
+
+          var optRow = document.createElement("div");
+          optRow.style.display = "flex";
+          optRow.style.alignItems = "center";
+          optRow.style.justifyContent = "space-between";
+          optRow.style.marginBottom = "2px";
+          optRow.style.fontSize = "11px";
+
+          var optLabel = document.createElement("span");
+          optLabel.style.flex = "1";
+          optLabel.textContent = opt.label;
+          optRow.appendChild(optLabel);
+
+          // Option visible checkbox
+          var optVisLabel = document.createElement("label");
+          optVisLabel.className = "check";
+          optVisLabel.style.marginRight = "8px";
+
+          var optVisCheck = document.createElement("input");
+          optVisCheck.type = "checkbox";
+          optVisCheck.checked = profileOpt.visible !== false;
+          optVisCheck.dataset.sectionKey = sectionKey;
+          optVisCheck.dataset.controlKey = controlKey;
+          optVisCheck.dataset.optionValue = opt.value;
+          optVisCheck.dataset.field = "visible";
+          optVisCheck.addEventListener("change", handleOptionVisibilityChange);
+
+          optVisLabel.appendChild(optVisCheck);
+          optVisLabel.appendChild(document.createTextNode(" Vis"));
+          optRow.appendChild(optVisLabel);
+
+          // Option editable checkbox
+          var optEditLabel = document.createElement("label");
+          optEditLabel.className = "check";
+
+          var optEditCheck = document.createElement("input");
+          optEditCheck.type = "checkbox";
+          optEditCheck.checked = profileOpt.editable !== false;
+          optEditCheck.disabled = profileOpt.visible === false;
+          optEditCheck.dataset.sectionKey = sectionKey;
+          optEditCheck.dataset.controlKey = controlKey;
+          optEditCheck.dataset.optionValue = opt.value;
+          optEditCheck.dataset.field = "editable";
+          optEditCheck.addEventListener("change", handleOptionEditableChange);
+
+          optEditLabel.appendChild(optEditCheck);
+          optEditLabel.appendChild(document.createTextNode(" Edit"));
+          optRow.appendChild(optEditLabel);
+
+          optionsContainer.appendChild(optRow);
+        }
+
+        content.appendChild(optionsContainer);
+      }
     }
 
     details.appendChild(content);
     container.appendChild(details);
   }
-}
-
-/**
- * Create a default value input for a control
- */
-function createDefaultInput(registryControl, profileControl, sectionKey, controlKey) {
-  var wrapper = document.createElement("span");
-  wrapper.style.marginLeft = "8px";
-  wrapper.style.fontSize = "11px";
-
-  var label = document.createElement("span");
-  label.textContent = "Default: ";
-  label.style.color = "#666";
-  wrapper.appendChild(label);
-
-  var input;
-  var currentDefault = profileControl.default !== undefined ? profileControl.default : registryControl.defaultValue;
-
-  // Determine input type - for dynamic-field controls, infer from fieldKey
-  var inputType = registryControl.type;
-  if (registryControl.type === "dynamic-field" && registryControl.fieldKey) {
-    inputType = inferDynamicFieldType(registryControl.fieldKey);
-  }
-
-  if (inputType === "select" || inputType === "dynamic-select") {
-    input = document.createElement("select");
-    input.style.fontSize = "11px";
-    input.style.padding = "2px";
-
-    // For static selects, get options from DOM
-    if (registryControl.elementIds && registryControl.elementIds[0]) {
-      var elementId = registryControl.elementIds[0];
-      var domSelect = document.getElementById(elementId);
-      if (domSelect) {
-        for (var i = 0; i < domSelect.options.length; i++) {
-          var opt = document.createElement("option");
-          opt.value = domSelect.options[i].value;
-          opt.textContent = domSelect.options[i].textContent;
-          input.appendChild(opt);
-        }
-      }
-    } else if (registryControl.fieldKey) {
-      // For dynamic selects, provide options based on fieldKey
-      var options = getDynamicFieldOptions(registryControl.fieldKey);
-      for (var i = 0; i < options.length; i++) {
-        var opt = document.createElement("option");
-        opt.value = options[i].value;
-        opt.textContent = options[i].label;
-        input.appendChild(opt);
-      }
-    }
-    input.value = currentDefault || "";
-  } else if (inputType === "number") {
-    input = document.createElement("input");
-    input.type = "number";
-    input.style.width = "60px";
-    input.style.fontSize = "11px";
-    input.style.padding = "2px";
-    input.value = currentDefault || "";
-  } else if (inputType === "checkbox") {
-    input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = !!currentDefault;
-  } else {
-    // Text input fallback
-    input = document.createElement("input");
-    input.type = "text";
-    input.style.width = "60px";
-    input.style.fontSize = "11px";
-    input.style.padding = "2px";
-    input.value = currentDefault || "";
-  }
-
-  input.dataset.sectionKey = sectionKey;
-  input.dataset.controlKey = controlKey;
-  input.addEventListener("change", handleDefaultValueChange);
-
-  wrapper.appendChild(input);
-  return wrapper;
-}
-
-/**
- * Infer the input type for a dynamic field based on its fieldKey
- * @param {string} fieldKey - e.g., "door.wall", "door.x", "door.open"
- * @returns {string} Input type: "select", "number", "checkbox", "text"
- */
-function inferDynamicFieldType(fieldKey) {
-  // Fields that are selects
-  var selectFields = [
-    "door.wall", "door.style", "door.hinge",
-    "window.wall", "window.style",
-    "divider.axis",
-    "attachment.type", "attachment.wall"
-  ];
-
-  // Fields that are numbers
-  var numberFields = [
-    "door.x", "door.width", "door.height",
-    "window.x", "window.y", "window.width", "window.height",
-    "divider.position",
-    "attachment.width", "attachment.depth", "attachment.offset"
-  ];
-
-  // Fields that are checkboxes
-  var checkboxFields = ["door.open"];
-
-  if (selectFields.indexOf(fieldKey) >= 0) {
-    return "dynamic-select";
-  }
-  if (numberFields.indexOf(fieldKey) >= 0) {
-    return "number";
-  }
-  if (checkboxFields.indexOf(fieldKey) >= 0) {
-    return "checkbox";
-  }
-
-  return "text";
-}
-
-/**
- * Get options for a dynamic select field
- * @param {string} fieldKey
- * @returns {Array<{value: string, label: string}>}
- */
-function getDynamicFieldOptions(fieldKey) {
-  var options = {
-    "door.wall": [
-      { value: "front", label: "Front" },
-      { value: "back", label: "Back" },
-      { value: "left", label: "Left" },
-      { value: "right", label: "Right" }
-    ],
-    "door.style": [
-      { value: "single", label: "Single" },
-      { value: "double", label: "Double" },
-      { value: "sliding", label: "Sliding" }
-    ],
-    "door.hinge": [
-      { value: "left", label: "Left" },
-      { value: "right", label: "Right" }
-    ],
-    "window.wall": [
-      { value: "front", label: "Front" },
-      { value: "back", label: "Back" },
-      { value: "left", label: "Left" },
-      { value: "right", label: "Right" }
-    ],
-    "window.style": [
-      { value: "fixed", label: "Fixed" },
-      { value: "sliding", label: "Sliding" },
-      { value: "casement", label: "Casement" }
-    ],
-    "divider.axis": [
-      { value: "x", label: "Front-Back (X)" },
-      { value: "z", label: "Left-Right (Z)" }
-    ],
-    "attachment.type": [
-      { value: "lean-to", label: "Lean-to" },
-      { value: "canopy", label: "Canopy" }
-    ],
-    "attachment.wall": [
-      { value: "front", label: "Front" },
-      { value: "back", label: "Back" },
-      { value: "left", label: "Left" },
-      { value: "right", label: "Right" }
-    ]
-  };
-
-  return options[fieldKey] || [];
 }
 
 /**
@@ -536,6 +429,8 @@ function handleSectionVisibilityChange(e) {
 
   if (currentEditorProfile) {
     updateProfileSection(currentEditorProfile, sectionKey, visible);
+    // Re-apply profile to show changes immediately
+    reapplyCurrentProfile();
   }
 }
 
@@ -548,32 +443,38 @@ function handleControlVisibilityChange(e) {
   var visible = e.target.checked;
 
   if (currentEditorProfile) {
-    // Get existing default value if any
+    // Get existing editable value
     var profile = getProfileByName(currentEditorProfile);
-    var existingDefault;
+    var editable = true;
     if (profile && profile.sections && profile.sections[sectionKey] &&
         profile.sections[sectionKey].controls && profile.sections[sectionKey].controls[controlKey]) {
-      existingDefault = profile.sections[sectionKey].controls[controlKey].default;
+      editable = profile.sections[sectionKey].controls[controlKey].editable !== false;
     }
-    updateProfileControl(currentEditorProfile, sectionKey, controlKey, visible, existingDefault);
+    updateProfileControl(currentEditorProfile, sectionKey, controlKey, visible, editable);
+
+    // Update the editable checkbox state (disable if not visible)
+    var editableCheckbox = document.querySelector(
+      'input[data-section-key="' + sectionKey + '"][data-control-key="' + controlKey + '"][data-field="editable"]'
+    );
+    if (editableCheckbox) {
+      editableCheckbox.disabled = !visible;
+      if (!visible) {
+        editableCheckbox.checked = false;
+      }
+    }
+
+    // Re-apply profile to show changes immediately
+    reapplyCurrentProfile();
   }
 }
 
 /**
- * Handle default value input change
+ * Handle control editable checkbox change
  */
-function handleDefaultValueChange(e) {
+function handleControlEditableChange(e) {
   var sectionKey = e.target.dataset.sectionKey;
   var controlKey = e.target.dataset.controlKey;
-  var value;
-
-  if (e.target.type === "checkbox") {
-    value = e.target.checked;
-  } else if (e.target.type === "number") {
-    value = e.target.value ? parseInt(e.target.value, 10) : undefined;
-  } else {
-    value = e.target.value || undefined;
-  }
+  var editable = e.target.checked;
 
   if (currentEditorProfile) {
     // Get existing visibility
@@ -583,7 +484,73 @@ function handleDefaultValueChange(e) {
         profile.sections[sectionKey].controls && profile.sections[sectionKey].controls[controlKey]) {
       visible = profile.sections[sectionKey].controls[controlKey].visible !== false;
     }
-    updateProfileControl(currentEditorProfile, sectionKey, controlKey, visible, value);
+    updateProfileControl(currentEditorProfile, sectionKey, controlKey, visible, editable);
+
+    // Re-apply profile to show changes immediately
+    reapplyCurrentProfile();
+  }
+}
+
+/**
+ * Handle option visibility checkbox change
+ */
+function handleOptionVisibilityChange(e) {
+  var sectionKey = e.target.dataset.sectionKey;
+  var controlKey = e.target.dataset.controlKey;
+  var optionValue = e.target.dataset.optionValue;
+  var visible = e.target.checked;
+
+  if (currentEditorProfile) {
+    // Get existing editable value for this option
+    var profile = getProfileByName(currentEditorProfile);
+    var editable = true;
+    if (profile && profile.sections && profile.sections[sectionKey] &&
+        profile.sections[sectionKey].controls && profile.sections[sectionKey].controls[controlKey] &&
+        profile.sections[sectionKey].controls[controlKey].options &&
+        profile.sections[sectionKey].controls[controlKey].options[optionValue]) {
+      editable = profile.sections[sectionKey].controls[controlKey].options[optionValue].editable !== false;
+    }
+    updateProfileControlOption(currentEditorProfile, sectionKey, controlKey, optionValue, visible, editable);
+
+    // Update the editable checkbox state
+    var editableCheckbox = document.querySelector(
+      'input[data-section-key="' + sectionKey + '"][data-control-key="' + controlKey + '"][data-option-value="' + optionValue + '"][data-field="editable"]'
+    );
+    if (editableCheckbox) {
+      editableCheckbox.disabled = !visible;
+      if (!visible) {
+        editableCheckbox.checked = false;
+      }
+    }
+
+    // Re-apply profile to show changes immediately
+    reapplyCurrentProfile();
+  }
+}
+
+/**
+ * Handle option editable checkbox change
+ */
+function handleOptionEditableChange(e) {
+  var sectionKey = e.target.dataset.sectionKey;
+  var controlKey = e.target.dataset.controlKey;
+  var optionValue = e.target.dataset.optionValue;
+  var editable = e.target.checked;
+
+  if (currentEditorProfile) {
+    // Get existing visibility for this option
+    var profile = getProfileByName(currentEditorProfile);
+    var visible = true;
+    if (profile && profile.sections && profile.sections[sectionKey] &&
+        profile.sections[sectionKey].controls && profile.sections[sectionKey].controls[controlKey] &&
+        profile.sections[sectionKey].controls[controlKey].options &&
+        profile.sections[sectionKey].controls[controlKey].options[optionValue]) {
+      visible = profile.sections[sectionKey].controls[controlKey].options[optionValue].visible !== false;
+    }
+    updateProfileControlOption(currentEditorProfile, sectionKey, controlKey, optionValue, visible, editable);
+
+    // Re-apply profile to show changes immediately
+    reapplyCurrentProfile();
   }
 }
 
@@ -591,32 +558,32 @@ function handleDefaultValueChange(e) {
  * Wire up editor button events
  */
 function wireEditorEvents() {
-  // Reset live toggles
-  var resetBtn = document.getElementById("resetLiveTogglesBtn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", function() {
-      resetLiveToggles();
-    });
-  }
-
-  // Profile selector change
+  // Profile selector change - automatically apply the selected profile
   var profileSelect = document.getElementById("profileEditorSelect");
   if (profileSelect) {
     profileSelect.addEventListener("change", function(e) {
       currentEditorProfile = e.target.value;
       renderProfileControls();
 
-      // If in preview mode, update the preview to show the newly selected profile
-      if (isPreviewMode) {
-        applyProfile(currentEditorProfile);
-        var previewHint = document.getElementById("profilePreviewHint");
-        if (previewHint) {
-          var profile = getProfileByName(currentEditorProfile);
-          var label = profile && profile.label ? profile.label : currentEditorProfile;
-          previewHint.textContent = "Previewing: " + label + " profile";
-        }
-        console.log("[profile-editor] Updated preview to:", currentEditorProfile);
+      // Automatically apply the selected profile to the UI
+      applyProfile(currentEditorProfile, _store);
+
+      // Refresh dynamic controls (doors, windows) to apply profile restrictions
+      if (window.__dbg && typeof window.__dbg.refreshDynamicControls === "function") {
+        window.__dbg.refreshDynamicControls();
       }
+
+      // Update the hint to show which profile is active
+      var activeHint = document.getElementById("profileActiveHint");
+      if (activeHint) {
+        var profile = getProfileByName(currentEditorProfile);
+        var label = profile && profile.label ? profile.label : currentEditorProfile;
+        activeHint.textContent = "Active: " + label;
+        activeHint.style.color = "#1976d2";
+        activeHint.style.fontWeight = "bold";
+      }
+
+      console.log("[profile-editor] Applied profile:", currentEditorProfile);
     });
   }
 
@@ -731,53 +698,94 @@ function wireEditorEvents() {
     });
   }
 
-  // Preview profile button
-  var previewBtn = document.getElementById("profilePreviewBtn");
-  var revertBtn = document.getElementById("profileRevertBtn");
-  var previewHint = document.getElementById("profilePreviewHint");
-
-  if (previewBtn) {
-    previewBtn.addEventListener("click", function() {
+  // Reset profile button - resets current profile to "admin" state (all visible/editable)
+  var resetBtn = document.getElementById("profileResetBtn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
       if (!currentEditorProfile) {
         alert("Select a profile first");
         return;
       }
 
-      // Apply the selected profile to see what it looks like
-      applyProfile(currentEditorProfile);
-      isPreviewMode = true;
+      var profile = getProfileByName(currentEditorProfile);
+      var label = profile && profile.label ? profile.label : currentEditorProfile;
 
-      // Update UI
-      previewBtn.style.display = "none";
-      if (revertBtn) revertBtn.style.display = "inline-block";
-      if (previewHint) {
-        var profile = getProfileByName(currentEditorProfile);
-        var label = profile && profile.label ? profile.label : currentEditorProfile;
-        previewHint.textContent = "Previewing: " + label + " profile";
-        previewHint.style.color = "#1976d2";
-        previewHint.style.fontWeight = "bold";
+      if (confirm("Reset \"" + label + "\" profile to show all controls?\n\nThis will make all controls visible and editable, and save the change.")) {
+        resetProfileToAdmin();
+
+        // Re-apply the profile (which is now all visible/editable)
+        applyProfile(currentEditorProfile, _store);
+
+        // Refresh dynamic controls
+        if (window.__dbg && typeof window.__dbg.refreshDynamicControls === "function") {
+          window.__dbg.refreshDynamicControls();
+        }
+
+        alert("Profile \"" + label + "\" has been reset to show all controls.");
       }
-
-      console.log("[profile-editor] Previewing profile:", currentEditorProfile);
     });
   }
+}
 
-  if (revertBtn) {
-    revertBtn.addEventListener("click", function() {
-      // Revert to admin view (show all controls)
-      showAllControls();
-      isPreviewMode = false;
+/**
+ * Re-apply the current profile to reflect changes in the UI
+ * Called whenever a checkbox is toggled in the profile editor
+ */
+function reapplyCurrentProfile() {
+  if (!currentEditorProfile) return;
 
-      // Update UI
-      revertBtn.style.display = "none";
-      if (previewBtn) previewBtn.style.display = "inline-block";
-      if (previewHint) {
-        previewHint.textContent = "";
-        previewHint.style.color = "";
-        previewHint.style.fontWeight = "";
-      }
+  // Re-apply the profile to show changes immediately
+  applyProfile(currentEditorProfile, _store);
 
-      console.log("[profile-editor] Reverted to admin view");
-    });
+  // Refresh dynamic controls (doors, windows) to apply profile restrictions
+  if (window.__dbg && typeof window.__dbg.refreshDynamicControls === "function") {
+    window.__dbg.refreshDynamicControls();
   }
+
+  console.log("[profile-editor] Re-applied profile:", currentEditorProfile);
+}
+
+/**
+ * Reset a profile to "admin" state (all visible, all editable) and SAVE it
+ * Use this if you want to actually reset a profile's configuration
+ */
+function resetProfileToAdmin() {
+  if (!currentEditorProfile) return;
+
+  var container = document.getElementById("profileControlsContainer");
+  if (!container) return;
+
+  // Find and check all section visibility checkboxes
+  var sectionCheckboxes = container.querySelectorAll('input[type="checkbox"][data-section-key]:not([data-control-key])');
+  for (var i = 0; i < sectionCheckboxes.length; i++) {
+    var checkbox = sectionCheckboxes[i];
+    checkbox.checked = true;
+    var sectionKey = checkbox.dataset.sectionKey;
+    updateProfileSection(currentEditorProfile, sectionKey, true);
+  }
+
+  // Find and check all control checkboxes
+  var controlCheckboxes = container.querySelectorAll('input[type="checkbox"][data-control-key]:not([data-option-value])');
+  for (var j = 0; j < controlCheckboxes.length; j++) {
+    var checkbox = controlCheckboxes[j];
+    checkbox.checked = true;
+    checkbox.disabled = false;
+    var sectionKey = checkbox.dataset.sectionKey;
+    var controlKey = checkbox.dataset.controlKey;
+    updateProfileControl(currentEditorProfile, sectionKey, controlKey, true, true);
+  }
+
+  // Find and check all option checkboxes
+  var optionCheckboxes = container.querySelectorAll('input[type="checkbox"][data-option-value]');
+  for (var k = 0; k < optionCheckboxes.length; k++) {
+    var checkbox = optionCheckboxes[k];
+    checkbox.checked = true;
+    checkbox.disabled = false;
+    var sectionKey = checkbox.dataset.sectionKey;
+    var controlKey = checkbox.dataset.controlKey;
+    var optionValue = checkbox.dataset.optionValue;
+    updateProfileControlOption(currentEditorProfile, sectionKey, controlKey, optionValue, true, true);
+  }
+
+  console.log("[profile-editor] Reset profile to admin state and saved:", currentEditorProfile);
 }

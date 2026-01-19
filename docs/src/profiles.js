@@ -39,8 +39,6 @@ export function parseUrlState() {
     try {
       var json = decodeURIComponent(escape(atob(base64Param)));
       state = JSON.parse(json);
-      console.log("[profiles] Decoded Base64 config:", state);
-
       // Ensure dim object has frameW_mm and frameD_mm set
       if (state.w && !state.dim) {
         state.dim = { frameW_mm: state.w, frameD_mm: state.d };
@@ -271,10 +269,15 @@ export function generateViewerUrl(state) {
     if (state.overhang.right_mm != null) compact.overhang.right_mm = state.overhang.right_mm;
   }
 
-  // Walls variant
-  if (state.walls && state.walls.variant) {
+  // Walls variant and height
+  if (state.walls) {
     compact.walls = compact.walls || {};
-    compact.walls.variant = state.walls.variant;
+    if (state.walls.variant) {
+      compact.walls.variant = state.walls.variant;
+    }
+    if (state.walls.height_mm != null) {
+      compact.walls.height_mm = state.walls.height_mm;
+    }
   }
 
   // Frame section
@@ -293,12 +296,19 @@ export function generateViewerUrl(state) {
         id: o.id,
         wall: o.wall,
         type: o.type,
+        enabled: o.enabled !== false, // Default to true
         x_mm: o.x_mm,
-        y_mm: o.y_mm,
         width_mm: o.width_mm,
-        height_mm: o.height_mm,
-        style: o.style
+        height_mm: o.height_mm
       };
+      // Only include y_mm for windows (doors are at ground level)
+      if (o.type === "window" && o.y_mm != null) {
+        opening.y_mm = o.y_mm;
+      }
+      // Include style if defined
+      if (o.style) {
+        opening.style = o.style;
+      }
       if (o.type === "door") {
         opening.handleSide = o.handleSide || "left";
         opening.isOpen = !!o.isOpen;
@@ -320,9 +330,12 @@ export function generateViewerUrl(state) {
     };
   }
 
-  // Encode as Base64
+  // Encode as Base64 with UTF-8 support
+  // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
   var json = JSON.stringify(compact);
-  var base64 = btoa(json);
+  var base64 = btoa(unescape(encodeURIComponent(json)));
+
+  console.log("[profiles] Generated viewer URL with state:", compact);
 
   return window.location.origin + window.location.pathname + "?profile=viewer&c=" + base64;
 }
@@ -571,6 +584,9 @@ function ensureSceneViewsVisible() {
   }
 }
 
+// Store the MutationObserver so we can disconnect it when switching away from viewer mode
+var _viewerModeObserver = null;
+
 /**
  * Make doors list viewer-mode friendly:
  * - Keep "Open" checkbox functional
@@ -581,15 +597,30 @@ function makeDoorsListViewerMode() {
   var doorsList = document.getElementById("doorsList");
   if (!doorsList) return;
 
+  // Disconnect any existing observer first
+  if (_viewerModeObserver) {
+    _viewerModeObserver.disconnect();
+  }
+
   // Use MutationObserver to handle dynamic door list updates
-  var observer = new MutationObserver(function() {
+  _viewerModeObserver = new MutationObserver(function() {
     applyDoorsListViewerRestrictions(doorsList);
   });
 
-  observer.observe(doorsList, { childList: true, subtree: true });
+  _viewerModeObserver.observe(doorsList, { childList: true, subtree: true });
 
   // Apply immediately
   applyDoorsListViewerRestrictions(doorsList);
+}
+
+/**
+ * Stop watching for viewer mode restrictions (called when switching to admin/other profiles)
+ */
+function stopViewerModeObserver() {
+  if (_viewerModeObserver) {
+    _viewerModeObserver.disconnect();
+    _viewerModeObserver = null;
+  }
 }
 
 /**
@@ -692,12 +723,20 @@ function fallbackCopyToClipboard(text, onSuccess, onError) {
  * @returns {string} URL with profile and state encoded
  */
 export function generateProfileUrl(profileName, state) {
+  console.log("[profiles] generateProfileUrl called with profileName:", profileName);
+  console.log("[profiles] generateProfileUrl input state:", JSON.stringify(state, null, 2));
+  console.log("[profiles] generateProfileUrl state.dim:", state?.dim);
+  console.log("[profiles] generateProfileUrl state.dim.frameW_mm:", state && state.dim ? state.dim.frameW_mm : "undefined");
+  console.log("[profiles] generateProfileUrl state.dim.frameD_mm:", state && state.dim ? state.dim.frameD_mm : "undefined");
+  console.log("[profiles] generateProfileUrl state.w:", state?.w);
+
   // Build a compact state object (reuse the same logic as viewer)
   var compact = {};
 
   // Basic dimensions
   var width = (state.dim && state.dim.frameW_mm) || state.w;
   var depth = (state.dim && state.dim.frameD_mm) || state.d;
+  console.log("[profiles] generateProfileUrl extracted width:", width, "depth:", depth);
   if (width) compact.w = width;
   if (depth) compact.d = depth;
   if (state.dimMode) compact.dimMode = state.dimMode;
@@ -751,10 +790,15 @@ export function generateProfileUrl(profileName, state) {
     if (state.overhang.right_mm != null) compact.overhang.right_mm = state.overhang.right_mm;
   }
 
-  // Walls variant
-  if (state.walls && state.walls.variant) {
+  // Walls variant and height
+  if (state.walls) {
     compact.walls = compact.walls || {};
-    compact.walls.variant = state.walls.variant;
+    if (state.walls.variant) {
+      compact.walls.variant = state.walls.variant;
+    }
+    if (state.walls.height_mm != null) {
+      compact.walls.height_mm = state.walls.height_mm;
+    }
   }
 
   // Frame section
@@ -765,7 +809,7 @@ export function generateProfileUrl(profileName, state) {
     };
   }
 
-  // Openings
+  // Openings (cleaned)
   if (state.walls && state.walls.openings && state.walls.openings.length > 0) {
     compact.walls = compact.walls || {};
     compact.walls.openings = state.walls.openings.map(function(o) {
@@ -773,12 +817,19 @@ export function generateProfileUrl(profileName, state) {
         id: o.id,
         wall: o.wall,
         type: o.type,
+        enabled: o.enabled !== false, // Default to true
         x_mm: o.x_mm,
-        y_mm: o.y_mm,
         width_mm: o.width_mm,
-        height_mm: o.height_mm,
-        style: o.style
+        height_mm: o.height_mm
       };
+      // Only include y_mm for windows (doors are at ground level)
+      if (o.type === "window" && o.y_mm != null) {
+        opening.y_mm = o.y_mm;
+      }
+      // Include style if defined
+      if (o.style) {
+        opening.style = o.style;
+      }
       if (o.type === "door") {
         opening.handleSide = o.handleSide || "left";
         opening.isOpen = !!o.isOpen;
@@ -804,9 +855,14 @@ export function generateProfileUrl(profileName, state) {
   var json = JSON.stringify(compact);
   var base64 = btoa(unescape(encodeURIComponent(json)));
 
+  console.log("[profiles] generateProfileUrl compact state:", compact);
+  console.log("[profiles] generateProfileUrl compact.w:", compact.w, "compact.d:", compact.d);
+
   // Build URL with profile and state
   var baseUrl = window.location.origin + window.location.pathname;
-  return baseUrl + "?profile=" + encodeURIComponent(profileName) + "&state=" + base64;
+  var url = baseUrl + "?profile=" + encodeURIComponent(profileName) + "&state=" + base64;
+  console.log("[profiles] generateProfileUrl final URL length:", url.length);
+  return url;
 }
 
 /**
@@ -850,12 +906,46 @@ export var CONTROL_REGISTRY = {
     controls: {
       unitModeMetric: { type: "radio", elementIds: ["unitModeMetric"], label: "Unit Mode: Metric" },
       unitModeImperial: { type: "radio", elementIds: ["unitModeImperial"], label: "Unit Mode: Imperial" },
-      dimMode: { type: "select", elementIds: ["dimMode"], label: "Dimension Mode", defaultValue: "frame" },
-      wInput: { type: "number", elementIds: ["wInput"], label: "Width", defaultValue: 3000 },
-      dInput: { type: "number", elementIds: ["dInput"], label: "Depth", defaultValue: 4000 },
-      roofStyle: { type: "select", elementIds: ["roofStyle"], label: "Roof Type", defaultValue: "apex" },
-      wallsVariant: { type: "select", elementIds: ["wallsVariant"], label: "Variant", defaultValue: "insulated" },
-      wallSection: { type: "select", elementIds: ["wallSection"], label: "Frame Gauge", defaultValue: "50x100" },
+      dimMode: {
+        type: "select",
+        elementIds: ["dimMode"],
+        label: "Dimension Mode",
+        options: [
+          { value: "base", label: "Base" },
+          { value: "frame", label: "Frame" },
+          { value: "roof", label: "Roof" }
+        ]
+      },
+      wInput: { type: "number", elementIds: ["wInput"], label: "Width" },
+      dInput: { type: "number", elementIds: ["dInput"], label: "Depth" },
+      roofStyle: {
+        type: "select",
+        elementIds: ["roofStyle"],
+        label: "Roof Type",
+        options: [
+          { value: "apex", label: "Apex (gabled)" },
+          { value: "pent", label: "Pent (single pitch)" },
+          { value: "hipped", label: "Hipped" }
+        ]
+      },
+      wallsVariant: {
+        type: "select",
+        elementIds: ["wallsVariant"],
+        label: "Variant",
+        options: [
+          { value: "insulated", label: "Insulated" },
+          { value: "basic", label: "Basic" }
+        ]
+      },
+      wallSection: {
+        type: "select",
+        elementIds: ["wallSection"],
+        label: "Frame Gauge",
+        options: [
+          { value: "50x75", label: "75 x 50" },
+          { value: "50x100", label: "100 x 50" }
+        ]
+      },
       snapPlanBtn: { type: "button", elementIds: ["snapPlanBtn"], label: "Scene View: Plan" },
       snapFrontBtn: { type: "button", elementIds: ["snapFrontBtn"], label: "Scene View: Front" },
       snapBackBtn: { type: "button", elementIds: ["snapBackBtn"], label: "Scene View: Back" },
@@ -872,9 +962,38 @@ export var CONTROL_REGISTRY = {
       removeAllDoorsBtn: { type: "button", elementIds: ["removeAllDoorsBtn"], label: "Remove All Doors Button" },
 
       // Door item fields (dynamic - applied during renderDoorsUi)
-      doorWall: { type: "dynamic-field", fieldKey: "door.wall", label: "Door: Wall Selector" },
-      doorStyle: { type: "dynamic-field", fieldKey: "door.style", label: "Door: Style" },
-      doorHinge: { type: "dynamic-field", fieldKey: "door.hinge", label: "Door: Hinge Side" },
+      doorWall: {
+        type: "dynamic-select",
+        fieldKey: "door.wall",
+        label: "Door: Wall",
+        options: [
+          { value: "front", label: "Front" },
+          { value: "back", label: "Back" },
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" }
+        ]
+      },
+      doorStyle: {
+        type: "dynamic-select",
+        fieldKey: "door.style",
+        label: "Door: Style",
+        options: [
+          { value: "standard", label: "Standard" },
+          { value: "double-standard", label: "Double Standard" },
+          { value: "mortise-tenon", label: "Mortise & Tenon" },
+          { value: "double-mortise-tenon", label: "Double Mortise & Tenon" },
+          { value: "french", label: "French Doors" }
+        ]
+      },
+      doorHinge: {
+        type: "dynamic-select",
+        fieldKey: "door.hinge",
+        label: "Door: Hinge Side",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" }
+        ]
+      },
       doorOpen: { type: "dynamic-field", fieldKey: "door.open", label: "Door: Open Checkbox" },
       doorX: { type: "dynamic-field", fieldKey: "door.x", label: "Door: X Position" },
       doorWidth: { type: "dynamic-field", fieldKey: "door.width", label: "Door: Width" },
@@ -887,7 +1006,17 @@ export var CONTROL_REGISTRY = {
       removeAllWindowsBtn: { type: "button", elementIds: ["removeAllWindowsBtn"], label: "Remove All Windows Button" },
 
       // Window item fields (dynamic - applied during renderWindowsUi)
-      windowWall: { type: "dynamic-field", fieldKey: "window.wall", label: "Window: Wall Selector" },
+      windowWall: {
+        type: "dynamic-select",
+        fieldKey: "window.wall",
+        label: "Window: Wall",
+        options: [
+          { value: "front", label: "Front" },
+          { value: "back", label: "Back" },
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" }
+        ]
+      },
       windowStyle: { type: "dynamic-field", fieldKey: "window.style", label: "Window: Style" },
       windowX: { type: "dynamic-field", fieldKey: "window.x", label: "Window: X Position" },
       windowY: { type: "dynamic-field", fieldKey: "window.y", label: "Window: Y Position" },
@@ -895,6 +1024,9 @@ export var CONTROL_REGISTRY = {
       windowHeight: { type: "dynamic-field", fieldKey: "window.height", label: "Window: Height" },
       windowSnapBtn: { type: "dynamic-field", fieldKey: "window.snapBtn", label: "Window: Snap Button" },
       windowRemoveBtn: { type: "dynamic-field", fieldKey: "window.removeBtn", label: "Window: Remove Button" },
+
+      // Internal Dividers section (wrapper for entire subsection)
+      internalDividersSection: { type: "container", elementIds: ["internalDividersSection"], label: "Internal Dividers Section" },
 
       // Divider buttons
       addDividerBtn: { type: "button", elementIds: ["addDividerBtn"], label: "Add Divider Button" },
@@ -935,8 +1067,25 @@ export var CONTROL_REGISTRY = {
   buildingAttachments: {
     label: "Building Attachments",
     controls: {
-      attachmentType: { type: "select", elementIds: ["attachmentType"], label: "Attachment: Type" },
-      attachmentWall: { type: "select", elementIds: ["attachmentWall"], label: "Attachment: Wall" },
+      attachmentType: {
+        type: "select",
+        elementIds: ["attachmentType"],
+        label: "Attachment: Type",
+        options: [
+          { value: "lean-to", label: "Lean-to" }
+        ]
+      },
+      attachmentWall: {
+        type: "select",
+        elementIds: ["attachmentWall"],
+        label: "Attachment: Wall",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+          { value: "front", label: "Front" },
+          { value: "back", label: "Back" }
+        ]
+      },
       attachmentWidth: { type: "number", elementIds: ["attachmentWidth"], label: "Attachment: Width" },
       attachmentDepth: { type: "number", elementIds: ["attachmentDepth"], label: "Attachment: Depth" },
       attachmentOffset: { type: "number", elementIds: ["attachmentOffset"], label: "Attachment: Offset" },
@@ -950,6 +1099,13 @@ export var CONTROL_REGISTRY = {
       attachmentItemDepth: { type: "dynamic-field", fieldKey: "attachment.depth", label: "Attachment Item: Depth" },
       attachmentItemOffset: { type: "dynamic-field", fieldKey: "attachment.offset", label: "Attachment Item: Offset" },
       attachmentItemRemoveBtn: { type: "dynamic-field", fieldKey: "attachment.removeBtn", label: "Attachment Item: Remove Button" }
+    }
+  },
+
+  appearance: {
+    label: "Appearance",
+    controls: {
+      // Placeholder - controls will be added when cladding/finishes/colours are implemented
     }
   },
 
@@ -989,7 +1145,9 @@ export var CONTROL_REGISTRY = {
       loadInstanceBtn: { type: "button", elementIds: ["loadInstanceBtn"], label: "Load Preset Button" },
       exportBtn: { type: "button", elementIds: ["exportBtn"], label: "Export Design Button" },
       importBtn: { type: "button", elementIds: ["importBtn"], label: "Import Design Button" },
-      copyViewerLinkBtn: { type: "button", elementIds: ["copyViewerLinkBtn"], label: "Copy Viewer Link Button" }
+      shareLinkProfileSelect: { type: "select", elementIds: ["shareLinkProfileSelect"], label: "Share Link Profile Selector" },
+      copyShareLinkBtn: { type: "button", elementIds: ["copyShareLinkBtn"], label: "Copy Share Link Button" },
+      copyShedDescriptionBtn: { type: "button", elementIds: ["copyShedDescriptionBtn"], label: "Copy Shed Description Button" }
     }
   },
 
@@ -1004,7 +1162,7 @@ export var CONTROL_REGISTRY = {
 
 /**
  * Get field restrictions for dynamic UI rendering
- * Returns an object mapping fieldKey to { visible, disabled }
+ * Returns an object mapping fieldKey to { visible, disabled, options }
  */
 export function getFieldRestrictions() {
   if (!_currentProfileName || _currentProfileName === "admin") {
@@ -1029,15 +1187,17 @@ export function getFieldRestrictions() {
       var controlKey = controlKeys[j];
       var controlConfig = controls[controlKey];
 
-      // Check if this is a dynamic field control
+      // Check if this is a dynamic field/select control
       var registrySection = CONTROL_REGISTRY[sectionKey];
       if (registrySection && registrySection.controls[controlKey]) {
         var regControl = registrySection.controls[controlKey];
-        if (regControl.type === "dynamic-field" && regControl.fieldKey) {
+        // Handle both dynamic-field and dynamic-select types
+        if ((regControl.type === "dynamic-field" || regControl.type === "dynamic-select") && regControl.fieldKey) {
           restrictions[regControl.fieldKey] = {
             visible: controlConfig.visible !== false,
-            disabled: controlConfig.disabled === true,
-            default: controlConfig.default
+            disabled: controlConfig.editable === false, // Use editable, not disabled
+            default: controlConfig.default,
+            options: controlConfig.options || null // Include option-level restrictions
           };
         }
       }
@@ -1086,6 +1246,19 @@ export function getFieldDefault(fieldKey) {
   return undefined;
 }
 
+/**
+ * Get option-level restrictions for a dynamic select field
+ * @param {string} fieldKey - e.g., "door.wall", "door.style"
+ * @returns {object|null} options restrictions or null
+ */
+export function getFieldOptionRestrictions(fieldKey) {
+  var restrictions = getFieldRestrictions();
+  if (restrictions[fieldKey] && restrictions[fieldKey].options) {
+    return restrictions[fieldKey].options;
+  }
+  return null;
+}
+
 // Profile data storage
 var _loadedProfiles = null;
 var _currentProfileName = null;
@@ -1114,6 +1287,13 @@ export function loadProfiles() {
             // Any profile in profiles.json that doesn't exist in localStorage gets added
             var jsonProfiles = jsonData.profiles || {};
             var localProfiles = localData.profiles || {};
+
+            // IMPORTANT: Always use the admin profile from profiles.json (not localStorage)
+            // This ensures admin profile is always unrestricted
+            if (jsonProfiles["admin"]) {
+              localProfiles["admin"] = jsonProfiles["admin"];
+              console.log("[profiles] Using admin profile from profiles.json (overriding localStorage)");
+            }
 
             // Add any new profiles from profiles.json that aren't in localStorage
             for (var profileName in jsonProfiles) {
@@ -1193,9 +1373,9 @@ export function getCurrentProfile() {
 }
 
 /**
- * Apply a named profile - hide controls and set defaults
+ * Apply a named profile - hide controls and disable non-editable ones
  * @param {string} profileName - Name of profile to apply
- * @param {object} store - State store (optional, for setting defaults)
+ * @param {object} store - State store (optional, not currently used)
  */
 export function applyProfile(profileName, store) {
   // Special case: viewer profile uses existing applyViewerProfile()
@@ -1205,10 +1385,18 @@ export function applyProfile(profileName, store) {
     return;
   }
 
-  // Admin or no profile = everything visible
+  // Admin or no profile = everything visible and editable
   if (!profileName || profileName === "admin") {
     _currentProfileName = "admin";
-    showAllControls();
+    try {
+      console.log("[profiles] Applying admin profile - calling showAllControls...");
+      showAllControls();
+      console.log("[profiles] showAllControls completed - calling enableAllControls...");
+      enableAllControls();
+      console.log("[profiles] enableAllControls completed - admin profile fully applied");
+    } catch (err) {
+      console.error("[profiles] Error applying admin profile:", err);
+    }
     return;
   }
 
@@ -1222,8 +1410,9 @@ export function applyProfile(profileName, store) {
   _currentProfileName = profileName;
   console.log("[profiles] Applying profile:", profileName);
 
-  // Start by showing everything
+  // Start by showing and enabling everything
   showAllControls();
+  enableAllControls();
 
   // Then apply profile restrictions
   var sections = profile.sections || {};
@@ -1237,25 +1426,6 @@ export function applyProfile(profileName, store) {
     // This ensures the Profile Editor is always accessible to admin users
     if (sectionKey === "developer") {
       continue;
-    }
-
-    // Never completely hide the saveLoad section - it contains the Developer panel
-    // Individual controls within it can still be hidden
-    if (sectionKey === "saveLoad") {
-      // Skip section-level hiding, but still process individual controls below
-      if (sectionConfig.visible === false) {
-        // Don't hide the section, but apply individual control restrictions
-        var controls = sectionConfig.controls || {};
-        var controlKeys = Object.keys(controls);
-        for (var j = 0; j < controlKeys.length; j++) {
-          var controlKey = controlKeys[j];
-          var controlConfig = controls[controlKey];
-          if (controlConfig.visible === false) {
-            hideControl(sectionKey, controlKey);
-          }
-        }
-        continue;
-      }
     }
 
     // Hide entire section if visible: false
@@ -1272,13 +1442,24 @@ export function applyProfile(profileName, store) {
       var controlKey = controlKeys[j];
       var controlConfig = controls[controlKey];
 
-      if (controlConfig.visible === false) {
-        hideControl(sectionKey, controlKey);
+      console.log("[profiles] Processing control:", sectionKey + "." + controlKey,
+        "visible:", controlConfig.visible,
+        "editable:", controlConfig.editable,
+        "hasOptions:", controlConfig.options ? Object.keys(controlConfig.options).length : 0);
 
-        // Apply default value if specified and store is provided
-        if (controlConfig.default !== undefined && store) {
-          applyControlDefault(controlKey, controlConfig.default, store);
-        }
+      if (controlConfig.visible === false) {
+        console.log("[profiles] Hiding control:", controlKey);
+        hideControl(sectionKey, controlKey);
+      } else if (controlConfig.editable === false) {
+        // Visible but not editable = greyed out
+        console.log("[profiles] Disabling control:", controlKey);
+        disableControl(sectionKey, controlKey);
+      }
+
+      // Apply option-level restrictions if this control has options configured
+      if (controlConfig.options && Object.keys(controlConfig.options).length > 0) {
+        console.log("[profiles] Applying option restrictions for:", controlKey, controlConfig.options);
+        applySelectOptionRestrictions(sectionKey, controlKey, controlConfig.options);
       }
     }
   }
@@ -1288,10 +1469,31 @@ export function applyProfile(profileName, store) {
  * Show all controls (reset to admin state)
  */
 export function showAllControls() {
-  // Show all sections
+  console.log("[profiles] showAllControls called");
+
+  // Stop the viewer mode MutationObserver (if active) to prevent it from re-disabling controls
+  stopViewerModeObserver();
+
+  // Show the view selector (viewer mode hides this)
+  var viewSelect = document.getElementById("viewSelect");
+  if (viewSelect) {
+    viewSelect.style.display = "";
+  }
+
+  // Show all sections and remove "(View Only)" suffix from summaries
   var allDetails = document.querySelectorAll("details.boSection");
   allDetails.forEach(function(details) {
     details.style.display = "";
+    var summary = details.querySelector("summary");
+    if (summary && summary.textContent.indexOf("(View Only)") >= 0) {
+      summary.textContent = summary.textContent.replace(" (View Only)", "");
+    }
+  });
+
+  // Show all rows that might have been hidden
+  var allRows = document.querySelectorAll(".row, .row3, .boBox, .checks");
+  allRows.forEach(function(row) {
+    row.style.display = "";
   });
 
   // Show all controls by iterating through registry
@@ -1308,12 +1510,23 @@ export function showAllControls() {
         var el = document.getElementById(elementIds[k]);
         if (el) {
           el.style.display = "";
+          // Show the label if it was hidden
+          var label = el.closest("label");
+          if (label) label.style.display = "";
+          // Also ensure the row is visible
           var row = el.closest(".row");
           if (row) row.style.display = "";
         }
       }
     }
   }
+
+  // Show dynamic control containers (doors list, windows list, etc.)
+  var dynamicContainers = ["doorsList", "windowsList", "dividersList", "attachmentsList"];
+  dynamicContainers.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = "";
+  });
 }
 
 /**
@@ -1367,12 +1580,30 @@ export function hideControl(sectionKey, controlKey) {
     var el = document.getElementById(elementIds[i]);
     if (!el) continue;
 
-    // Try to hide the parent .row for cleaner layout
-    var row = el.closest(".row");
-    if (row) {
-      row.style.display = "none";
-    } else {
+    // For container types, hide the element directly (it's a wrapper div)
+    if (control.type === "container") {
       el.style.display = "none";
+      continue;
+    }
+
+    // For buttons, just hide the button itself (don't affect siblings in row)
+    if (el.tagName === "BUTTON") {
+      el.style.display = "none";
+      continue;
+    }
+
+    // Try to hide the parent label first (safer - doesn't affect siblings in same row)
+    var label = el.closest("label");
+    if (label) {
+      label.style.display = "none";
+    } else {
+      // Fall back to hiding the row if no label
+      var row = el.closest(".row");
+      if (row) {
+        row.style.display = "none";
+      } else {
+        el.style.display = "none";
+      }
     }
   }
 }
@@ -1394,13 +1625,225 @@ export function showControl(sectionKey, controlKey) {
     if (!el) continue;
 
     el.style.display = "";
+
+    // For container types, just show the element directly
+    if (control.type === "container") {
+      continue;
+    }
+
+    // For buttons, just show the button itself
+    if (el.tagName === "BUTTON") {
+      continue;
+    }
+
+    // Show the label if it was hidden
+    var label = el.closest("label");
+    if (label) label.style.display = "";
+    // Also ensure the row is visible
     var row = el.closest(".row");
     if (row) row.style.display = "";
   }
 }
 
 /**
- * Apply a default value to a control
+ * Disable a specific control (visible but greyed out, not editable)
+ * @param {string} sectionKey
+ * @param {string} controlKey
+ */
+export function disableControl(sectionKey, controlKey) {
+  var section = CONTROL_REGISTRY[sectionKey];
+  if (!section || !section.controls[controlKey]) return;
+
+  var control = section.controls[controlKey];
+  var elementIds = control.elementIds || [];
+
+  for (var i = 0; i < elementIds.length; i++) {
+    var el = document.getElementById(elementIds[i]);
+    if (!el) continue;
+
+    // Disable the element
+    el.disabled = true;
+    el.classList.add("profile-disabled");
+
+    // For inputs, also add visual styling
+    if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "BUTTON") {
+      el.style.opacity = "0.6";
+      el.style.cursor = "not-allowed";
+      el.style.pointerEvents = "none";
+    }
+  }
+}
+
+/**
+ * Enable a specific control (make it editable)
+ * @param {string} sectionKey
+ * @param {string} controlKey
+ */
+export function enableControl(sectionKey, controlKey) {
+  var section = CONTROL_REGISTRY[sectionKey];
+  if (!section || !section.controls[controlKey]) return;
+
+  var control = section.controls[controlKey];
+  var elementIds = control.elementIds || [];
+
+  for (var i = 0; i < elementIds.length; i++) {
+    var el = document.getElementById(elementIds[i]);
+    if (!el) continue;
+
+    el.disabled = false;
+    el.classList.remove("profile-disabled");
+    el.style.opacity = "";
+    el.style.cursor = "";
+    el.style.pointerEvents = "";
+  }
+}
+
+/**
+ * Enable all controls (reset to editable state)
+ */
+export function enableAllControls() {
+  console.log("[profiles] enableAllControls called");
+
+  // Enable all controls by iterating through registry
+  var sectionKeys = Object.keys(CONTROL_REGISTRY);
+  for (var i = 0; i < sectionKeys.length; i++) {
+    var section = CONTROL_REGISTRY[sectionKeys[i]];
+    var controlKeys = Object.keys(section.controls);
+
+    for (var j = 0; j < controlKeys.length; j++) {
+      var control = section.controls[controlKeys[j]];
+      var elementIds = control.elementIds || [];
+
+      for (var k = 0; k < elementIds.length; k++) {
+        var el = document.getElementById(elementIds[k]);
+        if (el) {
+          el.disabled = false;
+          el.classList.remove("profile-disabled");
+          el.classList.remove("profile-options-restricted");
+          el.style.opacity = "";
+          el.style.cursor = "";
+          el.style.pointerEvents = "";
+
+          // Reset all options in select elements
+          if (el.tagName === "SELECT") {
+            resetSelectOptions(el);
+          }
+        }
+      }
+    }
+  }
+
+  // Also enable any inputs/buttons that might have been disabled by viewer mode
+  // This catches elements that aren't in the registry but were disabled
+  var allInputs = document.querySelectorAll("#controlPanel input, #controlPanel select, #controlPanel button");
+  allInputs.forEach(function(el) {
+    // Don't enable the hipped roof button (it's always disabled for now)
+    if (el.id === "hippedDesignOptionsBtn") return;
+
+    el.disabled = false;
+    el.style.opacity = "";
+    el.style.cursor = "";
+    el.style.pointerEvents = "";
+  });
+}
+
+/**
+ * Reset all options in a select element to visible and enabled
+ * @param {HTMLSelectElement} selectEl
+ */
+function resetSelectOptions(selectEl) {
+  var options = selectEl.querySelectorAll("option");
+  options.forEach(function(opt) {
+    opt.style.display = "";
+    opt.disabled = false;
+    opt.style.color = "";
+  });
+}
+
+/**
+ * Apply option-level restrictions to a select element
+ * @param {string} sectionKey
+ * @param {string} controlKey
+ * @param {object} optionsConfig - { optionValue: { visible, editable }, ... }
+ */
+export function applySelectOptionRestrictions(sectionKey, controlKey, optionsConfig) {
+  var section = CONTROL_REGISTRY[sectionKey];
+  if (!section || !section.controls[controlKey]) {
+    console.log("[profiles] applySelectOptionRestrictions - control not found in registry:", sectionKey, controlKey);
+    return;
+  }
+
+  var control = section.controls[controlKey];
+  var elementIds = control.elementIds || [];
+  console.log("[profiles] applySelectOptionRestrictions for", controlKey, "elementIds:", elementIds);
+
+  for (var i = 0; i < elementIds.length; i++) {
+    var el = document.getElementById(elementIds[i]);
+    var row = el ? el.closest(".row") : null;
+    console.log("[profiles] Looking for element:", elementIds[i],
+      "found:", !!el,
+      "tagName:", el ? el.tagName : "N/A",
+      "el.display:", el ? el.style.display : "N/A",
+      "row.display:", row ? row.style.display : "N/A");
+    if (!el || el.tagName !== "SELECT") continue;
+
+    var options = el.querySelectorAll("option");
+    var hasEnabledOption = false;
+
+    options.forEach(function(opt) {
+      var optValue = opt.value;
+      var optConfig = optionsConfig[optValue];
+
+      if (optConfig) {
+        if (optConfig.visible === false) {
+          // Hide the option completely
+          opt.style.display = "none";
+          opt.disabled = true;
+        } else if (optConfig.editable === false) {
+          // Show but grey out (not selectable)
+          opt.style.display = "";
+          opt.disabled = true;
+          opt.style.color = "#999";
+        } else {
+          // Fully enabled
+          opt.style.display = "";
+          opt.disabled = false;
+          opt.style.color = "";
+          hasEnabledOption = true;
+        }
+      } else {
+        // Option not in config - leave it enabled
+        hasEnabledOption = true;
+      }
+    });
+
+    // If ALL options are disabled, keep the select openable but users can't select anything
+    // The dropdown can still be opened to VIEW the greyed-out options
+    if (!hasEnabledOption) {
+      // Don't disable the select - allow opening to view options
+      // Just add visual indication that options are restricted
+      el.classList.add("profile-options-restricted");
+      console.log("[profiles] All options disabled for", controlKey, "- dropdown remains openable but options not selectable");
+    } else {
+      // If currently selected option is now hidden or disabled, select first available
+      var selectedOpt = el.options[el.selectedIndex];
+      if (selectedOpt && (selectedOpt.style.display === "none" || selectedOpt.disabled)) {
+        // Find first visible, enabled option
+        for (var j = 0; j < el.options.length; j++) {
+          if (el.options[j].style.display !== "none" && !el.options[j].disabled) {
+            el.selectedIndex = j;
+            // Trigger change event
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Apply a default value to a control (legacy, kept for compatibility)
  * @param {string} controlKey
  * @param {*} value
  * @param {object} store
@@ -1578,14 +2021,14 @@ export function renameProfile(oldName, newName, newLabel) {
 }
 
 /**
- * Update a control's visibility setting in a profile
+ * Update a control's visibility and editable settings in a profile
  * @param {string} profileName
  * @param {string} sectionKey
  * @param {string} controlKey
- * @param {boolean} visible
- * @param {*} defaultValue (optional)
+ * @param {boolean} visible - can the user see this control?
+ * @param {boolean} editable - can the user change it? (only relevant if visible)
  */
-export function updateProfileControl(profileName, sectionKey, controlKey, visible, defaultValue) {
+export function updateProfileControl(profileName, sectionKey, controlKey, visible, editable) {
   if (!_loadedProfiles || !_loadedProfiles.profiles[profileName]) {
     return false;
   }
@@ -1595,12 +2038,55 @@ export function updateProfileControl(profileName, sectionKey, controlKey, visibl
   if (!profile.sections[sectionKey]) profile.sections[sectionKey] = { visible: true, controls: {} };
   if (!profile.sections[sectionKey].controls) profile.sections[sectionKey].controls = {};
 
-  var controlConfig = { visible: visible };
-  if (defaultValue !== undefined) {
-    controlConfig.default = defaultValue;
+  // Preserve existing options if any
+  var existingOptions = profile.sections[sectionKey].controls[controlKey]
+    ? profile.sections[sectionKey].controls[controlKey].options
+    : undefined;
+
+  var controlConfig = {
+    visible: visible,
+    editable: editable !== false // default to true if not specified
+  };
+
+  if (existingOptions) {
+    controlConfig.options = existingOptions;
   }
 
   profile.sections[sectionKey].controls[controlKey] = controlConfig;
+  saveProfilesToStorage(_loadedProfiles);
+  return true;
+}
+
+/**
+ * Update a dropdown option's visibility and editable settings in a profile
+ * @param {string} profileName
+ * @param {string} sectionKey
+ * @param {string} controlKey
+ * @param {string} optionValue - the value attribute of the option
+ * @param {boolean} visible - can the user see this option?
+ * @param {boolean} editable - can the user select it? (only relevant if visible)
+ */
+export function updateProfileControlOption(profileName, sectionKey, controlKey, optionValue, visible, editable) {
+  if (!_loadedProfiles || !_loadedProfiles.profiles[profileName]) {
+    return false;
+  }
+
+  var profile = _loadedProfiles.profiles[profileName];
+  if (!profile.sections) profile.sections = {};
+  if (!profile.sections[sectionKey]) profile.sections[sectionKey] = { visible: true, controls: {} };
+  if (!profile.sections[sectionKey].controls) profile.sections[sectionKey].controls = {};
+  if (!profile.sections[sectionKey].controls[controlKey]) {
+    profile.sections[sectionKey].controls[controlKey] = { visible: true, editable: true, options: {} };
+  }
+  if (!profile.sections[sectionKey].controls[controlKey].options) {
+    profile.sections[sectionKey].controls[controlKey].options = {};
+  }
+
+  profile.sections[sectionKey].controls[controlKey].options[optionValue] = {
+    visible: visible,
+    editable: editable !== false
+  };
+
   saveProfilesToStorage(_loadedProfiles);
   return true;
 }

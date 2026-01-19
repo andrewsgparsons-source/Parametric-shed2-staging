@@ -162,13 +162,15 @@
                 </div>
                 <div id="windowsList"></div>
 
-                <div class="boSubhead" style="margin-top:10px;">Internal Dividers</div>
-                <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
-                <div class="row">
-                  <button id="addDividerBtn" type="button">+ Add Divider</button>
-                  <button id="removeAllDividersBtn" type="button">Remove All</button>
+                <div id="internalDividersSection">
+                  <div class="boSubhead" style="margin-top:10px;">Internal Dividers</div>
+                  <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
+                  <div class="row">
+                    <button id="addDividerBtn" type="button">+ Add Divider</button>
+                    <button id="removeAllDividersBtn" type="button">Remove All</button>
+                  </div>
+                  <div id="dividersList"></div>
                 </div>
-                <div id="dividersList"></div>
               </div>
             </details>
 
@@ -380,7 +382,7 @@
               </div>
             </details>
 
-       <details open class="boSection">
+            <details open class="boSection">
               <summary>Save / Load Design</summary>
               <div class="boBox" id="saveLoadBox">
                 <div class="boSubhead">Presets</div>
@@ -399,39 +401,35 @@
                 </div>
                 <p id="instancesHint" class="hint"></p>
 
-                <div class="boSubhead" style="margin-top:10px;">Developer</div>
+                <div class="boSubhead" style="margin-top:10px;">Share Links</div>
+                <div class="row" style="display:flex; gap:6px; align-items:center;">
+                  <select id="shareLinkProfileSelect" style="flex:1;">
+                    <option value="viewer">Viewer (read-only)</option>
+                    <!-- Other profiles populated dynamically -->
+                  </select>
+                  <button id="copyShareLinkBtn" type="button">Copy Link</button>
+                </div>
+
+                <div class="boSubhead" style="margin-top:10px;">Description</div>
+                <div class="row">
+                  <button id="copyShedDescriptionBtn" type="button">Copy Shed Description</button>
+                </div>
+              </div>
+            </details>
+
+            <details class="boSection">
+              <summary>Developer</summary>
+              <div class="boBox" id="developerBox">
                 <div class="row">
                   <label class="check">
                     <input id="devModeCheck" type="checkbox" /> Show Dev Tools
                   </label>
                 </div>
-                <div id="devPanel" style="display:none; padding-bottom: 20px;">
-                  <div class="row">
+                <div id="devPanel" style="display:none;">
+                  <div class="row" style="margin-top:10px;">
                     <button id="copyStateBtn" type="button">Copy State to Clipboard</button>
                   </div>
                   <p class="hint">Copy current state JSON for adding to presets file.</p>
-
-                  <details open class="boSection" style="margin-top:12px;">
-                    <summary>Share Links</summary>
-                    <div class="boBox">
-                      <p class="hint" style="margin:0 0 8px 0;">Copy shareable links for the current design</p>
-                      <div class="row">
-                        <button id="copyViewerLinkBtn" type="button">Copy Viewer Link</button>
-                      </div>
-                      <div id="profileLinksContainer">
-                        <!-- Dynamically populated with Copy [Profile] Link buttons -->
-                      </div>
-                    </div>
-                  </details>
-
-                  <div class="boSubhead" style="margin-top:12px;">Quick Live Toggles</div>
-                  <p class="hint" style="margin:0 0 8px 0;">Temporarily hide sections for testing</p>
-                  <div id="liveTogglesPanel">
-                    <!-- Populated by profile-editor.js -->
-                  </div>
-                  <div class="row" style="margin-top:8px;">
-                    <button id="resetLiveTogglesBtn" type="button">Reset All</button>
-                  </div>
 
                   <details open class="boSection" style="margin-top:12px;">
                     <summary>Profile Editor</summary>
@@ -445,14 +443,11 @@
                         <button id="profileRenameBtn" type="button">Rename</button>
                         <button id="profileDeleteBtn" type="button">Delete</button>
                       </div>
-                      <div class="row" style="margin-bottom:8px;">
-                        <button id="profilePreviewBtn" type="button">Preview Profile</button>
-                        <button id="profileRevertBtn" type="button" style="display:none;">Revert to Admin</button>
-                      </div>
-                      <p id="profilePreviewHint" class="hint" style="margin:0 0 12px 0;"></p>
+                      <p id="profileActiveHint" class="hint" style="margin:0 0 8px 0;"></p>
                       <div class="row" style="margin-bottom:12px;">
                         <button id="profileImportBtn" type="button">Import JSON</button>
                         <button id="profileExportBtn" type="button">Export JSON</button>
+                        <button id="profileResetBtn" type="button" title="Reset this profile to show all controls (admin state)">Reset Profile</button>
                       </div>
                       <div id="profileControlsContainer">
                         <!-- Populated by profile-editor.js -->

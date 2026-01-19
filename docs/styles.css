@@ -144,3 +144,21 @@
   color: #666;
   margin-top: 2px;
 }
+
+/* Profile system - disabled controls */
+.profile-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Profile system - select with all options restricted */
+/* Dropdown can still be opened to view options, but options are greyed out and not selectable */
+select.profile-options-restricted {
+  /* Slight visual indication that selections are restricted */
+  border-color: #999;
+}
+
+select.profile-options-restricted option:disabled {
+  color: #999;
+}
