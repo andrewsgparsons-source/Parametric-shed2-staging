@@ -12,7 +12,8 @@
         "appearance": { "visible": true },
         "visibility": { "visible": true },
         "saveLoad": { "visible": true },
-        "developer": { "visible": true }
+        "developer": { "visible": true },
+        "display": { "visible": true }
       }
     },
     "viewer": {
@@ -26,7 +27,8 @@
         "appearance": { "visible": false },
         "visibility": { "visible": true },
         "saveLoad": { "visible": false },
-        "developer": { "visible": false }
+        "developer": { "visible": false },
+        "display": { "visible": false }
       }
     },
     "customer": {
@@ -105,7 +107,8 @@
             "copyShedDescriptionBtn": { "visible": true, "editable": true }
           }
         },
-        "developer": { "visible": false }
+        "developer": { "visible": false },
+        "display": { "visible": false }
       }
     },
     "builder": {
@@ -135,7 +138,8 @@
         "buildingAttachments": { "visible": false },
         "appearance": { "visible": false },
         "visibility": { "visible": false },
-        "developer": { "visible": false }
+        "developer": { "visible": false },
+        "display": { "visible": true }
       }
     }
   },

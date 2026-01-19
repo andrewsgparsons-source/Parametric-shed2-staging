@@ -1157,6 +1157,13 @@ export var CONTROL_REGISTRY = {
       devModeCheck: { type: "checkbox", elementIds: ["devModeCheck"], label: "Developer Mode Checkbox" },
       copyStateBtn: { type: "button", elementIds: ["copyStateBtn"], label: "Copy State Button" }
     }
+  },
+
+  display: {
+    label: "Display",
+    controls: {
+      viewSelect: { type: "select", elementIds: ["viewSelect"], label: "View Selector (3D/Cutting Lists)" }
+    }
   }
 };
 
@@ -1422,9 +1429,10 @@ export function applyProfile(profileName, store) {
     var sectionKey = sectionKeys[i];
     var sectionConfig = sections[sectionKey];
 
-    // Never hide the developer section via profiles - it's controlled by "Show Dev Tools" checkbox
-    // This ensures the Profile Editor is always accessible to admin users
-    if (sectionKey === "developer") {
+    // Only skip hiding developer section if NOT loaded from a profile URL
+    // This ensures Profile Editor is accessible for local admin use, but hidden when sharing profile links
+    var urlProfile = getProfileFromUrl();
+    if (sectionKey === "developer" && !urlProfile) {
       continue;
     }
 
@@ -1537,6 +1545,16 @@ export function hideSection(sectionKey) {
   var section = CONTROL_REGISTRY[sectionKey];
   if (!section) return;
 
+  // Special handling for "display" section - it's not in a <details> element
+  // Instead, hide all controls in the section directly
+  if (sectionKey === "display") {
+    var controls = section.controls || {};
+    for (var controlKey in controls) {
+      hideControl(sectionKey, controlKey);
+    }
+    return;
+  }
+
   // Find the <details> element by matching summary text
   var allDetails = document.querySelectorAll("details.boSection");
   allDetails.forEach(function(details) {
@@ -1554,6 +1572,15 @@ export function hideSection(sectionKey) {
 export function showSection(sectionKey) {
   var section = CONTROL_REGISTRY[sectionKey];
   if (!section) return;
+
+  // Special handling for "display" section - it's not in a <details> element
+  if (sectionKey === "display") {
+    var controls = section.controls || {};
+    for (var controlKey in controls) {
+      showControl(sectionKey, controlKey);
+    }
+    return;
+  }
 
   var allDetails = document.querySelectorAll("details.boSection");
   allDetails.forEach(function(details) {
