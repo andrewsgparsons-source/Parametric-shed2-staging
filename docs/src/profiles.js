@@ -14,6 +14,28 @@ export function getProfileFromUrl() {
 }
 
 /**
+ * Get embedded profile configuration from URL parameters
+ * This allows profile restrictions to travel with the link
+ * @returns {object|null} Profile config object or null if not embedded
+ */
+export function getEmbeddedProfileFromUrl() {
+  var params = new URLSearchParams(window.location.search || "");
+  var profileConfig = params.get("pc"); // "pc" = profile config
+
+  if (!profileConfig) return null;
+
+  try {
+    var json = decodeURIComponent(escape(atob(profileConfig)));
+    var config = JSON.parse(json);
+    console.log("[profiles] Parsed embedded profile config from URL:", config);
+    return config;
+  } catch (e) {
+    console.warn("[profiles] Failed to decode embedded profile config:", e);
+    return null;
+  }
+}
+
+/**
  * Check if current profile is viewer mode
  * @returns {boolean}
  */
@@ -861,6 +883,21 @@ export function generateProfileUrl(profileName, state) {
   // Build URL with profile and state
   var baseUrl = window.location.origin + window.location.pathname;
   var url = baseUrl + "?profile=" + encodeURIComponent(profileName) + "&state=" + base64;
+
+  // Also embed the profile configuration so it works on any device
+  var profile = getProfileByName(profileName);
+  if (profile && profile.sections) {
+    // Create a compact profile config with just the restrictions
+    var profileConfig = {
+      label: profile.label || profileName,
+      sections: profile.sections
+    };
+    var profileJson = JSON.stringify(profileConfig);
+    var profileBase64 = btoa(unescape(encodeURIComponent(profileJson)));
+    url += "&pc=" + profileBase64; // "pc" = profile config
+    console.log("[profiles] Embedded profile config in URL, added", profileBase64.length, "chars");
+  }
+
   console.log("[profiles] generateProfileUrl final URL length:", url.length);
   return url;
 }
@@ -1409,23 +1446,30 @@ export function applyProfile(profileName, store) {
 
   var profile = getProfileByName(profileName);
   if (!profile) {
-    console.warn("[profiles] Profile not found:", profileName);
-    // If we came from a profile URL but profile doesn't exist (e.g., custom profile not in profiles.json),
-    // fall back to admin but still hide developer section for security
-    var urlProfile = getProfileFromUrl();
-    if (urlProfile) {
-      console.log("[profiles] Profile from URL not found, applying admin with hidden developer section");
-      _currentProfileName = "admin";
-      showAllControls();
-      enableAllControls();
-      // Hide developer section since this is from a shared link
-      hideSection("developer");
-      // Also hide display section for shared links
-      hideSection("display");
+    console.warn("[profiles] Profile not found locally:", profileName);
+    // Check if there's an embedded profile config in the URL
+    var embeddedProfile = getEmbeddedProfileFromUrl();
+    if (embeddedProfile && embeddedProfile.sections) {
+      console.log("[profiles] Using embedded profile config from URL");
+      profile = embeddedProfile;
+      // Continue with the embedded profile below
     } else {
-      _currentProfileName = null;
+      // No embedded profile either - fall back to admin with hidden developer section
+      var urlProfile = getProfileFromUrl();
+      if (urlProfile) {
+        console.log("[profiles] Profile from URL not found and no embedded config, applying admin with hidden developer section");
+        _currentProfileName = "admin";
+        showAllControls();
+        enableAllControls();
+        // Hide developer section since this is from a shared link
+        hideSection("developer");
+        // Also hide display section for shared links
+        hideSection("display");
+      } else {
+        _currentProfileName = null;
+      }
+      return;
     }
-    return;
   }
 
   _currentProfileName = profileName;
