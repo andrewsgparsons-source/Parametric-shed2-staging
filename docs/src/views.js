@@ -209,6 +209,15 @@ export function initViews() {
     applyView(v, "select");
   });
 
+  // Wire up "Back to 3D View" buttons on cutting list pages
+  var backButtons = document.querySelectorAll(".back-to-3d-btn");
+  backButtons.forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var target = btn.dataset.target || "3d";
+      applyView(target, "button");
+    });
+  });
+
   window.addEventListener("hashchange", function () {
     var hv = readHashView();
     if (hv) applyView(hv, "hash");

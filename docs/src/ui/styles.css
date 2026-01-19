@@ -323,6 +323,31 @@
       z-index: 1000;
     }
     .schedule-section{ margin-bottom: 30px; }
+
+    /* Page header with back button */
+    .page-header{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 0 10px;
+    }
+    .page-header h2{ margin: 0; text-align: left; }
+    .back-to-3d-btn{
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .back-to-3d-btn:hover{ background: #1565c0; }
+    .back-to-3d-btn:active{ background: #0d47a1; }
+
     h2{ margin: 0 0 20px 0; text-align:center; }
     h4{
       background:#333;
