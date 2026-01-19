@@ -16,6 +16,7 @@ export function getProfileFromUrl() {
 /**
  * Get embedded profile configuration from URL parameters
  * This allows profile restrictions to travel with the link
+ * The embedded config is in compact form (only restrictions), so we expand it
  * @returns {object|null} Profile config object or null if not embedded
  */
 export function getEmbeddedProfileFromUrl() {
@@ -26,13 +27,137 @@ export function getEmbeddedProfileFromUrl() {
 
   try {
     var json = decodeURIComponent(escape(atob(profileConfig)));
-    var config = JSON.parse(json);
-    console.log("[profiles] Parsed embedded profile config from URL:", config);
-    return config;
+    var compactConfig = JSON.parse(json);
+    console.log("[profiles] Parsed compact embedded profile config from URL:", compactConfig);
+    // Expand the compact config back to full format
+    var fullConfig = expandProfileConfig(compactConfig);
+    console.log("[profiles] Expanded to full profile config:", fullConfig);
+    return fullConfig;
   } catch (e) {
     console.warn("[profiles] Failed to decode embedded profile config:", e);
     return null;
   }
+}
+
+/**
+ * Create a compact version of a profile config that only includes restrictions
+ * Format: { h: ["sectionKey", ...], c: { sectionKey: { controlKey: 0|1, ... } } }
+ * Where h = hidden sections, c = control restrictions (0=hidden, 1=visible but disabled)
+ * @param {object} profile - Full profile config
+ * @returns {object} Compact config
+ */
+function compactifyProfileConfig(profile) {
+  var compact = {};
+  var hiddenSections = [];
+  var controlRestrictions = {};
+
+  var sections = profile.sections || {};
+  for (var sectionKey in sections) {
+    var sectionConfig = sections[sectionKey];
+
+    // If entire section is hidden, just add to hidden list
+    if (sectionConfig.visible === false) {
+      hiddenSections.push(sectionKey);
+      continue;
+    }
+
+    // Check for individual control restrictions
+    var controls = sectionConfig.controls || {};
+    var sectionRestrictions = {};
+    for (var controlKey in controls) {
+      var controlConfig = controls[controlKey];
+      if (controlConfig.visible === false) {
+        sectionRestrictions[controlKey] = 0; // 0 = hidden
+      } else if (controlConfig.editable === false) {
+        sectionRestrictions[controlKey] = 1; // 1 = visible but disabled
+      }
+      // If control has option restrictions, include them
+      if (controlConfig.options) {
+        var optionRestrictions = {};
+        var hasOptionRestrictions = false;
+        for (var optKey in controlConfig.options) {
+          var optConfig = controlConfig.options[optKey];
+          if (optConfig.visible === false) {
+            optionRestrictions[optKey] = 0;
+            hasOptionRestrictions = true;
+          } else if (optConfig.editable === false) {
+            optionRestrictions[optKey] = 1;
+            hasOptionRestrictions = true;
+          }
+        }
+        if (hasOptionRestrictions) {
+          sectionRestrictions[controlKey] = sectionRestrictions[controlKey] || 2; // 2 = has option restrictions
+          sectionRestrictions[controlKey + "_o"] = optionRestrictions; // "_o" suffix for options
+        }
+      }
+    }
+
+    if (Object.keys(sectionRestrictions).length > 0) {
+      controlRestrictions[sectionKey] = sectionRestrictions;
+    }
+  }
+
+  if (hiddenSections.length > 0) {
+    compact.h = hiddenSections; // "h" = hidden sections
+  }
+  if (Object.keys(controlRestrictions).length > 0) {
+    compact.c = controlRestrictions; // "c" = control restrictions
+  }
+
+  return compact;
+}
+
+/**
+ * Expand a compact profile config back to full format
+ * @param {object} compact - Compact config from URL
+ * @returns {object} Full profile config with sections
+ */
+function expandProfileConfig(compact) {
+  var profile = { sections: {} };
+
+  // Expand hidden sections
+  var hiddenSections = compact.h || [];
+  for (var i = 0; i < hiddenSections.length; i++) {
+    profile.sections[hiddenSections[i]] = { visible: false };
+  }
+
+  // Expand control restrictions
+  var controlRestrictions = compact.c || {};
+  for (var sectionKey in controlRestrictions) {
+    if (!profile.sections[sectionKey]) {
+      profile.sections[sectionKey] = { visible: true, controls: {} };
+    }
+    profile.sections[sectionKey].controls = profile.sections[sectionKey].controls || {};
+
+    var sectionRestrictions = controlRestrictions[sectionKey];
+    for (var controlKey in sectionRestrictions) {
+      // Skip option keys (they have "_o" suffix)
+      if (controlKey.endsWith("_o")) continue;
+
+      var restriction = sectionRestrictions[controlKey];
+      if (restriction === 0) {
+        profile.sections[sectionKey].controls[controlKey] = { visible: false, editable: false };
+      } else if (restriction === 1) {
+        profile.sections[sectionKey].controls[controlKey] = { visible: true, editable: false };
+      } else if (restriction === 2) {
+        // Has option restrictions - get them from the "_o" key
+        var optionsKey = controlKey + "_o";
+        var optionRestrictions = sectionRestrictions[optionsKey] || {};
+        var options = {};
+        for (var optKey in optionRestrictions) {
+          var optRestriction = optionRestrictions[optKey];
+          if (optRestriction === 0) {
+            options[optKey] = { visible: false, editable: false };
+          } else if (optRestriction === 1) {
+            options[optKey] = { visible: true, editable: false };
+          }
+        }
+        profile.sections[sectionKey].controls[controlKey] = { visible: true, editable: true, options: options };
+      }
+    }
+  }
+
+  return profile;
 }
 
 /**
@@ -884,18 +1009,17 @@ export function generateProfileUrl(profileName, state) {
   var baseUrl = window.location.origin + window.location.pathname;
   var url = baseUrl + "?profile=" + encodeURIComponent(profileName) + "&state=" + base64;
 
-  // Also embed the profile configuration so it works on any device
+  // Also embed a COMPACT profile configuration (only restrictions, not full config)
+  // This keeps URLs short by only including what differs from "everything visible/editable"
   var profile = getProfileByName(profileName);
   if (profile && profile.sections) {
-    // Create a compact profile config with just the restrictions
-    var profileConfig = {
-      label: profile.label || profileName,
-      sections: profile.sections
-    };
-    var profileJson = JSON.stringify(profileConfig);
-    var profileBase64 = btoa(unescape(encodeURIComponent(profileJson)));
-    url += "&pc=" + profileBase64; // "pc" = profile config
-    console.log("[profiles] Embedded profile config in URL, added", profileBase64.length, "chars");
+    var compactProfile = compactifyProfileConfig(profile);
+    if (compactProfile && Object.keys(compactProfile).length > 0) {
+      var profileJson = JSON.stringify(compactProfile);
+      var profileBase64 = btoa(unescape(encodeURIComponent(profileJson)));
+      url += "&pc=" + profileBase64; // "pc" = profile config
+      console.log("[profiles] Embedded compact profile config in URL, added", profileBase64.length, "chars");
+    }
   }
 
   console.log("[profiles] generateProfileUrl final URL length:", url.length);
