@@ -400,14 +400,17 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
       } catch (e0) { style = ""; }
       if (!style && roofStyleEl) style = String(roofStyleEl.value || "");
 
-      if (style === "pent") {
-        wallHeightEl.disabled = true;
-        wallHeightEl.setAttribute("aria-disabled", "true");
-        wallHeightEl.title = "Disabled for pent roof (use Roof Min/Max Height).";
-      } else {
-        wallHeightEl.disabled = false;
-        try { wallHeightEl.removeAttribute("aria-disabled"); } catch (e1) {}
-        try { wallHeightEl.removeAttribute("title"); } catch (e2) {}
+      // Only change disabled state if not profile-disabled
+      if (!wallHeightEl.classList.contains("profile-disabled")) {
+        if (style === "pent") {
+          wallHeightEl.disabled = true;
+          wallHeightEl.setAttribute("aria-disabled", "true");
+          wallHeightEl.title = "Disabled for pent roof (use Roof Min/Max Height).";
+        } else {
+          wallHeightEl.disabled = false;
+          try { wallHeightEl.removeAttribute("aria-disabled"); } catch (e1) {}
+          try { wallHeightEl.removeAttribute("title"); } catch (e2) {}
+        }
       }
     }
 
@@ -2434,8 +2437,11 @@ if (wInputEl && dInputEl) {
             if (n0 == null) n0 = computeLegacyApexTrussCount(state);
             roofApexTrussCountEl.value = String(n0);
             // Keep usable even if hidden by CSS/layout; but disable when not apex to avoid accidental edits.
-            roofApexTrussCountEl.disabled = (_roofStyleNow !== "apex");
-            roofApexTrussCountEl.setAttribute("aria-disabled", String(_roofStyleNow !== "apex"));
+            // Only change disabled state if not profile-disabled
+            if (!roofApexTrussCountEl.classList.contains("profile-disabled")) {
+              roofApexTrussCountEl.disabled = (_roofStyleNow !== "apex");
+              roofApexTrussCountEl.setAttribute("aria-disabled", String(_roofStyleNow !== "apex"));
+            }
           }
           if (roofApexTrussSpacingEl) {
             roofApexTrussSpacingEl.textContent = computeApexTrussSpacingText(state);
@@ -2451,8 +2457,13 @@ roofMinHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
           roofMaxHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
           roofMinHeightEl.min = (unitMode === "imperial") ? "4" : "100";
           roofMaxHeightEl.min = (unitMode === "imperial") ? "4" : "100";
-          roofMinHeightEl.disabled = !isPent;
-          roofMaxHeightEl.disabled = !isPent;
+          // Only change disabled state if not profile-disabled
+          if (!roofMinHeightEl.classList.contains("profile-disabled")) {
+            roofMinHeightEl.disabled = !isPent;
+          }
+          if (!roofMaxHeightEl.classList.contains("profile-disabled")) {
+            roofMaxHeightEl.disabled = !isPent;
+          }
           
           // Update labels
           var minLabel = roofMinHeightEl.parentElement;
@@ -2488,8 +2499,11 @@ roofMinHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
           var ah = getApexHeightsFromState(state);
 
 if (roofApexEavesHeightEl) {
-            roofApexEavesHeightEl.disabled = !isApex;
-            roofApexEavesHeightEl.setAttribute("aria-disabled", String(!isApex));
+            // Only change disabled state if not profile-disabled
+            if (!roofApexEavesHeightEl.classList.contains("profile-disabled")) {
+              roofApexEavesHeightEl.disabled = !isApex;
+              roofApexEavesHeightEl.setAttribute("aria-disabled", String(!isApex));
+            }
             roofApexEavesHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
             roofApexEavesHeightEl.min = (unitMode === "imperial") ? "4" : "100";
             if (isApex && ah.eaves != null) roofApexEavesHeightEl.value = formatDimension(ah.eaves, unitMode);
@@ -2500,8 +2514,11 @@ if (roofApexEavesHeightEl) {
           }
 
           if (roofApexCrestHeightEl) {
-            roofApexCrestHeightEl.disabled = !isApex;
-            roofApexCrestHeightEl.setAttribute("aria-disabled", String(!isApex));
+            // Only change disabled state if not profile-disabled
+            if (!roofApexCrestHeightEl.classList.contains("profile-disabled")) {
+              roofApexCrestHeightEl.disabled = !isApex;
+              roofApexCrestHeightEl.setAttribute("aria-disabled", String(!isApex));
+            }
            roofApexCrestHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
             roofApexCrestHeightEl.min = (unitMode === "imperial") ? "4" : "100";
             if (isApex && ah.crest != null) roofApexCrestHeightEl.value = formatDimension(ah.crest, unitMode);
