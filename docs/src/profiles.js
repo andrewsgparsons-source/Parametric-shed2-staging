@@ -477,6 +477,30 @@ export function generateViewerUrl(state) {
     };
   }
 
+  // Sections (attachments)
+  if (state.sections && state.sections.attachments && state.sections.attachments.length > 0) {
+    compact.sections = {
+      enabled: state.sections.enabled !== false,
+      attachments: state.sections.attachments.map(function(att) {
+        var compactAtt = {
+          id: att.id,
+          enabled: att.enabled !== false,
+          attachTo: att.attachTo,
+          dimensions: att.dimensions
+        };
+        // Include roof config if present
+        if (att.roof) {
+          compactAtt.roof = att.roof;
+        }
+        // Include base config if present
+        if (att.base) {
+          compactAtt.base = att.base;
+        }
+        return compactAtt;
+      })
+    };
+  }
+
   // Encode as Base64 with UTF-8 support
   // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
   var json = JSON.stringify(compact);
@@ -994,6 +1018,30 @@ export function generateProfileUrl(profileName, state) {
           axis: d.axis,
           position_mm: d.position_mm
         };
+      })
+    };
+  }
+
+  // Sections (attachments)
+  if (state.sections && state.sections.attachments && state.sections.attachments.length > 0) {
+    compact.sections = {
+      enabled: state.sections.enabled !== false,
+      attachments: state.sections.attachments.map(function(att) {
+        var compactAtt = {
+          id: att.id,
+          enabled: att.enabled !== false,
+          attachTo: att.attachTo,
+          dimensions: att.dimensions
+        };
+        // Include roof config if present
+        if (att.roof) {
+          compactAtt.roof = att.roof;
+        }
+        // Include base config if present
+        if (att.base) {
+          compactAtt.base = att.base;
+        }
+        return compactAtt;
       })
     };
   }
