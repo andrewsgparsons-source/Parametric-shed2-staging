@@ -501,6 +501,80 @@ export function generateViewerUrl(state) {
     };
   }
 
+  // Visibility settings - only include if something is hidden (not default)
+  if (state.vis) {
+    var compactVis = {};
+    var hasVisChanges = false;
+
+    // Main building visibility
+    if (state.vis.baseAll === false) { compactVis.baseAll = false; hasVisChanges = true; }
+    if (state.vis.walls === false) { compactVis.walls = false; hasVisChanges = true; }
+    if (state.vis.roof === false) { compactVis.roof = false; hasVisChanges = true; }
+    if (state.vis.cladding === false) { compactVis.cladding = false; hasVisChanges = true; }
+    if (state.vis.openings === false) { compactVis.openings = false; hasVisChanges = true; }
+
+    // Base sub-components
+    if (state.vis.base === false) { compactVis.base = false; hasVisChanges = true; }
+    if (state.vis.frame === false) { compactVis.frame = false; hasVisChanges = true; }
+    if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
+    if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
+
+    // Wall sub-components (per-wall visibility)
+    if (state.vis.walls && typeof state.vis.walls === 'object') {
+      var wallVis = state.vis.walls;
+      if (wallVis.front === false || wallVis.back === false || wallVis.left === false || wallVis.right === false) {
+        compactVis.walls = compactVis.walls || {};
+        if (typeof compactVis.walls !== 'object') compactVis.walls = {};
+        if (wallVis.front === false) compactVis.walls.front = false;
+        if (wallVis.back === false) compactVis.walls.back = false;
+        if (wallVis.left === false) compactVis.walls.left = false;
+        if (wallVis.right === false) compactVis.walls.right = false;
+        hasVisChanges = true;
+      }
+    }
+
+    // Roof sub-components
+    if (state.vis.roofParts) {
+      var rp = state.vis.roofParts;
+      if (rp.structure === false || rp.osb === false || rp.covering === false) {
+        compactVis.roofParts = {};
+        if (rp.structure === false) compactVis.roofParts.structure = false;
+        if (rp.osb === false) compactVis.roofParts.osb = false;
+        if (rp.covering === false) compactVis.roofParts.covering = false;
+        hasVisChanges = true;
+      }
+    }
+
+    // Attachment visibility
+    if (state.vis.attachments) {
+      var av = state.vis.attachments;
+      var compactAv = {};
+      var hasAttVisChanges = false;
+
+      if (av.base === false) { compactAv.base = false; hasAttVisChanges = true; }
+      if (av.walls === false) { compactAv.walls = false; hasAttVisChanges = true; }
+      if (av.roof === false) { compactAv.roof = false; hasAttVisChanges = true; }
+      if (av.cladding === false) { compactAv.cladding = false; hasAttVisChanges = true; }
+      if (av.baseGrid === false) { compactAv.baseGrid = false; hasAttVisChanges = true; }
+      if (av.baseFrame === false) { compactAv.baseFrame = false; hasAttVisChanges = true; }
+      if (av.baseDeck === false) { compactAv.baseDeck = false; hasAttVisChanges = true; }
+      if (av.wallFront === false) { compactAv.wallFront = false; hasAttVisChanges = true; }
+      if (av.wallBack === false) { compactAv.wallBack = false; hasAttVisChanges = true; }
+      if (av.wallLeft === false) { compactAv.wallLeft = false; hasAttVisChanges = true; }
+      if (av.wallRight === false) { compactAv.wallRight = false; hasAttVisChanges = true; }
+      if (av.wallOuter === false) { compactAv.wallOuter = false; hasAttVisChanges = true; }
+
+      if (hasAttVisChanges) {
+        compactVis.attachments = compactAv;
+        hasVisChanges = true;
+      }
+    }
+
+    if (hasVisChanges) {
+      compact.vis = compactVis;
+    }
+  }
+
   // Encode as Base64 with UTF-8 support
   // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
   var json = JSON.stringify(compact);
@@ -839,6 +913,76 @@ function applyDoorsListViewerRestrictions(doorsList) {
 }
 
 /**
+ * Hide visibility checkboxes for components that are hidden in the state
+ * This is called in viewer mode to prevent users from seeing controls for hidden components
+ * @param {object} state - Current application state with vis settings
+ */
+export function hideDisabledVisibilityControls(state) {
+  if (!state || !state.vis) return;
+
+  var vis = state.vis;
+
+  // Helper to hide a checkbox and its label
+  function hideCheckbox(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var label = el.closest("label.check");
+    if (label) {
+      label.style.display = "none";
+    } else {
+      el.style.display = "none";
+    }
+  }
+
+  // Main building visibility controls
+  if (vis.baseAll === false) hideCheckbox("vBaseAll");
+  if (vis.walls === false) hideCheckbox("vWalls");
+  if (vis.roof === false) hideCheckbox("vRoof");
+  if (vis.cladding === false) hideCheckbox("vCladding");
+  if (vis.openings === false) hideCheckbox("vOpenings");
+
+  // Roof sub-components
+  if (vis.roofParts) {
+    if (vis.roofParts.structure === false) hideCheckbox("vRoofStructure");
+    if (vis.roofParts.osb === false) hideCheckbox("vRoofOsb");
+    if (vis.roofParts.covering === false) hideCheckbox("vRoofCovering");
+  }
+
+  // Base sub-components
+  if (vis.base === false) hideCheckbox("vBase");
+  if (vis.frame === false) hideCheckbox("vFrame");
+  if (vis.ins === false) hideCheckbox("vIns");
+  if (vis.deck === false) hideCheckbox("vDeck");
+
+  // Wall sub-components (per-wall visibility)
+  if (vis.walls && typeof vis.walls === 'object') {
+    if (vis.walls.front === false) hideCheckbox("vWallFront");
+    if (vis.walls.back === false) hideCheckbox("vWallBack");
+    if (vis.walls.left === false) hideCheckbox("vWallLeft");
+    if (vis.walls.right === false) hideCheckbox("vWallRight");
+  }
+
+  // Attachment visibility controls
+  if (vis.attachments) {
+    var av = vis.attachments;
+    if (av.base === false) hideCheckbox("vAttBase");
+    if (av.walls === false) hideCheckbox("vAttWalls");
+    if (av.roof === false) hideCheckbox("vAttRoof");
+    if (av.cladding === false) hideCheckbox("vAttCladding");
+    if (av.baseGrid === false) hideCheckbox("vAttBaseGrid");
+    if (av.baseFrame === false) hideCheckbox("vAttBaseFrame");
+    if (av.baseDeck === false) hideCheckbox("vAttBaseDeck");
+    if (av.wallFront === false) hideCheckbox("vAttWallFront");
+    if (av.wallBack === false) hideCheckbox("vAttWallBack");
+    if (av.wallLeft === false) hideCheckbox("vAttWallLeft");
+    if (av.wallRight === false) hideCheckbox("vAttWallRight");
+    if (av.wallOuter === false) hideCheckbox("vAttWallOuter");
+  }
+
+  console.log("[profiles] Hidden visibility controls for disabled components");
+}
+
+/**
  * Copy viewer URL to clipboard
  * @param {object} state - Current application state
  * @param {function} onSuccess - Callback on successful copy
@@ -1044,6 +1188,80 @@ export function generateProfileUrl(profileName, state) {
         return compactAtt;
       })
     };
+  }
+
+  // Visibility settings - only include if something is hidden (not default)
+  if (state.vis) {
+    var compactVis = {};
+    var hasVisChanges = false;
+
+    // Main building visibility
+    if (state.vis.baseAll === false) { compactVis.baseAll = false; hasVisChanges = true; }
+    if (state.vis.walls === false) { compactVis.walls = false; hasVisChanges = true; }
+    if (state.vis.roof === false) { compactVis.roof = false; hasVisChanges = true; }
+    if (state.vis.cladding === false) { compactVis.cladding = false; hasVisChanges = true; }
+    if (state.vis.openings === false) { compactVis.openings = false; hasVisChanges = true; }
+
+    // Base sub-components
+    if (state.vis.base === false) { compactVis.base = false; hasVisChanges = true; }
+    if (state.vis.frame === false) { compactVis.frame = false; hasVisChanges = true; }
+    if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
+    if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
+
+    // Wall sub-components (per-wall visibility)
+    if (state.vis.walls && typeof state.vis.walls === 'object') {
+      var wallVis = state.vis.walls;
+      if (wallVis.front === false || wallVis.back === false || wallVis.left === false || wallVis.right === false) {
+        compactVis.walls = compactVis.walls || {};
+        if (typeof compactVis.walls !== 'object') compactVis.walls = {};
+        if (wallVis.front === false) compactVis.walls.front = false;
+        if (wallVis.back === false) compactVis.walls.back = false;
+        if (wallVis.left === false) compactVis.walls.left = false;
+        if (wallVis.right === false) compactVis.walls.right = false;
+        hasVisChanges = true;
+      }
+    }
+
+    // Roof sub-components
+    if (state.vis.roofParts) {
+      var rp = state.vis.roofParts;
+      if (rp.structure === false || rp.osb === false || rp.covering === false) {
+        compactVis.roofParts = {};
+        if (rp.structure === false) compactVis.roofParts.structure = false;
+        if (rp.osb === false) compactVis.roofParts.osb = false;
+        if (rp.covering === false) compactVis.roofParts.covering = false;
+        hasVisChanges = true;
+      }
+    }
+
+    // Attachment visibility
+    if (state.vis.attachments) {
+      var av = state.vis.attachments;
+      var compactAv = {};
+      var hasAttVisChanges = false;
+
+      if (av.base === false) { compactAv.base = false; hasAttVisChanges = true; }
+      if (av.walls === false) { compactAv.walls = false; hasAttVisChanges = true; }
+      if (av.roof === false) { compactAv.roof = false; hasAttVisChanges = true; }
+      if (av.cladding === false) { compactAv.cladding = false; hasAttVisChanges = true; }
+      if (av.baseGrid === false) { compactAv.baseGrid = false; hasAttVisChanges = true; }
+      if (av.baseFrame === false) { compactAv.baseFrame = false; hasAttVisChanges = true; }
+      if (av.baseDeck === false) { compactAv.baseDeck = false; hasAttVisChanges = true; }
+      if (av.wallFront === false) { compactAv.wallFront = false; hasAttVisChanges = true; }
+      if (av.wallBack === false) { compactAv.wallBack = false; hasAttVisChanges = true; }
+      if (av.wallLeft === false) { compactAv.wallLeft = false; hasAttVisChanges = true; }
+      if (av.wallRight === false) { compactAv.wallRight = false; hasAttVisChanges = true; }
+      if (av.wallOuter === false) { compactAv.wallOuter = false; hasAttVisChanges = true; }
+
+      if (hasAttVisChanges) {
+        compactVis.attachments = compactAv;
+        hasVisChanges = true;
+      }
+    }
+
+    if (hasVisChanges) {
+      compact.vis = compactVis;
+    }
   }
 
   // Encode as Base64

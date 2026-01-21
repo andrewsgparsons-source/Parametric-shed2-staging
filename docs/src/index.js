@@ -39,7 +39,7 @@ import * as Windows from "./elements/windows.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
-import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile } from "./profiles.js";
+import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";
 import { initPanelResize } from "./ui/panel-resize.js";
 
@@ -280,6 +280,10 @@ function initApp() {
       console.log("[INIT] Parsed state.w:", profileUrlState.w);
       initialState = deepMerge(initialState, profileUrlState);
       console.log("[INIT] State after profile URL merge - dim:", initialState.dim);
+      // Hide visibility checkboxes for components that are hidden in the shared state
+      setTimeout(function() {
+        hideDisabledVisibilityControls(initialState);
+      }, 0);
     }
 
     var store = createStateStore(initialState);
@@ -291,6 +295,8 @@ function initApp() {
       // Defer to ensure DOM is fully ready
       setTimeout(function() {
         applyViewerProfile();
+        // Hide visibility checkboxes for components that are hidden in the shared state
+        hideDisabledVisibilityControls(initialState);
       }, 0);
     }
 
