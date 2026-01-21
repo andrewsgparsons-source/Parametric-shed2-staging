@@ -1606,24 +1606,31 @@ function ensureCladdingMaterialOnMeshes() {
 
       let cladHits = 0;
       let cornerHits = 0;
+      let attachmentHits = 0;
       for (let i = 0; i < scene.meshes.length; i++) {
         const mesh = scene.meshes[i];
         if (!mesh || !mesh.name) continue;
-        
-        // Apply to cladding meshes
+
+        // Apply to main building cladding meshes
         if (mesh.name.startsWith("clad-")) {
           mesh.material = mat;
           cladHits++;
         }
-        
+
         // Apply to corner board meshes
         if (mesh.name.startsWith("corner-board-")) {
           mesh.material = mat;
           cornerHits++;
         }
+
+        // Apply to attachment cladding meshes (att-{id}-clad-...)
+        if (mesh.name.indexOf("-clad-") >= 0 || (mesh.metadata && mesh.metadata.type === "cladding")) {
+          mesh.material = mat;
+          attachmentHits++;
+        }
       }
 
-      console.log("CLAD_MATERIAL_FINALIZED cladding=", cladHits, "cornerBoards=", cornerHits);
+      console.log("CLAD_MATERIAL_FINALIZED cladding=", cladHits, "cornerBoards=", cornerHits, "attachments=", attachmentHits);
     } catch (e) {
       console.warn("ensureCladdingMaterialOnMeshes failed", e);
     }
@@ -1660,7 +1667,12 @@ function scheduleFollowUpFinalisers() {
             const mesh = scene.meshes[i];
             if (!mesh || !mesh.name) continue;
             
-            if ((mesh.name.startsWith("clad-") || mesh.name.startsWith("corner-board-")) && !mesh.material) {
+            // Apply to main building cladding, corner boards, and attachment cladding
+            var isCladding = mesh.name.startsWith("clad-") ||
+                             mesh.name.startsWith("corner-board-") ||
+                             mesh.name.indexOf("-clad-") >= 0 ||
+                             (mesh.metadata && mesh.metadata.type === "cladding");
+            if (isCladding && !mesh.material) {
               mesh.material = mat;
             }
           }

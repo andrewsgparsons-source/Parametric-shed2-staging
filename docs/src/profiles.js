@@ -1228,18 +1228,11 @@ export var CONTROL_REGISTRY = {
   buildingAttachments: {
     label: "Building Attachments",
     controls: {
-      attachmentType: {
-        type: "select",
-        elementIds: ["attachmentType"],
-        label: "Attachment: Type",
-        options: [
-          { value: "lean-to", label: "Lean-to" }
-        ]
-      },
+      // Add new attachment controls
       attachmentWall: {
         type: "select",
         elementIds: ["attachmentWall"],
-        label: "Attachment: Wall",
+        label: "Attachment: Wall Selector",
         options: [
           { value: "left", label: "Left" },
           { value: "right", label: "Right" },
@@ -1247,19 +1240,20 @@ export var CONTROL_REGISTRY = {
           { value: "back", label: "Back" }
         ]
       },
-      attachmentWidth: { type: "number", elementIds: ["attachmentWidth"], label: "Attachment: Width" },
-      attachmentDepth: { type: "number", elementIds: ["attachmentDepth"], label: "Attachment: Depth" },
-      attachmentOffset: { type: "number", elementIds: ["attachmentOffset"], label: "Attachment: Offset" },
       addAttachmentBtn: { type: "button", elementIds: ["addAttachmentBtn"], label: "Add Attachment Button" },
       removeAllAttachmentsBtn: { type: "button", elementIds: ["removeAllAttachmentsBtn"], label: "Remove All Attachments Button" },
 
-      // Attachment item fields (dynamic)
-      attachmentItemType: { type: "dynamic-field", fieldKey: "attachment.type", label: "Attachment Item: Type" },
-      attachmentItemWall: { type: "dynamic-field", fieldKey: "attachment.wall", label: "Attachment Item: Wall" },
-      attachmentItemWidth: { type: "dynamic-field", fieldKey: "attachment.width", label: "Attachment Item: Width" },
-      attachmentItemDepth: { type: "dynamic-field", fieldKey: "attachment.depth", label: "Attachment Item: Depth" },
-      attachmentItemOffset: { type: "dynamic-field", fieldKey: "attachment.offset", label: "Attachment Item: Offset" },
-      attachmentItemRemoveBtn: { type: "dynamic-field", fieldKey: "attachment.removeBtn", label: "Attachment Item: Remove Button" }
+      // Attachment editor fields (dynamic - rendered per attachment)
+      attachmentEditorWall: { type: "dynamic-select", fieldKey: "attachment.wall", label: "Attachment: Wall" },
+      attachmentEditorOffset: { type: "dynamic-field", fieldKey: "attachment.offset", label: "Attachment: Offset from Center" },
+      attachmentEditorWidth: { type: "dynamic-field", fieldKey: "attachment.width", label: "Attachment: Width" },
+      attachmentEditorDepth: { type: "dynamic-field", fieldKey: "attachment.depth", label: "Attachment: Depth" },
+      attachmentEditorLevelOffset: { type: "dynamic-field", fieldKey: "attachment.levelOffset", label: "Attachment: Level Offset" },
+      attachmentEditorBaseEnabled: { type: "dynamic-field", fieldKey: "attachment.baseEnabled", label: "Attachment: Show Base" },
+      attachmentEditorWallHeight: { type: "dynamic-field", fieldKey: "attachment.wallHeight", label: "Attachment: Wall Height" },
+      attachmentEditorWallsVariant: { type: "dynamic-select", fieldKey: "attachment.wallsVariant", label: "Attachment: Walls Variant" },
+      attachmentEditorRoofType: { type: "dynamic-select", fieldKey: "attachment.roofType", label: "Attachment: Roof Type" },
+      attachmentEditorRemoveBtn: { type: "dynamic-field", fieldKey: "attachment.removeBtn", label: "Attachment: Remove Button" }
     }
   },
 

@@ -290,16 +290,10 @@
             <details open class="boSection">
               <summary>Building Attachments</summary>
               <div class="boBox">
-                <div class="hint" style="margin:0 0 10px 0;">Add lean-to extensions or other secondary building sections</div>
+                <div class="hint" style="margin:0 0 10px 0;">Add secondary buildings attached to the main structure. Each attachment is a complete sub-building with its own base, walls, openings, and roof.</div>
 
                 <div class="boSubhead">Add New Attachment</div>
                 <div class="row">
-                  <label>
-                    Type
-                    <select id="attachmentType" aria-label="Attachment type">
-                      <option value="lean-to" selected>Lean-to</option>
-                    </select>
-                  </label>
                   <label>
                     Attach to Wall
                     <select id="attachmentWall" aria-label="Wall to attach to">
@@ -309,32 +303,16 @@
                       <option value="back">Back</option>
                     </select>
                   </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Width (mm)
-                    <input id="attachmentWidth" type="number" min="500" step="100" value="1800" />
-                  </label>
-                  <label>
-                    Depth (mm)
-                    <input id="attachmentDepth" type="number" min="500" step="100" value="1200" />
-                  </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Offset from corner (mm)
-                    <input id="attachmentOffset" type="number" min="0" step="100" value="0" />
-                  </label>
-                  <div></div>
-                </div>
-                <div class="row">
-                  <button id="addAttachmentBtn" type="button">+ Add Attachment</button>
-                  <button id="removeAllAttachmentsBtn" type="button">Remove All</button>
+                  <button id="addAttachmentBtn" type="button" style="align-self: flex-end;">+ Add Attachment</button>
                 </div>
 
                 <div class="boSubhead" style="margin-top:10px;">Current Attachments</div>
                 <div id="attachmentsList">
                   <div class="hint">(No attachments added)</div>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                  <button id="removeAllAttachmentsBtn" type="button" style="background:#c44;">Remove All Attachments</button>
                 </div>
               </div>
             </details>
@@ -378,6 +356,27 @@
                   <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure (future-safe)</label>
                   <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing (future-safe)</label>
                   <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Roof Covering</label>
+                </div>
+
+                <!-- Attached Buildings visibility - only shown when attachments exist -->
+                <div id="vAttachmentsSection" class="checks" role="group" aria-label="Visibility: Attached Buildings" style="margin-top:10px; display:none;">
+                  <div class="hint" style="margin:0 0 6px 0;">Attached Buildings</div>
+                  <label class="check"><input id="vAttBase" type="checkbox" checked /> Base</label>
+                  <label class="check"><input id="vAttWalls" type="checkbox" checked /> Walls</label>
+                  <label class="check"><input id="vAttRoof" type="checkbox" checked /> Roof</label>
+                  <label class="check"><input id="vAttCladding" type="checkbox" checked /> Cladding</label>
+
+                  <div class="hint" style="margin:10px 0 6px 0;">Base Components</div>
+                  <label class="check"><input id="vAttBaseGrid" type="checkbox" checked /> Base Grid</label>
+                  <label class="check"><input id="vAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
+                  <label class="check"><input id="vAttBaseDeck" type="checkbox" checked /> Decking (OSB)</label>
+
+                  <div class="hint" style="margin:10px 0 6px 0;">Wall Components</div>
+                  <label class="check"><input id="vAttWallFront" type="checkbox" checked /> Front</label>
+                  <label class="check"><input id="vAttWallBack" type="checkbox" checked /> Back</label>
+                  <label class="check"><input id="vAttWallLeft" type="checkbox" checked /> Left</label>
+                  <label class="check"><input id="vAttWallRight" type="checkbox" checked /> Right</label>
+                  <label class="check"><input id="vAttWallOuter" type="checkbox" checked /> Outer</label>
                 </div>
               </div>
             </details>

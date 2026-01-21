@@ -95,7 +95,7 @@ export const DEFAULTS = {
     thickness_mm: 50,
     depth_mm: 75
   },
-  // Multi-section support (lean-to, L-wing, etc.)
+  // Multi-section support (building attachments)
   sections: {
     enabled: false,  // When false, legacy single-building mode is used
     main: {
@@ -105,7 +105,7 @@ export const DEFAULTS = {
       roof: null,        // Uses state.roof when null
       walls: null        // Uses state.walls when null
     },
-    attachments: []  // Array of attachment objects
+    attachments: []  // Array of attachment objects (see ATTACHMENT_DEFAULTS below)
   },
   // Internal divider panels
   dividers: {
@@ -192,6 +192,87 @@ export function resolveDims(state) {
   const roof = pair(frame.w_mm + sumX, frame.d_mm + sumZ);
 
   return { base, frame, roof, overhang: ovh };
+}
+
+/**
+ * Default structure for a building attachment (sub-building)
+ * Each attachment is a complete building with its own base, walls, openings, and roof
+ */
+export const ATTACHMENT_DEFAULTS = {
+  // Identity
+  id: "",              // Unique ID (e.g., "att-1705000000000-123")
+  enabled: true,
+
+  // Connection to main building
+  attachTo: {
+    wall: "left",         // Which wall of main building: "front" | "back" | "left" | "right"
+    offsetFromCenter_mm: 0  // Offset from center of that wall (positive = towards right/back)
+  },
+
+  // Dimensions (width is along the attached wall, depth is outward)
+  dimensions: {
+    width_mm: 1800,       // Along the attached wall
+    depth_mm: 1200        // Outward from main building
+  },
+
+  // Base and floor
+  base: {
+    levelOffset_mm: 0,    // Relative to main building base (+ = higher, - = lower)
+    enabled: true         // Whether to show base/floor for this attachment
+  },
+
+  // Walls (3 walls - the wall facing main building is always absent)
+  walls: {
+    variant: "basic",     // "basic" | "insulated" - inherits from main if null
+    height_mm: null,      // Inherits from main building if null
+    // Which walls are present (one wall is always missing - the one touching main building)
+    // For left/right attachments: front, back, outer are present (inner is missing)
+    // For front/back attachments: left, right, outer are present (inner is missing)
+    openings: []          // Doors and windows on this attachment's walls
+  },
+
+  // Roof
+  roof: {
+    type: "pent",         // "pent" | "apex" | "overhang"
+    // If "overhang": roof is covered by extended overhang from main building (no separate roof)
+    // If "pent": single slope roof going outward (high at main building, low at outer edge)
+    // If "apex": gabled roof with ridge parallel to attached wall
+    pent: {
+      highHeight_mm: null,   // Total height from ground at main building (null = use max based on main fascia)
+      lowHeight_mm: null,    // Total height from ground at outer edge (null = highHeight - 300)
+      // Overhangs for pent roof (matching main building overhang structure)
+      overhang: {
+        eaves_mm: 75,        // Overhang at outer (low) edge
+        vergeLeft_mm: 75,    // Overhang on left side (perpendicular to slope)
+        vergeRight_mm: 75    // Overhang on right side (perpendicular to slope)
+        // Note: No ridge overhang - attachment connects to main building there
+      }
+    },
+    apex: {
+      eaveHeight_mm: 1850,
+      crestHeight_mm: 2200,
+      trussCount: 2
+    },
+    overhang: {
+      extension_mm: 0     // How far to extend main building's overhang (only if type="overhang")
+    }
+  }
+};
+
+/**
+ * Create a new attachment with default values
+ * @param {string} wall - Wall to attach to
+ * @returns {object} New attachment object
+ */
+export function createAttachment(wall = "left") {
+  return {
+    ...JSON.parse(JSON.stringify(ATTACHMENT_DEFAULTS)),
+    id: "att-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+    attachTo: {
+      wall: wall,
+      offsetFromCenter_mm: 0
+    }
+  };
 }
 
 /** Utilities */

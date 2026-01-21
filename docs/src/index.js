@@ -25,12 +25,13 @@ window.addEventListener("unhandledrejection", function (e) {
 });
 
 import { createStateStore, deepMerge } from "./state.js";
-import { DEFAULTS, resolveDims, CONFIG } from "./params.js";
+import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js";
 import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js";
+import * as Attachments from "./elements/attachments.js";
 import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js";
 import * as Doors from "./elements/doors.js";
@@ -330,6 +331,21 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vWallLeftEl = $("vWallLeft");
     var vWallRightEl = $("vWallRight");
 
+    // Attachment visibility elements
+    var vAttachmentsSectionEl = $("vAttachmentsSection");
+    var vAttBaseEl = $("vAttBase");
+    var vAttWallsEl = $("vAttWalls");
+    var vAttRoofEl = $("vAttRoof");
+    var vAttCladdingEl = $("vAttCladding");
+    var vAttBaseGridEl = $("vAttBaseGrid");
+    var vAttBaseFrameEl = $("vAttBaseFrame");
+    var vAttBaseDeckEl = $("vAttBaseDeck");
+    var vAttWallFrontEl = $("vAttWallFront");
+    var vAttWallBackEl = $("vAttWallBack");
+    var vAttWallLeftEl = $("vAttWallLeft");
+    var vAttWallRightEl = $("vAttWallRight");
+    var vAttWallOuterEl = $("vAttWallOuter");
+
     var dimModeEl = $("dimMode");
     var wInputEl = $("wInput");
     var dInputEl = $("dInput");
@@ -368,12 +384,8 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var removeAllWindowsBtnEl = $("removeAllWindowsBtn");
     var windowsListEl = $("windowsList");
 
-    // Attachment controls
-    var attachmentTypeEl = $("attachmentType");
+    // Attachment controls (simplified - most inputs are dynamically created)
     var attachmentWallEl = $("attachmentWall");
-    var attachmentWidthEl = $("attachmentWidth");
-    var attachmentDepthEl = $("attachmentDepth");
-    var attachmentOffsetEl = $("attachmentOffset");
     var addAttachmentBtnEl = $("addAttachmentBtn");
     var removeAllAttachmentsBtnEl = $("removeAllAttachmentsBtn");
     var attachmentsListEl = $("attachmentsList");
@@ -605,7 +617,15 @@ function formatDimension(mm, unitMode) {
         if (!m) continue;
 
         var nm = String(m.name || "");
-        var isClad = (nm.indexOf("clad-") === 0) || (m.metadata && m.metadata.cladding === true);
+        // Check for cladding meshes:
+        // 1. Main building: name starts with "clad-" (e.g., "clad-front-panel-0")
+        // 2. Section-based: name contains "clad-" (e.g., "section-main-clad-front-panel-0")
+        // 3. Attachments: name contains "clad-" (e.g., "att-123-clad-outer-c0")
+        // 4. Metadata type === "cladding"
+        // 5. Metadata cladding === true (corner boards)
+        var isClad = (nm.indexOf("clad-") >= 0) ||
+                     (m.metadata && m.metadata.type === "cladding") ||
+                     (m.metadata && m.metadata.cladding === true);
         if (!isClad) continue;
 
         try { m.isVisible = visible; } catch (e0) {}
@@ -620,11 +640,478 @@ function applyOpeningsVisibility(scene, on) {
         var m = scene.meshes[i];
         if (!m) continue;
         var nm = String(m.name || "");
-        var isDoor = (nm.indexOf("door-") === 0);
-        var isWindow = (nm.indexOf("window-") === 0);
+        // Check for door/window meshes:
+        // 1. Main building: name starts with "door-" or "window-"
+        // 2. Attachments (future): name contains "door-" or "window-"
+        // 3. Metadata type === "door" or "window"
+        var isDoor = (nm.indexOf("door-") >= 0) ||
+                     (m.metadata && m.metadata.type === "door");
+        var isWindow = (nm.indexOf("window-") >= 0) ||
+                       (m.metadata && m.metadata.type === "window");
         if (!isDoor && !isWindow) continue;
         try { m.isVisible = visible; } catch (e0) {}
         try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Base visibility - controls base frame, insulation, deck for main building and attachments
+    function applyBaseVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        // Check for base meshes:
+        // 1. Base module uses simple names ('g', 'r', 'j', 'i', 'd') parented to shed-root
+        // 2. Attachments: metadata.type === 'base', 'frame', or 'deck'
+        // 3. Check parent name contains 'shed-root' or 'base'
+        var isBase = false;
+
+        // Check metadata type for attachments
+        if (m.metadata && (m.metadata.type === "base" || m.metadata.type === "frame" || m.metadata.type === "deck")) {
+          // Only count as base if it's from attachment (has attachmentId) or specifically base type
+          if (m.metadata.attachmentId || m.metadata.type === "base" || m.metadata.type === "deck") {
+            isBase = true;
+          }
+        }
+
+        // Check if parented to shed-root (main building base)
+        if (!isBase && m.parent) {
+          var parentName = String(m.parent.name || "");
+          if (parentName.indexOf("shed-root") >= 0) {
+            // This is a main building base mesh
+            isBase = true;
+          }
+        }
+
+        // Attachment base meshes by name pattern
+        if (!isBase && nm.indexOf("att-") === 0) {
+          if (nm.indexOf("-base-") >= 0) {
+            isBase = true;
+          }
+        }
+
+        if (!isBase) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Walls visibility - controls wall frame studs, plates for main building and attachments
+    function applyWallsVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        // Check for wall frame meshes:
+        // 1. Main building: name contains "wall-" (e.g., "wall-front-plate-bottom", "wall-front-stud-0")
+        // 2. Attachments: metadata.type === "wall-frame"
+        // 3. Dividers: name contains "divider-" (internal partition walls)
+        var isWall = (nm.indexOf("wall-") >= 0) ||
+                     (nm.indexOf("divider-") >= 0) ||
+                     (m.metadata && m.metadata.type === "wall-frame");
+
+        // Exclude cladding (handled by applyCladdingVisibility)
+        if (nm.indexOf("clad-") >= 0 || (m.metadata && m.metadata.type === "cladding")) {
+          isWall = false;
+        }
+
+        if (!isWall) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof visibility - controls rafters, OSB, covering, fascia for main building and attachments
+    function applyRoofVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        // Check for roof meshes:
+        // 1. Main building: name contains "roof-" (e.g., "roof-root", "roof-truss-0")
+        // 2. Attachments: metadata.type === "roof"
+        // 3. Attachment roof meshes: name pattern "att-{id}-rafter-", "att-{id}-osb", "att-{id}-fascia-"
+        var isRoof = (nm.indexOf("roof-") >= 0) ||
+                     (m.metadata && m.metadata.type === "roof") ||
+                     (m.metadata && m.metadata.roof); // metadata.roof = "apex" or "pent"
+
+        // Also catch attachment roof parts by name pattern
+        if (!isRoof && nm.indexOf("att-") === 0) {
+          if (nm.indexOf("-rafter") >= 0 || nm.indexOf("-osb") >= 0 ||
+              nm.indexOf("-fascia") >= 0 || nm.indexOf("-roof-") >= 0 ||
+              nm.indexOf("-rim-") >= 0 || nm.indexOf("-covering") >= 0) {
+            isRoof = true;
+          }
+        }
+
+        if (!isRoof) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof Structure visibility - controls rafters, rim joists, trusses for main building and attachments
+    function applyRoofStructureVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isStructure = false;
+
+        // Main building roof structure (trusses, rafters)
+        if (nm.indexOf("roof-truss") >= 0 || nm.indexOf("roof-rafter") >= 0) {
+          isStructure = true;
+        }
+        // Main building: metadata.part includes structure-related parts
+        if (meta.roof && (meta.part === "truss" || meta.member === "kingpost" || meta.part === "rafter")) {
+          isStructure = true;
+        }
+
+        // Attachment roof structure
+        if (nm.indexOf("att-") === 0) {
+          if (nm.indexOf("-rafter") >= 0 || nm.indexOf("-rim-") >= 0) {
+            isStructure = true;
+          }
+          if (meta.part === "rafter" || meta.part === "rim") {
+            isStructure = true;
+          }
+        }
+
+        if (!isStructure) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof OSB visibility - controls OSB/sheathing for main building and attachments
+    function applyRoofOsbVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isOsb = false;
+
+        // Main building OSB
+        if (nm.indexOf("roof-osb") >= 0 || nm.indexOf("-osb-") >= 0) {
+          isOsb = true;
+        }
+        if (meta.roof && meta.part === "osb") {
+          isOsb = true;
+        }
+
+        // Attachment OSB
+        if (nm.indexOf("att-") === 0 && nm.indexOf("-osb") >= 0) {
+          isOsb = true;
+        }
+        if (meta.attachmentId && meta.part === "osb") {
+          isOsb = true;
+        }
+
+        if (!isOsb) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof Covering visibility - controls felt/covering for main building and attachments
+    function applyRoofCoveringVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isCovering = false;
+
+        // Main building covering
+        if (nm.indexOf("roof-covering") >= 0 || nm.indexOf("roof-felt") >= 0) {
+          isCovering = true;
+        }
+        if (meta.roof && (meta.part === "covering" || meta.part === "felt")) {
+          isCovering = true;
+        }
+
+        // Attachment covering
+        if (nm.indexOf("att-") === 0 && nm.indexOf("-covering") >= 0) {
+          isCovering = true;
+        }
+        if (meta.attachmentId && (meta.part === "covering" || meta.part === "covering-eaves" ||
+            meta.part === "covering-ridge" || (meta.part && meta.part.indexOf("covering") >= 0))) {
+          isCovering = true;
+        }
+
+        // Also check for roof ribbon meshes (apex roof covering panels)
+        if (nm.indexOf("att-") === 0 && (nm.indexOf("-roof-left") >= 0 || nm.indexOf("-roof-right") >= 0)) {
+          isCovering = true;
+        }
+
+        if (!isCovering) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // ==================== ATTACHMENT VISIBILITY FUNCTIONS ====================
+
+    /**
+     * Show or hide the attachments visibility section based on whether attachments exist
+     */
+    function updateAttachmentVisibilitySection() {
+      if (!vAttachmentsSectionEl) return;
+      var s = store.getState();
+      var atts = (s && s.sections && s.sections.attachments) ? s.sections.attachments : [];
+      var hasAttachments = atts.length > 0;
+      vAttachmentsSectionEl.style.display = hasAttachments ? "" : "none";
+    }
+
+    /**
+     * Apply visibility to attachment base (all base components)
+     */
+    function applyAttachmentBaseVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentBaseVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var t = m.metadata.type;
+        if (t === "base" || t === "frame" || t === "deck") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment base meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment base grid only
+     */
+    function applyAttachmentBaseGridVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentBaseGridVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        if (m.metadata.type === "base") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment base grid meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment floor frame only
+     */
+    function applyAttachmentBaseFrameVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentBaseFrameVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        if (m.metadata.type === "frame") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment base frame meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment decking (OSB floor) only
+     */
+    function applyAttachmentBaseDeckVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentBaseDeckVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        if (m.metadata.type === "deck") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment base deck meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment walls (all wall framing)
+     */
+    function applyAttachmentWallsVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentWallsVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        if (m.metadata.type === "wall-frame") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment walls meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to a specific attachment wall by wallId
+     * @param {string} wallId - 'front', 'back', 'left', 'right', or 'outer'
+     */
+    function applyAttachmentWallVisibility(scene, wallId, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentWallVisibility:", wallId, visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var isTargetWall = false;
+
+        // Check wall frame by name pattern: att-{id}-{wallId}-
+        if (m.metadata.type === "wall-frame") {
+          var prefix = "att-" + m.metadata.attachmentId + "-" + wallId + "-";
+          if (nm.indexOf(prefix) === 0) {
+            isTargetWall = true;
+          }
+        }
+
+        // Check cladding by wallId metadata
+        if (m.metadata.type === "cladding" && m.metadata.wallId === wallId) {
+          isTargetWall = true;
+        }
+
+        if (isTargetWall) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment wall", wallId, "meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment roof (all roof components)
+     */
+    function applyAttachmentRoofVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var isRoof = m.metadata.type === "roof";
+        // Also catch roof-related meshes by name
+        if (nm.indexOf("-rafter") >= 0 || nm.indexOf("-osb") >= 0 ||
+            nm.indexOf("-fascia") >= 0 || nm.indexOf("-covering") >= 0 ||
+            nm.indexOf("-rim-") >= 0 || nm.indexOf("-roof-") >= 0) {
+          isRoof = true;
+        }
+        if (isRoof) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment cladding
+     */
+    function applyAttachmentCladdingVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentCladdingVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        if (m.metadata.type === "cladding") {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment cladding meshes affected:", count);
+    }
+
+    /**
+     * Get attachment visibility settings from state (with defaults to true)
+     */
+    function getAttachmentVisibility(state) {
+      var attVis = (state && state.vis && state.vis.attachments) ? state.vis.attachments : {};
+      return {
+        base: attVis.base !== false,
+        walls: attVis.walls !== false,
+        roof: attVis.roof !== false,
+        cladding: attVis.cladding !== false,
+        baseGrid: attVis.baseGrid !== false,
+        baseFrame: attVis.baseFrame !== false,
+        baseDeck: attVis.baseDeck !== false,
+        wallFront: attVis.wallFront !== false,
+        wallBack: attVis.wallBack !== false,
+        wallLeft: attVis.wallLeft !== false,
+        wallRight: attVis.wallRight !== false,
+        wallOuter: attVis.wallOuter !== false
+      };
+    }
+
+    /**
+     * Apply all attachment visibility settings
+     */
+    function applyAllAttachmentVisibility(scene, state) {
+      var av = getAttachmentVisibility(state);
+
+      // Apply master toggles
+      applyAttachmentBaseVisibility(scene, av.base);
+      applyAttachmentWallsVisibility(scene, av.walls);
+      applyAttachmentRoofVisibility(scene, av.roof);
+      applyAttachmentCladdingVisibility(scene, av.cladding);
+
+      // Apply granular toggles (only if master is on)
+      if (av.base) {
+        applyAttachmentBaseGridVisibility(scene, av.baseGrid);
+        applyAttachmentBaseFrameVisibility(scene, av.baseFrame);
+        applyAttachmentBaseDeckVisibility(scene, av.baseDeck);
+      }
+
+      if (av.walls) {
+        applyAttachmentWallVisibility(scene, "front", av.wallFront);
+        applyAttachmentWallVisibility(scene, "back", av.wallBack);
+        applyAttachmentWallVisibility(scene, "left", av.wallLeft);
+        applyAttachmentWallVisibility(scene, "right", av.wallRight);
+        applyAttachmentWallVisibility(scene, "outer", av.wallOuter);
       }
     }
 
@@ -1183,163 +1670,167 @@ if (getWallsEnabled(state)) {
 
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
 
-       try {
+       // Apply all visibility settings
+        try {
+          var _baseOn = getBaseEnabled(state);
+          var _wallsOn = getWallsEnabled(state);
+          var _roofOn = getRoofEnabled(state);
           var _cladOn = getCladdingEnabled(state);
+          var _openOn = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
+
+          // Get roof sub-component visibility
+          var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
+          var _roofStructOn = rp.structure !== false;
+          var _roofOsbOn = rp.osb !== false;
+          var _roofCoverOn = rp.covering !== false;
+
+          applyBaseVisibility(ctx.scene, _baseOn);
+          applyWallsVisibility(ctx.scene, _wallsOn);
+          applyRoofVisibility(ctx.scene, _roofOn);
+          applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
+          applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
+          applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
           applyCladdingVisibility(ctx.scene, _cladOn);
+          applyOpeningsVisibility(ctx.scene, _openOn);
+          applyAllAttachmentVisibility(ctx.scene, state);
+
           requestAnimationFrame(function () {
+            try { applyBaseVisibility(ctx.scene, _baseOn); } catch (e0) {}
+            try { applyWallsVisibility(ctx.scene, _wallsOn); } catch (e0) {}
+            try { applyRoofVisibility(ctx.scene, _roofOn); } catch (e0) {}
+            try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
+            try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
+            try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+            try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
+            try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
           });
         } catch (e1) {}
-
-        try {
-          var _openOn = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
-          applyOpeningsVisibility(ctx.scene, _openOn);
-          requestAnimationFrame(function () {
-            try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
-          });
-        } catch (e2) {}
     }
 
-    // Multi-section render path - renders main building + all attachments
+    // Multi-section render path - renders main building + all attachments (v2)
     function renderMultiSectionMode(state) {
-      console.log("[RENDER_MULTI] Starting multi-section render...");
-
-      // Get all sections (main + attachments)
-      var allSections = Sections.getAllSections(state);
-      console.log("[RENDER_MULTI] Sections to render:", allSections.length);
+      console.log("[RENDER_MULTI] Starting multi-section render (v2)...");
 
       // Dispose all existing meshes first
       safeDispose();
 
-      // Render each section
-      for (var i = 0; i < allSections.length; i++) {
-        var section = allSections[i];
-        var sectionId = section.id || ("section-" + i);
-        console.log("[RENDER_MULTI] Rendering section:", sectionId, section.type);
+      // Also dispose any attachment-specific meshes
+      if (Attachments && typeof Attachments.disposeAllAttachments === "function") {
+        Attachments.disposeAllAttachments(ctx.scene);
+      }
 
-        // Get world position for this section
-        var worldPos = Sections.getSectionWorldPosition(state, sectionId);
-        console.log("[RENDER_MULTI] Section position:", worldPos);
+      // STEP 1: Render the main building using legacy path
+      console.log("[RENDER_MULTI] Rendering main building...");
 
-        // Create section-specific state
-        var sectionState = Sections.createSectionState(state, section);
+      var R = resolveDims(state);
+      var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
-        // Create section context for mesh naming/grouping
-        var sectionContext = {
-          sectionId: sectionId,
-          sectionType: section.type || "rectangular",
-          position: worldPos
-        };
+      var wallDims = getWallOuterDimsFromState(state);
+      var wallState = Object.assign({}, state, { w: wallDims.w_mm, d: wallDims.d_mm });
 
-        // Resolve dimensions for this section
-        var R = resolveDims(sectionState);
-        var baseState = Object.assign({}, sectionState, { w: R.base.w_mm, d: R.base.d_mm });
+      // Build main building base
+      if (getBaseEnabled(state)) {
+        if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, undefined);
+      }
 
-        var wallDims = getWallOuterDimsFromState(sectionState);
-        var wallState = Object.assign({}, sectionState, { w: wallDims.w_mm, d: wallDims.d_mm });
+      // Build main building walls
+      if (getWallsEnabled(state)) {
+        if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, undefined);
+        shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+      }
 
-        // Apply wall flags from section config (which walls to build)
-        if (section.walls && section.walls.enabled) {
-          wallState = Object.assign({}, wallState, {
-            walls: Object.assign({}, wallState.walls || {}, {
-              enabled: section.walls.enabled
-            })
-          });
-        }
+      // Build internal dividers
+      if (Dividers && typeof Dividers.build3D === "function") {
+        Dividers.build3D(wallState, ctx, undefined);
+        shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+      }
 
-        // Build base (only for main section for now)
-        if (sectionId === "main" && getBaseEnabled(state)) {
-          if (Base && typeof Base.build3D === "function") Base.build3D(baseState, ctx, sectionContext);
-        }
+      // Build doors/windows
+      if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
+      if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
 
-        // Build walls for this section
-        if (getWallsEnabled(state)) {
-          if (Walls && typeof Walls.build3D === "function") Walls.build3D(wallState, ctx, sectionContext);
-        }
+      // Build main building roof
+      var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
+      var roofEnabled = getRoofEnabled(state);
+      var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
+      var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
 
-        // Build internal dividers (only for main section for now)
-        if (sectionId === "main") {
-          if (Dividers && typeof Dividers.build3D === "function") Dividers.build3D(wallState, ctx, sectionContext);
-        }
+      if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+        var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
-        // Build doors/windows (only for main section for now)
-        if (sectionId === "main") {
-          if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, sectionContext);
-          if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, sectionContext);
-        }
+        if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
+        shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+      }
 
-        // Build roof for this section
-        var roofStyle = (sectionState.roof && sectionState.roof.style) ? String(sectionState.roof.style) : "apex";
-        // Attachments default to pent roof
-        if (sectionId !== "main" && section.roof && section.roof.style) {
-          roofStyle = section.roof.style;
-        } else if (sectionId !== "main") {
-          roofStyle = "pent";
-        }
+      // STEP 2: Render all attachments using the new Attachments module
+      var attachments = state.sections?.attachments || [];
+      console.log("[RENDER_MULTI] Rendering", attachments.length, "attachments...");
 
-        var roofEnabled = getRoofEnabled(state);
-        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
-          var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
-          var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
-          var roofState = Object.assign({}, sectionState, {
-            w: roofW,
-            d: roofD,
-            roof: Object.assign({}, sectionState.roof || {}, { style: roofStyle })
-          });
+      for (var i = 0; i < attachments.length; i++) {
+        var attachment = attachments[i];
+        if (!attachment || !attachment.enabled) continue;
 
-          if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, sectionContext);
-        }
+        console.log("[RENDER_MULTI] Building attachment:", attachment.id, "on", attachment.attachTo?.wall);
 
-        // Shift meshes for this section to correct position
-        // Main section uses standard offsets, attachments use their calculated world position
-        if (sectionId === "main") {
-          shiftWallMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
-          shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
-          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM, sectionContext);
-        } else {
-          // Attachment sections: shift by world position + standard offsets
-          var shiftX = (worldPos.x || 0) - WALL_OVERHANG_MM;
-          var shiftY = WALL_RISE_MM;
-          var shiftZ = (worldPos.z || 0) - WALL_OVERHANG_MM;
-          shiftWallMeshes(ctx.scene, shiftX, shiftY, shiftZ, sectionContext);
-          shiftRoofMeshes(ctx.scene, shiftX, shiftY, shiftZ, sectionContext);
+        try {
+          if (Attachments && typeof Attachments.build3D === "function") {
+            Attachments.build3D(state, attachment, ctx);
+          }
+        } catch (attError) {
+          console.error("[RENDER_MULTI] Error building attachment:", attachment.id, attError);
         }
       }
 
-      // Update BOM for main section
-      var mainSectionState = Sections.createSectionState(state, allSections[0]);
-      var mainR = resolveDims(mainSectionState);
-      var mainWallDims = getWallOuterDimsFromState(mainSectionState);
-      var mainWallState = Object.assign({}, mainSectionState, { w: mainWallDims.w_mm, d: mainWallDims.d_mm });
-      var mainRoofW = mainR.roof ? mainR.roof.w_mm : mainR.base.w_mm;
-      var mainRoofD = mainR.roof ? mainR.roof.d_mm : mainR.base.d_mm;
-      var mainRoofState = Object.assign({}, mainSectionState, { w: mainRoofW, d: mainRoofD });
-      var mainBaseState = Object.assign({}, mainSectionState, { w: mainR.base.w_mm, d: mainR.base.d_mm });
-
+      // Update BOM for main building
       if (Walls && typeof Walls.updateBOM === "function") {
-        var wallsBom = Walls.updateBOM(mainWallState);
+        var wallsBom = Walls.updateBOM(wallState);
         if (wallsBom && wallsBom.sections) renderBOM(wallsBom.sections);
       }
 
-      if (Roof && typeof Roof.updateBOM === "function") Roof.updateBOM(mainRoofState);
-      if (Base && typeof Base.updateBOM === "function") Base.updateBOM(mainBaseState);
+      if (roofEnabled && Roof && typeof Roof.updateBOM === "function") {
+        Roof.updateBOM(Object.assign({}, state, { w: roofW, d: roofD }));
+      }
+      if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
 
-      // Apply visibility settings
+      // Apply all visibility settings to main building AND attachments
       try {
+        var _baseOn = getBaseEnabled(state);
+        var _wallsOn = getWallsEnabled(state);
+        var _roofOn = getRoofEnabled(state);
         var _cladOn = getCladdingEnabled(state);
-        applyCladdingVisibility(ctx.scene, _cladOn);
-        requestAnimationFrame(function () {
-          try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
-        });
-      } catch (e1) {}
-
-      try {
         var _openOn = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
+
+        // Get roof sub-component visibility
+        var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
+        var _roofStructOn = rp.structure !== false;
+        var _roofOsbOn = rp.osb !== false;
+        var _roofCoverOn = rp.covering !== false;
+
+        applyBaseVisibility(ctx.scene, _baseOn);
+        applyWallsVisibility(ctx.scene, _wallsOn);
+        applyRoofVisibility(ctx.scene, _roofOn);
+        applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
+        applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
+        applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
+        applyCladdingVisibility(ctx.scene, _cladOn);
         applyOpeningsVisibility(ctx.scene, _openOn);
+        applyAllAttachmentVisibility(ctx.scene, state);
+
         requestAnimationFrame(function () {
+          try { applyBaseVisibility(ctx.scene, _baseOn); } catch (e0) {}
+          try { applyWallsVisibility(ctx.scene, _wallsOn); } catch (e0) {}
+          try { applyRoofVisibility(ctx.scene, _roofOn); } catch (e0) {}
+          try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
+          try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
+          try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
+          try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
+          try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
         });
-      } catch (e2) {}
+      } catch (eVis) {
+        console.error("[RENDER_MULTI] Error applying visibility:", eVis);
+      }
 
       console.log("[RENDER_MULTI] Multi-section render complete.");
     }
@@ -2807,14 +3298,23 @@ if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
       vWallsEl.addEventListener("change", function (e) {
         var s = store.getState();
         var on = !!(e && e.target && e.target.checked);
+        // Apply visibility immediately for responsiveness
+        try { applyWallsVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
 
         if (s && s.vis && typeof s.vis.walls === "boolean") store.setState({ vis: { walls: on } });
         else if (s && s.vis && typeof s.vis.wallsEnabled === "boolean") store.setState({ vis: { wallsEnabled: on } });
         else store.setState({ vis: { walls: on } });
+        console.log("[vis] walls=", on ? "ON" : "OFF");
       });
     }
 
-    if (vRoofEl) vRoofEl.addEventListener("change", function(e){ store.setState({ vis: { roof: !!e.target.checked } }); console.log("[vis] roof=", !!e.target.checked); });
+    if (vRoofEl) vRoofEl.addEventListener("change", function(e){
+      var on = !!e.target.checked;
+      // Apply visibility immediately for responsiveness
+      try { applyRoofVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { roof: on } });
+      console.log("[vis] roof=", on ? "ON" : "OFF");
+    });
 
 if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       var on = !!(e && e.target && e.target.checked);
@@ -2843,31 +3343,49 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     });
 
     if (vRoofStructureEl) vRoofStructureEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofStructureVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       var s = store.getState();
       var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
       var next = cur ? Object.assign({}, cur) : {};
-      next.structure = !!(e && e.target && e.target.checked);
+      next.structure = on;
       store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof structure=", on ? "ON" : "OFF");
     });
 
-if (vRoofOsbEl) vRoofOsbEl.addEventListener("change", function (e) {
+    if (vRoofOsbEl) vRoofOsbEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofOsbVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       var s = store.getState();
       var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
       var next = cur ? Object.assign({}, cur) : {};
-      next.osb = !!(e && e.target && e.target.checked);
+      next.osb = on;
       store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof osb=", on ? "ON" : "OFF");
     });
 
     var vRoofCoveringEl = $("vRoofCovering");
     if (vRoofCoveringEl) vRoofCoveringEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofCoveringVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       var s = store.getState();
       var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
       var next = cur ? Object.assign({}, cur) : {};
-      next.covering = !!(e && e.target && e.target.checked);
+      next.covering = on;
       store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof covering=", on ? "ON" : "OFF");
     });
 
-    if (vBaseAllEl) vBaseAllEl.addEventListener("change", function(e){ var on = !!(e && e.target && e.target.checked); store.setState({ vis: { baseAll: on } }); console.log("[vis] base=", on ? "ON" : "OFF"); });
+    if (vBaseAllEl) vBaseAllEl.addEventListener("change", function(e){
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyBaseVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { baseAll: on } });
+      console.log("[vis] base=", on ? "ON" : "OFF");
+    });
 
     if (vBaseEl) vBaseEl.addEventListener("change", function (e) { store.setState({ vis: { base: !!e.target.checked } }); });
     if (vFrameEl) vFrameEl.addEventListener("change", function (e) { store.setState({ vis: { frame: !!e.target.checked } }); });
@@ -2891,6 +3409,92 @@ if (vRoofOsbEl) vRoofOsbEl.addEventListener("change", function (e) {
     if (vWallBackEl)  vWallBackEl.addEventListener("change",  function (e) { patchWallPart("back",  !!e.target.checked); });
     if (vWallLeftEl)  vWallLeftEl.addEventListener("change",  function (e) { patchWallPart("left",  !!e.target.checked); });
     if (vWallRightEl) vWallRightEl.addEventListener("change", function (e) { patchWallPart("right", !!e.target.checked); });
+
+    // ==================== ATTACHMENT VISIBILITY EVENT HANDLERS ====================
+
+    if (vAttBaseEl) vAttBaseEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentBaseVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { base: on } } });
+      console.log("[vis] attachment base=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallsEl) vAttWallsEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallsVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { walls: on } } });
+      console.log("[vis] attachment walls=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofEl) vAttRoofEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roof: on } } });
+      console.log("[vis] attachment roof=", on ? "ON" : "OFF");
+    });
+
+    if (vAttCladdingEl) vAttCladdingEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentCladdingVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { cladding: on } } });
+      console.log("[vis] attachment cladding=", on ? "ON" : "OFF");
+    });
+
+    if (vAttBaseGridEl) vAttBaseGridEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentBaseGridVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { baseGrid: on } } });
+      console.log("[vis] attachment base grid=", on ? "ON" : "OFF");
+    });
+
+    if (vAttBaseFrameEl) vAttBaseFrameEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentBaseFrameVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { baseFrame: on } } });
+      console.log("[vis] attachment base frame=", on ? "ON" : "OFF");
+    });
+
+    if (vAttBaseDeckEl) vAttBaseDeckEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentBaseDeckVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { baseDeck: on } } });
+      console.log("[vis] attachment base deck=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallFrontEl) vAttWallFrontEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "front", on); } catch (e0) {}
+      store.setState({ vis: { attachments: { wallFront: on } } });
+      console.log("[vis] attachment wall front=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallBackEl) vAttWallBackEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "back", on); } catch (e0) {}
+      store.setState({ vis: { attachments: { wallBack: on } } });
+      console.log("[vis] attachment wall back=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallLeftEl) vAttWallLeftEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "left", on); } catch (e0) {}
+      store.setState({ vis: { attachments: { wallLeft: on } } });
+      console.log("[vis] attachment wall left=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallRightEl) vAttWallRightEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "right", on); } catch (e0) {}
+      store.setState({ vis: { attachments: { wallRight: on } } });
+      console.log("[vis] attachment wall right=", on ? "ON" : "OFF");
+    });
+
+    if (vAttWallOuterEl) vAttWallOuterEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "outer", on); } catch (e0) {}
+      store.setState({ vis: { attachments: { wallOuter: on } } });
+      console.log("[vis] attachment wall outer=", on ? "ON" : "OFF");
+    });
 
     if (dimModeEl) {
       dimModeEl.addEventListener("change", function () {
@@ -3091,12 +3695,7 @@ function parseOverhangInput(val) {
       });
     }
 
-    // ==================== ATTACHMENT HANDLERS ====================
-
-    /** Generate unique attachment ID */
-    function generateAttachmentId() {
-      return "att-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
-    }
+    // ==================== ATTACHMENT HANDLERS (v2 - Sub-buildings) ====================
 
     /** Get current attachments from state */
     function getAttachmentsFromState(s) {
@@ -3123,80 +3722,391 @@ function parseOverhangInput(val) {
       });
     }
 
-    /** Render the attachments list UI */
+    /** Update a single attachment by ID */
+    function patchAttachmentById(attId, patch) {
+      var atts = getAttachmentsFromState(store.getState());
+      var updated = atts.map(function(att) {
+        if (att.id !== attId) return att;
+        return deepMerge(att, patch);
+      });
+      setAttachments(updated);
+    }
+
+    /**
+     * Calculate the maximum allowed height for an attachment's inner edge
+     * based on the main building's fascia bottom position
+     */
+    function getMaxAttachmentHeight(mainState) {
+      var roofStyle = (mainState.roof && mainState.roof.style) || "apex";
+      var FASCIA_DEPTH_MM = 135;
+      var ROOF_STACK_MM = 70; // rafter (50) + OSB (18) + covering (2)
+
+      var fasciaBottom;
+      if (roofStyle === "apex") {
+        var apex = mainState.roof && mainState.roof.apex;
+        var eavesHeight = Number(
+          (apex && apex.heightToEaves_mm) ||
+          (apex && apex.eavesHeight_mm) ||
+          1850
+        );
+        fasciaBottom = eavesHeight - FASCIA_DEPTH_MM;
+      } else if (roofStyle === "pent") {
+        var pent = mainState.roof && mainState.roof.pent;
+        var minHeight = Number((pent && pent.minHeight_mm) || 2100);
+        fasciaBottom = minHeight - FASCIA_DEPTH_MM;
+      } else {
+        fasciaBottom = 1850 - FASCIA_DEPTH_MM; // Default fallback
+      }
+
+      // Max height = fascia bottom - roof stack (so roof doesn't exceed fascia)
+      return Math.max(500, fasciaBottom - ROOF_STACK_MM);
+    }
+
+    /** Render the attachments list UI - creates expandable editors for each attachment */
     function renderAttachmentsList() {
       if (!attachmentsListEl) return;
       var s = store.getState();
       var attachments = getAttachmentsFromState(s);
+      var mainState = s;
 
       if (attachments.length === 0) {
         attachmentsListEl.innerHTML = '<div class="hint">(No attachments added)</div>';
+        updateAttachmentVisibilitySection();
         return;
       }
 
-      var html = "";
+      attachmentsListEl.innerHTML = "";
+
       for (var i = 0; i < attachments.length; i++) {
-        var att = attachments[i];
-        var label = (att.type || "lean-to") + " on " + (att.attachTo?.wall || "?") + " wall";
-        var dims = (att.dimensions?.w_mm || "?") + " x " + (att.dimensions?.d_mm || "?") + " mm";
-        html += '<div class="attachment-item" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee;">';
-        html += '<span style="font-size:12px;"><strong>' + label + '</strong><br/><span style="color:#666;">' + dims + '</span></span>';
-        html += '<button type="button" class="remove-attachment-btn" data-id="' + att.id + '" style="padding:2px 8px;">Remove</button>';
-        html += '</div>';
-      }
-      attachmentsListEl.innerHTML = html;
+        (function(att, idx) {
+          var attId = att.id;
+          var attachWall = att.attachTo?.wall || "left";
 
-      // Wire up remove buttons
-      var removeBtns = attachmentsListEl.querySelectorAll(".remove-attachment-btn");
-      for (var j = 0; j < removeBtns.length; j++) {
-        (function(btn) {
-          // Apply profile field restrictions
-          applyFieldRestriction(btn, "attachment.removeBtn");
+          // Create attachment editor container
+          var editor = document.createElement("div");
+          editor.className = "attachment-editor";
+          editor.dataset.attId = attId;
 
-          btn.addEventListener("click", function() {
-            var attId = btn.getAttribute("data-id");
+          // Header (clickable to collapse/expand)
+          var header = document.createElement("div");
+          header.className = "attachment-editor-header";
+          header.innerHTML = '<h4>Attachment #' + (idx + 1) + '<span class="att-wall-label">(' + attachWall + ' wall)</span></h4>' +
+                             '<button class="att-toggle-btn" type="button">▼</button>';
+          header.addEventListener("click", function(e) {
+            if (e.target.classList.contains("att-toggle-btn") || e.target.tagName === "H4" || e.target.classList.contains("att-wall-label")) {
+              editor.classList.toggle("collapsed");
+              var toggleBtn = header.querySelector(".att-toggle-btn");
+              toggleBtn.textContent = editor.classList.contains("collapsed") ? "▶" : "▼";
+            }
+          });
+          editor.appendChild(header);
+
+          // Body
+          var body = document.createElement("div");
+          body.className = "attachment-editor-body";
+
+          // === Position Section ===
+          var posSection = document.createElement("div");
+          posSection.className = "att-section";
+          posSection.innerHTML = '<div class="att-section-title">Position</div>';
+
+          var posRow1 = document.createElement("div");
+          posRow1.className = "att-row";
+          posRow1.innerHTML =
+            '<label><span>Attach to Wall</span>' +
+            '<select class="att-wall-select">' +
+            '<option value="left"' + (attachWall === "left" ? " selected" : "") + '>Left</option>' +
+            '<option value="right"' + (attachWall === "right" ? " selected" : "") + '>Right</option>' +
+            '<option value="front"' + (attachWall === "front" ? " selected" : "") + '>Front</option>' +
+            '<option value="back"' + (attachWall === "back" ? " selected" : "") + '>Back</option>' +
+            '</select></label>' +
+            '<label><span>Offset from Center (mm)</span>' +
+            '<input type="number" class="att-offset-input" value="' + (att.attachTo?.offsetFromCenter_mm || 0) + '" step="50" /></label>';
+          posSection.appendChild(posRow1);
+          body.appendChild(posSection);
+
+          // === Dimensions Section ===
+          var dimSection = document.createElement("div");
+          dimSection.className = "att-section";
+          dimSection.innerHTML = '<div class="att-section-title">Dimensions</div>' +
+            '<div class="att-hint">Width is along the attached wall, depth extends outward.</div>';
+
+          var dimRow = document.createElement("div");
+          dimRow.className = "att-row";
+          dimRow.innerHTML =
+            '<label><span>Width (mm)</span>' +
+            '<input type="number" class="att-width-input" value="' + (att.dimensions?.width_mm || 1800) + '" min="500" step="100" /></label>' +
+            '<label><span>Depth (mm)</span>' +
+            '<input type="number" class="att-depth-input" value="' + (att.dimensions?.depth_mm || 1200) + '" min="500" step="100" /></label>';
+          dimSection.appendChild(dimRow);
+          body.appendChild(dimSection);
+
+          // === Base Section ===
+          var baseSection = document.createElement("div");
+          baseSection.className = "att-section";
+          baseSection.innerHTML = '<div class="att-section-title">Base & Floor</div>';
+
+          var baseRow = document.createElement("div");
+          baseRow.className = "att-row";
+          baseRow.innerHTML =
+            '<label><span>Level Offset (mm)</span>' +
+            '<input type="number" class="att-level-input" value="' + (att.base?.levelOffset_mm || 0) + '" step="50" /></label>' +
+            '<label style="display:flex;align-items:center;gap:6px;padding-top:18px;">' +
+            '<input type="checkbox" class="att-base-enabled" ' + (att.base?.enabled !== false ? "checked" : "") + ' />' +
+            '<span style="margin:0;">Show Base/Floor</span></label>';
+          baseSection.appendChild(baseRow);
+          body.appendChild(baseSection);
+
+          // === Walls Section ===
+          var wallsSection = document.createElement("div");
+          wallsSection.className = "att-section";
+          wallsSection.innerHTML = '<div class="att-section-title">Walls</div>' +
+            '<div class="att-hint">The wall facing the main building is automatically omitted. Wall heights are controlled in the Roof section below.</div>';
+
+          var wallsRow = document.createElement("div");
+          wallsRow.className = "att-row";
+          wallsRow.innerHTML =
+            '<label><span>Variant</span>' +
+            '<select class="att-walls-variant">' +
+            '<option value="basic"' + ((att.walls?.variant || "basic") === "basic" ? " selected" : "") + '>Basic</option>' +
+            '<option value="insulated"' + (att.walls?.variant === "insulated" ? " selected" : "") + '>Insulated</option>' +
+            '</select></label>';
+          wallsSection.appendChild(wallsRow);
+          body.appendChild(wallsSection);
+
+          // === Roof Section ===
+          var roofSection = document.createElement("div");
+          roofSection.className = "att-section";
+          roofSection.innerHTML = '<div class="att-section-title">Roof</div>';
+
+          var roofType = att.roof?.type || "pent";
+          var roofRow1 = document.createElement("div");
+          roofRow1.className = "att-row full";
+          roofRow1.innerHTML =
+            '<label><span>Roof Type</span>' +
+            '<select class="att-roof-type">' +
+            '<option value="pent"' + (roofType === "pent" ? " selected" : "") + '>Pent (single slope outward)</option>' +
+            '<option value="apex"' + (roofType === "apex" ? " selected" : "") + '>Apex (gabled)</option>' +
+            '<option value="overhang"' + (roofType === "overhang" ? " selected" : "") + '>Extended Overhang (no separate roof)</option>' +
+            '</select></label>';
+          roofSection.appendChild(roofRow1);
+
+          // Pent roof options
+          // Calculate dynamic default heights based on main building fascia
+          var maxAttHeight = getMaxAttachmentHeight(mainState);
+          var defaultHighHeight = att.roof?.pent?.highHeight_mm || maxAttHeight;
+          var defaultLowHeight = att.roof?.pent?.lowHeight_mm || Math.max(500, maxAttHeight - 300);
+
+          var pentOptions = document.createElement("div");
+          pentOptions.className = "att-pent-options";
+          pentOptions.style.display = roofType === "pent" ? "block" : "none";
+          var pentRow = document.createElement("div");
+          pentRow.className = "att-row";
+          pentRow.innerHTML =
+            '<label><span>High Height (mm)</span>' +
+            '<input type="number" class="att-pent-high" value="' + defaultHighHeight + '" min="500" max="' + maxAttHeight + '" step="50" placeholder="Max: ' + maxAttHeight + 'mm" /></label>' +
+            '<label><span>Low Height (mm)</span>' +
+            '<input type="number" class="att-pent-low" value="' + defaultLowHeight + '" min="500" step="50" placeholder="Total height at outer edge" /></label>';
+          pentOptions.appendChild(pentRow);
+
+          // Overhang controls for pent roof
+          var pentOverhang = att.roof?.pent?.overhang || {};
+          var ovhEaves = pentOverhang.eaves_mm != null ? pentOverhang.eaves_mm : 75;
+          var ovhVergeL = pentOverhang.vergeLeft_mm != null ? pentOverhang.vergeLeft_mm : 75;
+          var ovhVergeR = pentOverhang.vergeRight_mm != null ? pentOverhang.vergeRight_mm : 75;
+
+          var pentOverhangRow = document.createElement("div");
+          pentOverhangRow.className = "att-row three-col";
+          pentOverhangRow.innerHTML =
+            '<label><span>Eaves Overhang</span>' +
+            '<input type="number" class="att-pent-ovh-eaves" value="' + ovhEaves + '" min="0" step="25" /></label>' +
+            '<label><span>Verge Left</span>' +
+            '<input type="number" class="att-pent-ovh-verge-l" value="' + ovhVergeL + '" min="0" step="25" /></label>' +
+            '<label><span>Verge Right</span>' +
+            '<input type="number" class="att-pent-ovh-verge-r" value="' + ovhVergeR + '" min="0" step="25" /></label>';
+          pentOptions.appendChild(pentOverhangRow);
+          roofSection.appendChild(pentOptions);
+
+          // Apex roof options
+          var apexOptions = document.createElement("div");
+          apexOptions.className = "att-apex-options";
+          apexOptions.style.display = roofType === "apex" ? "block" : "none";
+          var apexRow = document.createElement("div");
+          apexRow.className = "att-row three-col";
+          apexRow.innerHTML =
+            '<label><span>Eave (mm)</span>' +
+            '<input type="number" class="att-apex-eave" value="' + (att.roof?.apex?.eaveHeight_mm || 100) + '" step="50" /></label>' +
+            '<label><span>Crest (mm)</span>' +
+            '<input type="number" class="att-apex-crest" value="' + (att.roof?.apex?.crestHeight_mm || 400) + '" step="50" /></label>' +
+            '<label><span>Trusses</span>' +
+            '<input type="number" class="att-apex-trusses" value="' + (att.roof?.apex?.trussCount || 2) + '" min="2" step="1" /></label>';
+          apexOptions.appendChild(apexRow);
+          roofSection.appendChild(apexOptions);
+
+          body.appendChild(roofSection);
+
+          // === Remove Button ===
+          var removeBtn = document.createElement("button");
+          removeBtn.className = "att-remove-btn";
+          removeBtn.type = "button";
+          removeBtn.textContent = "Remove This Attachment";
+          removeBtn.addEventListener("click", function() {
             var currentAtts = getAttachmentsFromState(store.getState());
             var filtered = currentAtts.filter(function(a) { return a.id !== attId; });
             setAttachments(filtered);
           });
-        })(removeBtns[j]);
+          body.appendChild(removeBtn);
+
+          editor.appendChild(body);
+          attachmentsListEl.appendChild(editor);
+
+          // Wire up all the input handlers
+          wireAttachmentInputs(editor, attId);
+
+        })(attachments[i], i);
+      }
+
+      // Update the visibility section visibility
+      updateAttachmentVisibilitySection();
+    }
+
+    /** Wire up input change handlers for an attachment editor */
+    function wireAttachmentInputs(editor, attId) {
+      // Position inputs
+      var wallSelect = editor.querySelector(".att-wall-select");
+      var offsetInput = editor.querySelector(".att-offset-input");
+
+      if (wallSelect) {
+        wallSelect.addEventListener("change", function() {
+          patchAttachmentById(attId, { attachTo: { wall: this.value } });
+        });
+      }
+      if (offsetInput) {
+        offsetInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { attachTo: { offsetFromCenter_mm: parseInt(this.value, 10) || 0 } });
+        });
+      }
+
+      // Dimension inputs
+      var widthInput = editor.querySelector(".att-width-input");
+      var depthInput = editor.querySelector(".att-depth-input");
+
+      if (widthInput) {
+        widthInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { dimensions: { width_mm: parseInt(this.value, 10) || 1800 } });
+        });
+      }
+      if (depthInput) {
+        depthInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { dimensions: { depth_mm: parseInt(this.value, 10) || 1200 } });
+        });
+      }
+
+      // Base inputs
+      var levelInput = editor.querySelector(".att-level-input");
+      var baseEnabledCheck = editor.querySelector(".att-base-enabled");
+
+      if (levelInput) {
+        levelInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { base: { levelOffset_mm: parseInt(this.value, 10) || 0 } });
+        });
+      }
+      if (baseEnabledCheck) {
+        baseEnabledCheck.addEventListener("change", function() {
+          patchAttachmentById(attId, { base: { enabled: this.checked } });
+        });
+      }
+
+      // Walls inputs
+      var wallsVariantSelect = editor.querySelector(".att-walls-variant");
+
+      if (wallsVariantSelect) {
+        wallsVariantSelect.addEventListener("change", function() {
+          patchAttachmentById(attId, { walls: { variant: this.value } });
+        });
+      }
+
+      // Roof inputs
+      var roofTypeSelect = editor.querySelector(".att-roof-type");
+      var pentOptions = editor.querySelector(".att-pent-options");
+      var apexOptions = editor.querySelector(".att-apex-options");
+
+      if (roofTypeSelect) {
+        roofTypeSelect.addEventListener("change", function() {
+          var type = this.value;
+          patchAttachmentById(attId, { roof: { type: type } });
+
+          // Show/hide appropriate options
+          if (pentOptions) pentOptions.style.display = type === "pent" ? "block" : "none";
+          if (apexOptions) apexOptions.style.display = type === "apex" ? "block" : "none";
+        });
+      }
+
+      // Pent roof inputs
+      var pentHighInput = editor.querySelector(".att-pent-high");
+      var pentLowInput = editor.querySelector(".att-pent-low");
+
+      if (pentHighInput) {
+        pentHighInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { pent: { highHeight_mm: parseInt(this.value, 10) || 300 } } });
+        });
+      }
+      if (pentLowInput) {
+        pentLowInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { pent: { lowHeight_mm: parseInt(this.value, 10) || 100 } } });
+        });
+      }
+
+      // Pent roof overhang inputs
+      var pentOvhEavesInput = editor.querySelector(".att-pent-ovh-eaves");
+      var pentOvhVergeLInput = editor.querySelector(".att-pent-ovh-verge-l");
+      var pentOvhVergeRInput = editor.querySelector(".att-pent-ovh-verge-r");
+
+      if (pentOvhEavesInput) {
+        pentOvhEavesInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { pent: { overhang: { eaves_mm: parseInt(this.value, 10) || 0 } } } });
+        });
+      }
+      if (pentOvhVergeLInput) {
+        pentOvhVergeLInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { pent: { overhang: { vergeLeft_mm: parseInt(this.value, 10) || 0 } } } });
+        });
+      }
+      if (pentOvhVergeRInput) {
+        pentOvhVergeRInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { pent: { overhang: { vergeRight_mm: parseInt(this.value, 10) || 0 } } } });
+        });
+      }
+
+      // Apex roof inputs
+      var apexEaveInput = editor.querySelector(".att-apex-eave");
+      var apexCrestInput = editor.querySelector(".att-apex-crest");
+      var apexTrussesInput = editor.querySelector(".att-apex-trusses");
+
+      if (apexEaveInput) {
+        apexEaveInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { apex: { eaveHeight_mm: parseInt(this.value, 10) || 100 } } });
+        });
+      }
+      if (apexCrestInput) {
+        apexCrestInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { apex: { crestHeight_mm: parseInt(this.value, 10) || 400 } } });
+        });
+      }
+      if (apexTrussesInput) {
+        apexTrussesInput.addEventListener("change", function() {
+          patchAttachmentById(attId, { roof: { apex: { trussCount: parseInt(this.value, 10) || 2 } } });
+        });
       }
     }
 
     // Add attachment button handler
     if (addAttachmentBtnEl) {
       addAttachmentBtnEl.addEventListener("click", function() {
-        var attType = attachmentTypeEl ? attachmentTypeEl.value : "lean-to";
         var attWall = attachmentWallEl ? attachmentWallEl.value : "left";
-        var attWidth = attachmentWidthEl ? parseInt(attachmentWidthEl.value, 10) || 1800 : 1800;
-        var attDepth = attachmentDepthEl ? parseInt(attachmentDepthEl.value, 10) || 1200 : 1200;
-        var attOffset = attachmentOffsetEl ? parseInt(attachmentOffsetEl.value, 10) || 0 : 0;
 
-        var newAttachment = {
-          id: generateAttachmentId(),
-          type: attType,
-          dimensions: {
-            w_mm: attWidth,
-            d_mm: attDepth
-          },
-          attachTo: {
-            sectionId: "main",
-            wall: attWall,
-            offset_mm: attOffset
-          },
-          roof: {
-            style: "pent"  // Lean-tos typically have pent roofs
-          },
-          walls: {
-            enabled: { front: true, back: true, left: true, right: true }
-          }
-        };
-
-        // Disable the wall that connects to the main building
-        if (attWall === "left") newAttachment.walls.enabled.right = false;
-        else if (attWall === "right") newAttachment.walls.enabled.left = false;
-        else if (attWall === "front") newAttachment.walls.enabled.back = false;
-        else if (attWall === "back") newAttachment.walls.enabled.front = false;
+        // Use the new createAttachment function from params.js
+        var newAttachment = createAttachment(attWall);
 
         var currentAtts = getAttachmentsFromState(store.getState());
         currentAtts.push(newAttachment);
@@ -3211,10 +4121,37 @@ function parseOverhangInput(val) {
       });
     }
 
+    // Track if we need to re-render after blur
+    var pendingAttachmentRender = false;
+
     // Render attachments list when state changes
+    // But skip if user is actively editing an attachment input (to prevent losing focus/selection)
     store.onChange(function(s) {
-      renderAttachmentsList();
+      var activeEl = document.activeElement;
+      var isEditingAttachment = activeEl && attachmentsListEl && attachmentsListEl.contains(activeEl) &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "SELECT");
+      if (!isEditingAttachment) {
+        renderAttachmentsList();
+        pendingAttachmentRender = false;
+      } else {
+        pendingAttachmentRender = true;
+      }
     });
+
+    // Re-render when user finishes editing (on blur from attachment inputs)
+    if (attachmentsListEl) {
+      attachmentsListEl.addEventListener("focusout", function(e) {
+        if (pendingAttachmentRender && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) {
+          // Small delay to ensure state update is complete
+          setTimeout(function() {
+            if (pendingAttachmentRender) {
+              renderAttachmentsList();
+              pendingAttachmentRender = false;
+            }
+          }, 50);
+        }
+      });
+    }
 
     // Initial render of attachments list
     renderAttachmentsList();

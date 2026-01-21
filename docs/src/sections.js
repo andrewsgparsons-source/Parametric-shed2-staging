@@ -73,9 +73,18 @@ export function getSectionWorldPosition(state, sectionId) {
 /**
  * Calculate position for an attached section
  * Returns world coordinates based on parent section and attachment config
+ *
+ * NEW SYSTEM (v2): Attachments snap to center of wall with offset from centerline
+ * OLD SYSTEM (v1): Attachments use offset from corner (for backwards compatibility)
  */
 function calculateAttachmentPosition(state, attachment) {
-  if (!attachment.attachTo) return { x: 0, y: 0, z: 0 };
+  // Check for new attachment system (attachTo.wall + offsetFromCenter_mm)
+  if (attachment.attachTo?.wall && attachment.attachTo?.offsetFromCenter_mm !== undefined) {
+    return calculateCenterSnapPosition(state, attachment);
+  }
+
+  // Legacy system: sectionId-based attachment
+  if (!attachment.attachTo?.sectionId) return { x: 0, y: 0, z: 0 };
 
   const parent = findSection(state, attachment.attachTo.sectionId);
   if (!parent) return { x: 0, y: 0, z: 0 };
@@ -98,6 +107,52 @@ function calculateAttachmentPosition(state, attachment) {
 
   // Default: same position as parent
   return { ...parentPos };
+}
+
+/**
+ * NEW: Calculate position for center-snap attachments
+ * Attachment snaps to center of specified wall with offset from centerline
+ */
+function calculateCenterSnapPosition(state, attachment) {
+  const attachWall = attachment.attachTo?.wall || "left";
+  const offsetFromCenter = attachment.attachTo?.offsetFromCenter_mm || 0;
+  const attWidth = attachment.dimensions?.width_mm || 1800;
+  const attDepth = attachment.dimensions?.depth_mm || 1200;
+  const levelOffset = attachment.base?.levelOffset_mm || 0;
+
+  // Main building dimensions
+  const mainW = state.dim?.frameW_mm || 1800;
+  const mainD = state.dim?.frameD_mm || 2400;
+
+  let x = 0, y = levelOffset, z = 0;
+
+  switch (attachWall) {
+    case "left":
+      // Attachment extends outward from main building's left side
+      x = -attDepth;
+      z = (mainD / 2) - (attWidth / 2) + offsetFromCenter;
+      break;
+
+    case "right":
+      // Attachment extends outward from main building's right side
+      x = mainW;
+      z = (mainD / 2) - (attWidth / 2) + offsetFromCenter;
+      break;
+
+    case "front":
+      // Attachment extends outward from main building's front
+      x = (mainW / 2) - (attWidth / 2) + offsetFromCenter;
+      z = -attDepth;
+      break;
+
+    case "back":
+      // Attachment extends outward from main building's back
+      x = (mainW / 2) - (attWidth / 2) + offsetFromCenter;
+      z = mainD;
+      break;
+  }
+
+  return { x, y, z };
 }
 
 /**
