@@ -1526,7 +1526,16 @@ export var CONTROL_REGISTRY = {
   appearance: {
     label: "Appearance",
     controls: {
-      // Placeholder - controls will be added when cladding/finishes/colours are implemented
+      claddingStyle: {
+        type: "select",
+        elementIds: ["claddingStyle"],
+        label: "Cladding Style",
+        options: [
+          { value: "shiplap", label: "Shiplap" },
+          { value: "overlap", label: "Overlap (Featheredge)" },
+          { value: "loglap", label: "Log Lap" }
+        ]
+      }
     }
   },
 
