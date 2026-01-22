@@ -171,7 +171,8 @@
 
     /* Controls visible ONLY in 3D */
     body[data-view="base"]  #controls,
-    body[data-view="walls"] #controls { display:none !important; }
+    body[data-view="walls"] #controls,
+    body[data-view="roof"]  #controls { display:none !important; }
     body[data-view="3d"] #controls { display:block; }
     body[data-view="3d"] #controls.has-height { display:flex; }
 
