@@ -281,6 +281,7 @@ function renderProfileControls() {
 
     // Individual control toggles
     var controlKeys = Object.keys(registrySection.controls);
+    var sectionVisible = profileSection.visible !== false;
 
     for (var j = 0; j < controlKeys.length; j++) {
       var controlKey = controlKeys[j];
@@ -308,7 +309,10 @@ function renderProfileControls() {
 
       var visibleCheckbox = document.createElement("input");
       visibleCheckbox.type = "checkbox";
-      visibleCheckbox.checked = profileControl.visible !== false;
+      // When section is hidden, show as unchecked for tidiness
+      visibleCheckbox.checked = sectionVisible && profileControl.visible !== false;
+      // Disable control checkboxes when section is hidden
+      visibleCheckbox.disabled = !sectionVisible;
       visibleCheckbox.dataset.sectionKey = sectionKey;
       visibleCheckbox.dataset.controlKey = controlKey;
       visibleCheckbox.dataset.field = "visible";
@@ -325,8 +329,11 @@ function renderProfileControls() {
 
       var editableCheckbox = document.createElement("input");
       editableCheckbox.type = "checkbox";
-      editableCheckbox.checked = profileControl.editable !== false;
-      editableCheckbox.disabled = profileControl.visible === false; // Disable if not visible
+      // When section or control is hidden, show as unchecked for tidiness
+      var controlEffectivelyVisible = sectionVisible && profileControl.visible !== false;
+      editableCheckbox.checked = controlEffectivelyVisible && profileControl.editable !== false;
+      // Disable if section is hidden OR control is not visible
+      editableCheckbox.disabled = !controlEffectivelyVisible;
       editableCheckbox.dataset.sectionKey = sectionKey;
       editableCheckbox.dataset.controlKey = controlKey;
       editableCheckbox.dataset.field = "editable";
@@ -379,7 +386,10 @@ function renderProfileControls() {
 
           var optVisCheck = document.createElement("input");
           optVisCheck.type = "checkbox";
-          optVisCheck.checked = profileOpt.visible !== false;
+          // When section or control is hidden, show as unchecked for tidiness
+          optVisCheck.checked = controlEffectivelyVisible && profileOpt.visible !== false;
+          // Disable if section or control is hidden
+          optVisCheck.disabled = !controlEffectivelyVisible;
           optVisCheck.dataset.sectionKey = sectionKey;
           optVisCheck.dataset.controlKey = controlKey;
           optVisCheck.dataset.optionValue = opt.value;
@@ -396,8 +406,11 @@ function renderProfileControls() {
 
           var optEditCheck = document.createElement("input");
           optEditCheck.type = "checkbox";
-          optEditCheck.checked = profileOpt.editable !== false;
-          optEditCheck.disabled = profileOpt.visible === false;
+          // When section, control, or option is hidden, show as unchecked for tidiness
+          var optionEffectivelyVisible = controlEffectivelyVisible && profileOpt.visible !== false;
+          optEditCheck.checked = optionEffectivelyVisible && profileOpt.editable !== false;
+          // Disable if section, control, or option is not visible
+          optEditCheck.disabled = !optionEffectivelyVisible;
           optEditCheck.dataset.sectionKey = sectionKey;
           optEditCheck.dataset.controlKey = controlKey;
           optEditCheck.dataset.optionValue = opt.value;
@@ -429,6 +442,32 @@ function handleSectionVisibilityChange(e) {
 
   if (currentEditorProfile) {
     updateProfileSection(currentEditorProfile, sectionKey, visible);
+
+    // Cascade to child control checkboxes - disable them when section is hidden
+    var controlCheckboxes = document.querySelectorAll(
+      'input[data-section-key="' + sectionKey + '"][data-control-key]'
+    );
+    for (var i = 0; i < controlCheckboxes.length; i++) {
+      var checkbox = controlCheckboxes[i];
+      checkbox.disabled = !visible;
+      // Also visually uncheck when section is hidden (for tidiness)
+      if (!visible) {
+        checkbox.checked = false;
+      }
+    }
+
+    // Also handle option checkboxes within this section
+    var optionCheckboxes = document.querySelectorAll(
+      'input[data-section-key="' + sectionKey + '"][data-option-value]'
+    );
+    for (var j = 0; j < optionCheckboxes.length; j++) {
+      var optCheckbox = optionCheckboxes[j];
+      optCheckbox.disabled = !visible;
+      if (!visible) {
+        optCheckbox.checked = false;
+      }
+    }
+
     // Re-apply profile to show changes immediately
     reapplyCurrentProfile();
   }
@@ -460,6 +499,18 @@ function handleControlVisibilityChange(e) {
       editableCheckbox.disabled = !visible;
       if (!visible) {
         editableCheckbox.checked = false;
+      }
+    }
+
+    // Cascade to option checkboxes within this control
+    var optionCheckboxes = document.querySelectorAll(
+      'input[data-section-key="' + sectionKey + '"][data-control-key="' + controlKey + '"][data-option-value]'
+    );
+    for (var i = 0; i < optionCheckboxes.length; i++) {
+      var optCheckbox = optionCheckboxes[i];
+      optCheckbox.disabled = !visible;
+      if (!visible) {
+        optCheckbox.checked = false;
       }
     }
 
