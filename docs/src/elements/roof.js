@@ -868,6 +868,22 @@ function updateBOM_Pent(state, tbody) {
     appendRow5(tbody, [r.item, String(r.qty), String(r.L), String(r.W), r.notes]);
   }
 
+  // Calculate total frame timber (exclude OSB)
+  const FRAME_STOCK_LENGTH = 6200;
+  const rimJoistLen = data.isWShort ? data.roofD_mm : data.roofW_mm;
+  let totalFrameLength_mm = 0;
+  totalFrameLength_mm += 2 * rimJoistLen;                    // Rim Joists
+  totalFrameLength_mm += data.rafters.length * rafterLenPhys_mm;  // Rafters
+
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  appendRow5(tbody, [
+    "TOTAL FRAME",
+    String(totalFrameStockPieces),
+    String(FRAME_STOCK_LENGTH),
+    "",
+    `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+  ]);
+
   if (!rows.length) appendPlaceholderRow(tbody, "Roof cutting list not yet generated.");
 }
 
@@ -2427,6 +2443,23 @@ function updateBOM_Apex(state, tbody) {
     const r = rows[i];
     appendRow5(tbody, [r.item, String(r.qty), String(r.L), String(r.W), r.notes || ""]);
   }
+
+  // Calculate total frame timber (exclude OSB)
+  const FRAME_STOCK_LENGTH = 6200;
+  let totalFrameLength_mm = 0;
+  totalFrameLength_mm += trussQty * A_mm;           // Truss Ties
+  totalFrameLength_mm += (trussQty * 2) * rafterLen_mm;  // Truss Rafters
+  totalFrameLength_mm += 1 * B_mm;                  // Ridge Beam
+  totalFrameLength_mm += purlinQty * B_mm;          // Purlins
+
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  appendRow5(tbody, [
+    "TOTAL FRAME",
+    String(totalFrameStockPieces),
+    String(FRAME_STOCK_LENGTH),
+    "",
+    `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+  ]);
 
   if (!rows.length) appendPlaceholderRow(tbody, "Roof cutting list not yet generated.");
 }

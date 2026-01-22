@@ -203,6 +203,27 @@ export function updateBOM(state) {
   document.getElementById('timberTableBody').innerHTML = timberHtml;
   document.getElementById('timberTotals').textContent = `Total pieces: ${timberCount}`;
 
+  // ----- TOTAL FRAME Summary -----
+  const FRAME_STOCK_LENGTH = 6200;
+  let totalFrameLength_mm = 0;
+  totalFrameLength_mm += 2 * L.rimLen;                          // Rim Joists
+  totalFrameLength_mm += L.positions.length * L.innerJoistLen;  // Inner Joists
+
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  const totalFrameLinearM = Math.round(totalFrameLength_mm / 1000 * 10) / 10;
+
+  // Add to timber table as summary row
+  const timberBody = document.getElementById('timberTableBody');
+  if (timberBody) {
+    timberBody.innerHTML += `<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">
+      <td>TOTAL FRAME</td>
+      <td>${totalFrameStockPieces}</td>
+      <td class="highlight">${FRAME_STOCK_LENGTH}mm</td>
+      <td>${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths</td>
+    </tr>`;
+  }
+  pushCsv('Timber Frame', 'TOTAL FRAME', totalFrameStockPieces, FRAME_STOCK_LENGTH, '', `${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`);
+
   // ----- OSB Decking (mirrors build3D; no stagger; rotation-invariant) -----
   const extA = L.joistSpan;
   const extB = L.rimLen;
