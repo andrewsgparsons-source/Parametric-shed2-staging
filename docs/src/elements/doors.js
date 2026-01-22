@@ -712,216 +712,59 @@ function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, materi
 
 /**
  * Build French doors (double doors with glass panels)
+ * Each door panel pivots from its outer edge (like standard double doors)
  */
 function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const isOpen = door.isOpen || false;
-  const handleSide = door.handleSide || "right";
 
-  // Dimensions in mm
-  const doorThickness_mm = 40;
-  const frameWidth_mm = 60;
-  const kickboardHeight_mm = Math.floor(doorHeight * 0.18);
-  const glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
-  const panelWidth_mm = doorWidth / 2;
-  const centerStileWidth_mm = 50;
+  // Each door is half the total width minus a small center gap
+  const centerGap = 10; // 10mm gap between the two doors
+  const singleDoorWidth = (doorWidth - centerGap) / 2;
+
+  const isLeftRightWall = door.wall === "left" || door.wall === "right";
+  const clearanceAdjust = 2.5;
+  const clearanceX = isLeftRightWall ? 0 : clearanceAdjust;
+  const clearanceZ = isLeftRightWall ? clearanceAdjust : 0;
 
   const mats = scene._doorMaterials;
 
-  // Create door group
-  const doorGroup = new BABYLON.TransformNode(`${meshPrefix}door-${index}-french-group`, scene);
-  doorGroup.position = new BABYLON.Vector3(pos.x / 1000, pos.y / 1000, pos.z / 1000);
-  doorGroup.rotation.y = pos.rotation;
-
-  // Build left panel
-  buildFrenchDoorPanel(
-    scene, doorGroup,
-    -panelWidth_mm / 2,
-    panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
-    frameWidth_mm, doorThickness_mm,
-    mats, index, "left", meshPrefix
+  // Build LEFT door (hinged on LEFT EDGE of opening)
+  buildSingleFrenchDoorPanel(
+    scene,
+    `${meshPrefix}door-${index}-french-left`,
+    pos,
+    singleDoorWidth,
+    doorHeight,
+    "left",  // hinge on left
+    -doorWidth / 2,  // hinge position at left edge of full opening
+    isOpen,
+    isLeftRightWall,
+    clearanceX,
+    clearanceZ,
+    mats,
+    door.id,
+    meshPrefix,
+    index
   );
 
-  // Build right panel
-  buildFrenchDoorPanel(
-    scene, doorGroup,
-    panelWidth_mm / 2,
-    panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
-    frameWidth_mm, doorThickness_mm,
-    mats, index, "right", meshPrefix
+  // Build RIGHT door (hinged on RIGHT EDGE of opening)
+  buildSingleFrenchDoorPanel(
+    scene,
+    `${meshPrefix}door-${index}-french-right`,
+    pos,
+    singleDoorWidth,
+    doorHeight,
+    "right",  // hinge on right
+    doorWidth / 2,  // hinge position at right edge of full opening
+    isOpen,
+    isLeftRightWall,
+    clearanceX,
+    clearanceZ,
+    mats,
+    door.id,
+    meshPrefix,
+    index
   );
-
-  // Center stile (where doors meet)
-  const centerStile = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-center-stile`,
-    {
-      width: centerStileWidth_mm / 1000,
-      height: (doorHeight - 20) / 1000,
-      depth: doorThickness_mm / 1000
-    },
-    scene
-  );
-  centerStile.position = new BABYLON.Vector3(0, 0, 10 / 1000);
-  centerStile.parent = doorGroup;
-  centerStile.material = mats.door;
-  centerStile.metadata = { dynamic: true, doorId: door.id };
-
-  // Hinges on outer edges
-  const hingeY_top = doorHeight / 2 - 150;
-  const hingeY_bottom = -doorHeight / 2 + 150;
-
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_left", meshPrefix);
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_left", meshPrefix);
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_right", meshPrefix);
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_right", meshPrefix);
-
-  if (isOpen) {
-    const openAngle = handleSide === "left" ? -Math.PI / 2 : Math.PI / 2;
-    doorGroup.rotation.y += openAngle;
-  }
-
-  doorGroup.metadata = { dynamic: true, doorId: door.id };
-}
-
-/**
- * Build a single panel of a French door
- */
-function buildFrenchDoorPanel(scene, parent, xOffset, panelWidth, doorHeight, glassHeight, kickboardHeight, frameWidth, doorThickness, mats, index, side, meshPrefix = "") {
-  const innerWidth = panelWidth - frameWidth * 2 - 20;
-
-  // Top rail
-  const topRail = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-top-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  topRail.position = new BABYLON.Vector3(
-    xOffset / 1000,
-    (doorHeight / 2 - frameWidth / 2) / 1000,
-    10 / 1000
-  );
-  topRail.parent = parent;
-  topRail.material = mats.door;
-  topRail.metadata = { dynamic: true };
-
-  // Bottom rail
-  const bottomRail = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-bottom-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  bottomRail.position = new BABYLON.Vector3(
-    xOffset / 1000,
-    (-doorHeight / 2 + frameWidth / 2) / 1000,
-    10 / 1000
-  );
-  bottomRail.parent = parent;
-  bottomRail.material = mats.door;
-  bottomRail.metadata = { dynamic: true };
-
-  // Outer stile
-  const outerStileX = side === "left"
-    ? xOffset - panelWidth / 2 + frameWidth / 2
-    : xOffset + panelWidth / 2 - frameWidth / 2;
-
-  const outerStile = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-outer-stile-${side}`,
-    {
-      width: frameWidth / 1000,
-      height: (doorHeight - frameWidth * 2) / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  outerStile.position = new BABYLON.Vector3(outerStileX / 1000, 0, 10 / 1000);
-  outerStile.parent = parent;
-  outerStile.material = mats.door;
-  outerStile.metadata = { dynamic: true };
-
-  // Inner stile
-  const innerStileX = side === "left"
-    ? xOffset + panelWidth / 2 - frameWidth / 2 - 10
-    : xOffset - panelWidth / 2 + frameWidth / 2 + 10;
-
-  const innerStile = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-inner-stile-${side}`,
-    {
-      width: frameWidth / 1000,
-      height: (doorHeight - frameWidth * 2) / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  innerStile.position = new BABYLON.Vector3(innerStileX / 1000, 0, 10 / 1000);
-  innerStile.parent = parent;
-  innerStile.material = mats.door;
-  innerStile.metadata = { dynamic: true };
-
-  // Middle rail (separates glass from kickboard)
-  const midRailY = -doorHeight / 2 + kickboardHeight + frameWidth / 2;
-
-  const midRail = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-mid-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  midRail.position = new BABYLON.Vector3(xOffset / 1000, midRailY / 1000, 10 / 1000);
-  midRail.parent = parent;
-  midRail.material = mats.door;
-  midRail.metadata = { dynamic: true };
-
-  // Glass pane
-  const glassY = midRailY + frameWidth / 2 + glassHeight / 2;
-
-  const glass = BABYLON.MeshBuilder.CreateBox(
-    `${meshPrefix}door-${index}-french-glass-${side}`,
-    {
-      width: (innerWidth - frameWidth) / 1000,
-      height: (glassHeight - frameWidth) / 1000,
-      depth: 6 / 1000
-    },
-    scene
-  );
-  glass.position = new BABYLON.Vector3(xOffset / 1000, glassY / 1000, 10 / 1000);
-  glass.parent = parent;
-  glass.material = mats.glass;
-  glass.metadata = { dynamic: true };
-
-  // Kickboard - tongue and groove boards
-  const kickboardY = -doorHeight / 2 + frameWidth + kickboardHeight / 2;
-  const boardWidth = 60;
-  const numBoards = Math.ceil(innerWidth / boardWidth);
-
-  for (let i = 0; i < numBoards; i++) {
-    const boardX = xOffset - innerWidth / 2 + boardWidth / 2 + i * boardWidth + frameWidth / 2;
-    if (boardX > xOffset + innerWidth / 2 - frameWidth / 2) break;
-
-    const board = BABYLON.MeshBuilder.CreateBox(
-      `${meshPrefix}door-${index}-french-kickboard-${side}-${i}`,
-      {
-        width: (boardWidth - 4) / 1000,
-        height: (kickboardHeight - frameWidth - 20) / 1000,
-        depth: (doorThickness - 10) / 1000
-      },
-      scene
-    );
-    board.position = new BABYLON.Vector3(boardX / 1000, kickboardY / 1000, 10 / 1000);
-    board.parent = parent;
-
-    board.material = mats.door;
-    board.metadata = { dynamic: true };
-  }
 }
 
 /**
@@ -941,6 +784,201 @@ function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, p
   hinge.parent = parent;
   hinge.material = material;
   hinge.metadata = { dynamic: true };
+}
+
+/**
+ * Build a single French door panel (used by double French doors)
+ * Similar to buildSingleDoorPanel but with French door styling
+ * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
+ * @param doorWidth - Width of this single panel (half the opening width)
+ */
+function buildSingleFrenchDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0) {
+  // Dimensions in mm
+  const doorThickness_mm = 40;
+  const frameWidth_mm = 60;
+  const kickboardHeight_mm = Math.floor(doorHeight * 0.18);
+  const glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
+
+  // Create door group (transform node for rotation)
+  // Door group is positioned at the HINGE POINT (outer edge of opening)
+  const doorGroup = new BABYLON.TransformNode(`${name}-group`, scene);
+
+  // For left/right walls, invert the offset sign to match single door behavior
+  let adjustedOffsetX = offsetX;
+  if (isLeftRightWall) {
+    adjustedOffsetX = -offsetX;
+  }
+
+  // Apply rotation to transform to world coordinates
+  const cosR = Math.cos(pos.rotation);
+  const sinR = Math.sin(pos.rotation);
+  const hingeWorldX = pos.x + adjustedOffsetX * cosR + clearanceX;
+  const hingeWorldZ = pos.z + adjustedOffsetX * sinR + clearanceZ;
+
+  doorGroup.position = new BABYLON.Vector3(
+    hingeWorldX / 1000,
+    pos.y / 1000,
+    hingeWorldZ / 1000
+  );
+  doorGroup.rotation.y = pos.rotation;
+
+  // All components positioned relative to hinge (at x=0 in door local space)
+  // For left-hinged door: components extend from 0 to +doorWidth
+  // For right-hinged door: components extend from -doorWidth to 0
+
+  // Inner dimensions for glass and kickboard
+  const innerWidth = doorWidth - frameWidth_mm * 2 - 20;
+
+  // Top rail
+  const topRailX = hingeSide === "left" ? doorWidth / 2 : -doorWidth / 2;
+  const topRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-top-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  topRail.position = new BABYLON.Vector3(
+    topRailX / 1000,
+    (doorHeight / 2 - frameWidth_mm / 2) / 1000,
+    10 / 1000
+  );
+  topRail.parent = doorGroup;
+  topRail.material = mats.door;
+  topRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Bottom rail
+  const bottomRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-bottom-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  bottomRail.position = new BABYLON.Vector3(
+    topRailX / 1000,
+    (-doorHeight / 2 + frameWidth_mm / 2) / 1000,
+    10 / 1000
+  );
+  bottomRail.parent = doorGroup;
+  bottomRail.material = mats.door;
+  bottomRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Outer stile (at hinge edge)
+  const outerStileX = hingeSide === "left" ? frameWidth_mm / 2 : -frameWidth_mm / 2;
+  const outerStile = BABYLON.MeshBuilder.CreateBox(
+    `${name}-outer-stile`,
+    {
+      width: frameWidth_mm / 1000,
+      height: (doorHeight - frameWidth_mm * 2) / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  outerStile.position = new BABYLON.Vector3(outerStileX / 1000, 0, 10 / 1000);
+  outerStile.parent = doorGroup;
+  outerStile.material = mats.door;
+  outerStile.metadata = { dynamic: true, doorId: doorId };
+
+  // Inner stile (at meeting edge)
+  const innerStileX = hingeSide === "left"
+    ? doorWidth - frameWidth_mm / 2 - 10
+    : -doorWidth + frameWidth_mm / 2 + 10;
+  const innerStile = BABYLON.MeshBuilder.CreateBox(
+    `${name}-inner-stile`,
+    {
+      width: frameWidth_mm / 1000,
+      height: (doorHeight - frameWidth_mm * 2) / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  innerStile.position = new BABYLON.Vector3(innerStileX / 1000, 0, 10 / 1000);
+  innerStile.parent = doorGroup;
+  innerStile.material = mats.door;
+  innerStile.metadata = { dynamic: true, doorId: doorId };
+
+  // Middle rail (separates glass from kickboard)
+  const midRailY = -doorHeight / 2 + kickboardHeight_mm + frameWidth_mm / 2;
+  const midRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-mid-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  midRail.position = new BABYLON.Vector3(topRailX / 1000, midRailY / 1000, 10 / 1000);
+  midRail.parent = doorGroup;
+  midRail.material = mats.door;
+  midRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Glass pane
+  const glassY = midRailY + frameWidth_mm / 2 + glassHeight_mm / 2;
+  const glass = BABYLON.MeshBuilder.CreateBox(
+    `${name}-glass`,
+    {
+      width: (innerWidth - frameWidth_mm) / 1000,
+      height: (glassHeight_mm - frameWidth_mm) / 1000,
+      depth: 6 / 1000
+    },
+    scene
+  );
+  glass.position = new BABYLON.Vector3(topRailX / 1000, glassY / 1000, 10 / 1000);
+  glass.parent = doorGroup;
+  glass.material = mats.glass;
+  glass.metadata = { dynamic: true, doorId: doorId };
+
+  // Kickboard - tongue and groove boards
+  const kickboardY = -doorHeight / 2 + frameWidth_mm + kickboardHeight_mm / 2;
+  const boardWidth = 60;
+  const numBoards = Math.ceil(innerWidth / boardWidth);
+
+  for (let i = 0; i < numBoards; i++) {
+    // Calculate board position relative to hinge
+    let boardX;
+    if (hingeSide === "left") {
+      boardX = frameWidth_mm + boardWidth / 2 + i * boardWidth;
+      if (boardX > doorWidth - frameWidth_mm - 10) break;
+    } else {
+      boardX = -frameWidth_mm - boardWidth / 2 - i * boardWidth;
+      if (boardX < -doorWidth + frameWidth_mm + 10) break;
+    }
+
+    const board = BABYLON.MeshBuilder.CreateBox(
+      `${name}-kickboard-${i}`,
+      {
+        width: (boardWidth - 4) / 1000,
+        height: (kickboardHeight_mm - frameWidth_mm - 20) / 1000,
+        depth: (doorThickness_mm - 10) / 1000
+      },
+      scene
+    );
+    board.position = new BABYLON.Vector3(boardX / 1000, kickboardY / 1000, 10 / 1000);
+    board.parent = doorGroup;
+    board.material = mats.door;
+    board.metadata = { dynamic: true, doorId: doorId };
+  }
+
+  // Hinges on outer edge (hinge side)
+  const hingeY_top = doorHeight / 2 - 150;
+  const hingeY_bottom = -doorHeight / 2 + 150;
+  const hingeX = hingeSide === "left" ? 30 : -30;
+
+  buildFrenchHinge(scene, doorGroup, hingeX, hingeY_top, doorThickness_mm, mats.hinge, doorIndex, `${hingeSide}_top`, meshPrefix);
+  buildFrenchHinge(scene, doorGroup, hingeX, hingeY_bottom, doorThickness_mm, mats.hinge, doorIndex, `${hingeSide}_bottom`, meshPrefix);
+
+  // Handle open state - each door rotates from its own hinge
+  if (isOpen) {
+    doorGroup.rotation.y += hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;
+  }
+
+  doorGroup.metadata = { dynamic: true, doorId: doorId };
 }
 
 /**
