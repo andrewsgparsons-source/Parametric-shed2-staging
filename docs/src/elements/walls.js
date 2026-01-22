@@ -2999,6 +2999,8 @@ export function updateBOM(state) {
   const isPent = !!(state && state.roof && String(state.roof.style || "") === "pent");
   if (!isPent) {
     const sections = [];
+    let totalFrameLength_mm = 0;  // Track total frame timber length
+    const FRAME_STOCK_LENGTH = 6200;  // Frame timber stock length
     const variant = state.walls?.variant || "insulated";
 
     // Keep BOM consistent with build3D():
@@ -3090,11 +3092,14 @@ export function updateBOM(state) {
 
         // Panel contents (all include L/W/D)
         sections.push([`  Bottom Plate`, 1, pan.len, plateY, wallThk, ""]);
+        totalFrameLength_mm += pan.len;
         sections.push([`  Top Plate`, 1, pan.len, plateY, wallThk, ""]);
+        totalFrameLength_mm += pan.len;
 
         if (variant === "basic") {
           // Mirrors current basic wall panel stud policy (3 studs per panel in buildBasicPanel; suppression is geometric-only)
           sections.push([`  Studs`, 3, studLen, prof.studW, wallThk, "basic"]);
+          totalFrameLength_mm += 3 * studLen;
         } else {
           // Insulated stud count logic preserved (was previously per wall; now attributed under single panel)
           let count = 2;
@@ -3104,13 +3109,34 @@ export function updateBOM(state) {
             run += prof.spacing;
           }
           sections.push([`  Studs`, count, studLen, prof.studW, wallThk, "@400"]);
+          totalFrameLength_mm += count * studLen;
         }
 
         // Opening framing items attributed to this panel
-const items = openingItemsByPanel[p] || [];
-        for (let i = 0; i < items.length; i++) sections.push(items[i]);
+        const items = openingItemsByPanel[p] || [];
+        for (let i = 0; i < items.length; i++) {
+          sections.push(items[i]);
+          // Accumulate frame length from opening items: [name, qty, length, ...]
+          const qty = items[i][1];
+          const len = items[i][2];
+          if (typeof qty === 'number' && typeof len === 'number') {
+            totalFrameLength_mm += qty * len;
+          }
+        }
       }
     }
+
+    // ---- TOTAL FRAME SUMMARY (APEX) ----
+    sections.push(["", "", "", "", "", ""]);
+    const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+    sections.push([
+      `TOTAL FRAME`,
+      totalFrameStockPieces,
+      FRAME_STOCK_LENGTH,
+      "",
+      "",
+      `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+    ]);
 
     // ---- CLADDING CUTTING LIST (APEX) ----
     sections.push(["", "", "", "", "", ""]);
@@ -3218,6 +3244,8 @@ const items = openingItemsByPanel[p] || [];
   }
 
   const sections = [];
+  let totalFrameLength_mm = 0;  // Track total frame timber length
+  const FRAME_STOCK_LENGTH = 6200;  // Frame timber stock length
   const variant = state.walls?.variant || "insulated";
   const baseHeight = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
 
@@ -3323,6 +3351,7 @@ const items = openingItemsByPanel[p] || [];
       sections.push([`  PANEL ${p + 1}`, "", "", "", "", `start=${pan.start}mm, len=${pan.len}mm`]);
 
       sections.push([`  Bottom Plate`, 1, pan.len, plateY, wallThk, isSlopeWall ? `pent slope; ${wname}` : ""]);
+      totalFrameLength_mm += pan.len;
 
       if (isSlopeWall) {
         const x0 = pan.start;
@@ -3330,17 +3359,22 @@ const items = openingItemsByPanel[p] || [];
         const h0 = heightAtX(x0);
         const h1 = heightAtX(x1);
         sections.push([`  Top Plate (Sloped)`, 1, pan.len, plateY, wallThk, `pent slope; ${wname}; minH=${h0}mm maxH=${h1}mm`]);
+        totalFrameLength_mm += pan.len;
       } else {
         sections.push([`  Top Plate`, 1, pan.len, plateY, wallThk, `pent; ${wname}; H=${wallHFlat}mm`]);
+        totalFrameLength_mm += pan.len;
       }
 
       if (!isSlopeWall) {
-        if (variant === "basic") sections.push([`  Studs`, 3, studLenFlat, prof.studW, wallThk, `pent; ${wname}`]);
-        else {
+        if (variant === "basic") {
+          sections.push([`  Studs`, 3, studLenFlat, prof.studW, wallThk, `pent; ${wname}`]);
+          totalFrameLength_mm += 3 * studLenFlat;
+        } else {
           let count = 2;
           let run = 400;
           while (run <= pan.len - prof.studW) { count += 1; run += prof.spacing; }
           sections.push([`  Studs`, count, studLenFlat, prof.studW, wallThk, `pent; ${wname}; @400`]);
+          totalFrameLength_mm += count * studLenFlat;
         }
       } else {
         const studsByLen = {};
@@ -3417,13 +3451,34 @@ const items = openingItemsByPanel[p] || [];
 
         Object.keys(studsByLen).sort((a, b) => Number(a) - Number(b)).forEach((k) => {
           sections.push([`  Studs`, studsByLen[k], Number(k), prof.studW, wallThk, `pent slope; ${wname}`]);
+          totalFrameLength_mm += studsByLen[k] * Number(k);
         });
       }
 
-const items = openingItemsByPanel[p] || [];
-      for (let i = 0; i < items.length; i++) sections.push(items[i]);
+      const items = openingItemsByPanel[p] || [];
+      for (let i = 0; i < items.length; i++) {
+        sections.push(items[i]);
+        // Accumulate frame length from opening items: [name, qty, length, ...]
+        const qty = items[i][1];
+        const len = items[i][2];
+        if (typeof qty === 'number' && typeof len === 'number') {
+          totalFrameLength_mm += qty * len;
+        }
+      }
     }
   }
+
+  // ---- TOTAL FRAME SUMMARY (PENT) ----
+  sections.push(["", "", "", "", "", ""]);
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  sections.push([
+    `TOTAL FRAME`,
+    totalFrameStockPieces,
+    FRAME_STOCK_LENGTH,
+    "",
+    "",
+    `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+  ]);
 
   // ---- CLADDING CUTTING LIST ----
   sections.push(["", "", "", "", "", ""]);
