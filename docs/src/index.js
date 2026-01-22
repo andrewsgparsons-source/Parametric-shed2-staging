@@ -381,6 +381,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallSectionEl = $("wallSection"); // NEW
     var wallsVariantEl = $("wallsVariant");
     var wallHeightEl = $("wallHeight");
+    var claddingStyleEl = $("claddingStyle");
 
     var addDoorBtnEl = $("addDoorBtn");
     var removeAllDoorsBtnEl = $("removeAllDoorsBtn");
@@ -3126,6 +3127,7 @@ if (state && state.overhang) {
         if (vWallRightEl) vWallRightEl.checked = !!parts.right;
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
+        if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
 
         if (wallHeightEl) {
           if (isPent) {
@@ -3629,6 +3631,7 @@ function parseOverhangInput(val) {
     }
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
+    if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });

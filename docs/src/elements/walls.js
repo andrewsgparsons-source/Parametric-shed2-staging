@@ -104,16 +104,41 @@ export function build3D(state, ctx, sectionContext) {
   const plateY = prof.studW;
   const wallThk = prof.studH;
 
-  // ---- Cladding (Phase 1): external shiplap, geometry only ----
-  const CLAD_H = 140;
-  const CLAD_T = 20;
-  const CLAD_DRIP = 30;
-  const CLAD_BOTTOM_DROP_MM = 60;
+  // ---- Cladding (Phase 1): external cladding, geometry only ----
+  // Get cladding style from state (default to shiplap)
+  const claddingStyle = state?.cladding?.style || "shiplap";
 
-  const CLAD_Rt = 5;
-  const CLAD_Ht = 45;
-  const CLAD_Rb = 5;
-  const CLAD_Hb = 20;
+  // Cladding profile constants based on style
+  let CLAD_H, CLAD_T, CLAD_DRIP, CLAD_BOTTOM_DROP_MM;
+  let CLAD_Rt, CLAD_Ht, CLAD_Rb, CLAD_Hb;
+  let CLAD_T_TOP, CLAD_T_BOTTOM; // For overlap wedge profile
+
+  if (claddingStyle === "overlap") {
+    // Overlap (featheredge) cladding - wedge profile
+    CLAD_H = 150;           // Board height (exposed face)
+    CLAD_T = 22;            // Max thickness (at top)
+    CLAD_T_TOP = 22;        // Thick edge at top
+    CLAD_T_BOTTOM = 6;      // Thin edge at bottom
+    CLAD_DRIP = 30;         // Bottom overhang
+    CLAD_BOTTOM_DROP_MM = 60;
+    // For overlap, we use a simpler two-box approach
+    CLAD_Rt = 0;
+    CLAD_Ht = 0;
+    CLAD_Rb = 0;
+    CLAD_Hb = CLAD_H;       // Entire board is one piece
+  } else {
+    // Shiplap (default) - rabbeted profile
+    CLAD_H = 140;
+    CLAD_T = 20;
+    CLAD_T_TOP = 20;
+    CLAD_T_BOTTOM = 20;
+    CLAD_DRIP = 30;
+    CLAD_BOTTOM_DROP_MM = 60;
+    CLAD_Rt = 5;
+    CLAD_Ht = 45;
+    CLAD_Rb = 5;
+    CLAD_Hb = 20;
+  }
 
   // DIAGNOSTIC: disabled (must not restrict walls/panels/courses)
   const __DIAG_ONE_FRONT_ONE_BOARD = false;
@@ -731,7 +756,95 @@ console.log("CLAD_COURSES_FINAL", {
       const isFirst = i === 0;
 const yBase = claddingAnchorY_mm + i * CLAD_H;
 
+      // OVERLAP CLADDING: Create single wedge-like boards per course
+      if (claddingStyle === "overlap") {
+        const boardHeight = CLAD_H + (isFirst ? CLAD_DRIP : 0);
+        const yBoard = yBase - (isFirst ? CLAD_DRIP : 0);
+        // Overlap boards: bottom edge sits further out than top edge
+        // This creates the characteristic shadow line
+        const overlapOffset = 8; // mm offset for overlap effect
 
+        if (isAlongX) {
+          const wallOutsideFaceWorld = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+          const outwardNormalZ = outwardSignZ;
+          const xShift_mm = (Number.isFinite(xMin_mm) ? Math.max(0, xMin_mm - (origin.x + panelStart)) : 0);
+          const panelLenAdj = Math.max(1, panelLen - xShift_mm);
+
+          // Bottom part of board (thicker, sits further out)
+          const bottomPartHeight = Math.floor(boardHeight * 0.4);
+          const boardCenterZ_bottom = wallOutsideFaceWorld + outwardNormalZ * (CLAD_T_TOP / 2 + overlapOffset / 2);
+          const zMin_bottom = boardCenterZ_bottom - (CLAD_T_TOP / 2);
+
+          const b0 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+            panelLenAdj,
+            bottomPartHeight,
+            CLAD_T_TOP,
+            { x: origin.x + panelStart + xShift_mm, y: yBoard, z: zMin_bottom },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "bottom", style: "overlap" }
+          );
+          parts.push(b0);
+
+          // Top part of board (thinner, sits closer to wall)
+          const topPartHeight = boardHeight - bottomPartHeight;
+          const boardCenterZ_top = wallOutsideFaceWorld + outwardNormalZ * (CLAD_T_BOTTOM / 2);
+          const zMin_top = boardCenterZ_top - (CLAD_T_BOTTOM / 2);
+
+          const b1 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+            panelLenAdj,
+            topPartHeight,
+            CLAD_T_BOTTOM,
+            { x: origin.x + panelStart + xShift_mm, y: yBoard + bottomPartHeight, z: zMin_top },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "upper", style: "overlap" }
+          );
+          parts.push(b1);
+        } else {
+          // LEFT/RIGHT walls (along Z axis)
+          const wallOutsideFaceWorld = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+          const outwardNormalX = outwardSignX;
+          const zStart_mm = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
+          const zEnd_mm = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
+          const panelLenAdj = Math.max(1, zEnd_mm - zStart_mm);
+
+          // Bottom part of board
+          const bottomPartHeight = Math.floor(boardHeight * 0.4);
+          const boardCenterX_bottom = wallOutsideFaceWorld + outwardNormalX * (CLAD_T_TOP / 2 + overlapOffset / 2);
+          const xMin_bottom = boardCenterX_bottom - (CLAD_T_TOP / 2);
+
+          const b0 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+            CLAD_T_TOP,
+            bottomPartHeight,
+            panelLenAdj,
+            { x: xMin_bottom, y: yBoard, z: zStart_mm },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "bottom", style: "overlap" }
+          );
+          parts.push(b0);
+
+          // Top part of board
+          const topPartHeight = boardHeight - bottomPartHeight;
+          const boardCenterX_top = wallOutsideFaceWorld + outwardNormalX * (CLAD_T_BOTTOM / 2);
+          const xMin_top = boardCenterX_top - (CLAD_T_BOTTOM / 2);
+
+          const b1 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+            CLAD_T_BOTTOM,
+            topPartHeight,
+            panelLenAdj,
+            { x: xMin_top, y: yBoard + bottomPartHeight, z: zStart_mm },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "upper", style: "overlap" }
+          );
+          parts.push(b1);
+        }
+        continue; // Skip the shiplap code below
+      }
+
+      // SHIPLAP CLADDING (default): Two-part profile with rabbets
       // Drip: first course only; bottom edge at (claddingAnchorY_mm - 30mm)
       // Implemented as bottom-only extension (no change to X/Z extents)
       const yBottomStrip = yBase - (isFirst ? CLAD_DRIP : 0);

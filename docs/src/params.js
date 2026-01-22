@@ -95,6 +95,10 @@ export const DEFAULTS = {
     thickness_mm: 50,
     depth_mm: 75
   },
+  // Cladding appearance
+  cladding: {
+    style: "shiplap"  // "shiplap" | "overlap" | "loglap"
+  },
   // Multi-section support (building attachments)
   sections: {
     enabled: false,  // When false, legacy single-building mode is used
