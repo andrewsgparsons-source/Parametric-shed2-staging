@@ -368,7 +368,7 @@
     }
     th, td{ padding:12px; text-align:left; border-bottom:1px solid #eee; font-size:13px; }
     th{ background:#f8f9fa; color:#555; }
-    .sticky-table thead th{ position:sticky; top:80px; z-index:1; }
+    /* Removed sticky headers - they were obscuring data when scrolling */
     .totals-row td{ font-weight:bold; }
     .subtle{ color:#666; font-size:12px; margin:6px 0 12px 0; }
 
@@ -416,6 +416,5 @@
         height:auto !important;
       }
       #bomToolbar{ display:none !important; }
-      .sticky-table thead th{ top:0; }
     }
 ```0
