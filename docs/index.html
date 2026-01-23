@@ -47,6 +47,7 @@
               <option value="walls">Walls List</option>
               <option value="base">Base List</option>
               <option value="roof">Roof List</option>
+              <option value="openings">Openings List</option>
             </select>
             <button type="button" class="panel-btn" id="panelMaximizeBtn" title="Maximize panel">⛶</button>
           </div>
@@ -576,6 +577,40 @@
         </thead>
         <tbody id="roofBomTable">
           <tr><td colspan="5">Roof cutting list not yet generated.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- View: Openings (Doors & Windows) Cutting List -->
+  <div id="openingsBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Doors &amp; Windows Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Doors — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>L (mm)</th><th>W (mm)</th><th>D (mm)</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="doorsBomTable">
+          <tr><td colspan="6">No doors configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="schedule-section" style="margin-top: 20px;">
+      <h4>Windows — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>L (mm)</th><th>W (mm)</th><th>D (mm)</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="windowsBomTable">
+          <tr><td colspan="6">No windows configured.</td></tr>
         </tbody>
       </table>
     </div>

@@ -47,6 +47,81 @@ function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
 function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", String(!!hidden)); }
 
+/**
+ * Update the Openings (Doors & Windows) BOM tables
+ */
+function updateOpeningsBOM(state) {
+  // Get doors BOM
+  var doorsBom = (Doors && typeof Doors.updateBOM === "function") ? Doors.updateBOM(state) : { sections: [] };
+  var doorsSections = (doorsBom && doorsBom.sections) ? doorsBom.sections : [];
+
+  // Get windows BOM
+  var windowsBom = (Windows && typeof Windows.updateBOM === "function") ? Windows.updateBOM(state) : { sections: [] };
+  var windowsSections = (windowsBom && windowsBom.sections) ? windowsBom.sections : [];
+
+  // Render doors table
+  var doorsTbody = $("doorsBomTable");
+  if (doorsTbody) {
+    doorsTbody.innerHTML = "";
+    if (doorsSections.length === 0) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 6;
+      emptyCell.textContent = "No doors configured.";
+      emptyRow.appendChild(emptyCell);
+      doorsTbody.appendChild(emptyRow);
+    } else {
+      doorsSections.forEach(function(row) {
+        var tr = document.createElement("tr");
+        var item = row && row.length ? row[0] : "";
+        var qty = row && row.length > 1 ? row[1] : "";
+        var L = row && row.length > 2 ? row[2] : "";
+        var W = row && row.length > 3 ? row[3] : "";
+        var D = row && row.length > 4 ? row[4] : "";
+        var notes = row && row.length > 5 ? row[5] : "";
+
+        [item, qty, L, W, D, notes].forEach(function(val) {
+          var td = document.createElement("td");
+          td.textContent = String(val);
+          tr.appendChild(td);
+        });
+        doorsTbody.appendChild(tr);
+      });
+    }
+  }
+
+  // Render windows table
+  var windowsTbody = $("windowsBomTable");
+  if (windowsTbody) {
+    windowsTbody.innerHTML = "";
+    if (windowsSections.length === 0) {
+      var emptyRow = document.createElement("tr");
+      var emptyCell = document.createElement("td");
+      emptyCell.colSpan = 6;
+      emptyCell.textContent = "No windows configured.";
+      emptyRow.appendChild(emptyCell);
+      windowsTbody.appendChild(emptyRow);
+    } else {
+      windowsSections.forEach(function(row) {
+        var tr = document.createElement("tr");
+        var item = row && row.length ? row[0] : "";
+        var qty = row && row.length > 1 ? row[1] : "";
+        var L = row && row.length > 2 ? row[2] : "";
+        var W = row && row.length > 3 ? row[3] : "";
+        var D = row && row.length > 4 ? row[4] : "";
+        var notes = row && row.length > 5 ? row[5] : "";
+
+        [item, qty, L, W, D, notes].forEach(function(val) {
+          var td = document.createElement("td");
+          td.textContent = String(val);
+          tr.appendChild(td);
+        });
+        windowsTbody.appendChild(tr);
+      });
+    }
+  }
+}
+
 var WALL_OVERHANG_MM = 25;
 var WALL_RISE_MM = 168;
 
@@ -137,11 +212,13 @@ function ensureRequiredDomScaffolding() {
   var bomPage = $("bomPage") || ensureEl("div", "bomPage", document.body);
   var wallsPage = $("wallsBomPage") || ensureEl("div", "wallsBomPage", document.body);
   var roofPage = $("roofBomPage") || ensureEl("div", "roofBomPage", document.body);
+  var openingsPage = $("openingsBomPage") || ensureEl("div", "openingsBomPage", document.body);
 
   // Make sure they start hidden (view system will show/hide).
   if (bomPage && bomPage.style && bomPage.style.display === "") bomPage.style.display = "none";
   if (wallsPage && wallsPage.style && wallsPage.style.display === "") wallsPage.style.display = "none";
   if (roofPage && roofPage.style && roofPage.style.display === "") roofPage.style.display = "none";
+  if (openingsPage && openingsPage.style && openingsPage.style.display === "") openingsPage.style.display = "none";
 
   // Walls cutting list table (renderBOM targets #bomTable)
   if (!$("bomTable")) {
@@ -1676,6 +1753,7 @@ if (getWallsEnabled(state)) {
         }
 
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
+        updateOpeningsBOM(state);
 
        // Apply all visibility settings
         try {
@@ -1799,6 +1877,7 @@ if (getWallsEnabled(state)) {
         Roof.updateBOM(Object.assign({}, state, { w: roofW, d: roofD }));
       }
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
+      updateOpeningsBOM(state);
 
       // Apply all visibility settings to main building AND attachments
       try {
