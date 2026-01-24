@@ -52,8 +52,8 @@ export const DEFAULTS = {
       heightToCrest_mm: 2200
     },
     pent: {
-      minHeight_mm: 2100,
-      maxHeight_mm: 2700
+      minHeight_mm: 2300,
+      maxHeight_mm: 2500
     }
   },
   walls: {
