@@ -3603,13 +3603,8 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     function clampBuildingDimensions(w, d) {
       var MAX_LONG = 8000;  // Maximum for the longer dimension
       var MAX_SHORT = 4000; // Maximum for the shorter dimension when other > 4000
-      var MIN_DIM = 1000;   // Minimum dimension (1m)
 
       var origW = w, origD = d;
-
-      // Enforce minimum
-      if (w < MIN_DIM) w = MIN_DIM;
-      if (d < MIN_DIM) d = MIN_DIM;
 
       // Enforce absolute maximum of 8000mm
       if (w > MAX_LONG) w = MAX_LONG;
@@ -3625,7 +3620,12 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
         }
       }
 
-      return { w: w, d: d, clamped: (w !== origW || d !== origD) };
+      var didClamp = (w !== origW || d !== origD);
+      if (didClamp) {
+        console.log("[clampBuildingDimensions] CLAMPED:", origW, "x", origD, "->", w, "x", d);
+      }
+
+      return { w: w, d: d, clamped: didClamp };
     }
 
 function writeActiveDims() {
