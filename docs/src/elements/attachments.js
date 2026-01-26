@@ -1454,35 +1454,31 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // Yaw rotation to align local +X (high end of slope) toward the main building
   // Pitch sign determines which way to tilt to raise the inner edge
   // 
-  // After yaw, local +X should point toward main building (inner edge)
+  // After yaw, local +X points toward main building (inner edge = ridge)
   // Then pitch rotation around the perpendicular axis tilts that edge UP
   //
-  // Attachment | Yaw    | Inner edge direction | Pitch sign to raise inner
-  // -----------|--------|---------------------|---------------------------
-  // Left       | 0      | +X (toward main)    | +1 (tilts +X up)
-  // Right      | π      | -X (toward main)    | -1 (tilts -X up)
-  // Front      | π/2    | +Z (toward main)    | -1 (tilts +Z up via X rotation)
-  // Back       | -π/2   | -Z (toward main)    | +1 (tilts -Z up via X rotation)
+  // Attachment | Yaw    | Ridge direction | Pitch axis | Pitch sign
+  // -----------|--------|-----------------|------------|------------
+  // Left       | 0      | +X              | Z          | +1
+  // Right      | π      | -X              | Z          | -1
+  // Front      | -π/2   | +Z              | X          | -1
+  // Back       | +π/2   | -Z              | X          | +1
 
   let yaw = 0;
   let pitchSign = 1;
 
   if (attachWall === "left") {
     yaw = 0;
-    pitchSign = 1;
+    pitchSign = 1;   // +pitch around Z tilts +X toward +Y (up)
   } else if (attachWall === "right") {
-    yaw = Math.PI;  // 180° flip so +X points toward main building
-    pitchSign = -1;
+    yaw = Math.PI;   // 180° flip: local +X → world -X
+    pitchSign = -1;  // -pitch around Z tilts -X toward +Y (up)
   } else if (attachWall === "front") {
-    // Main building at +Z, need ridge (local +X) to point toward +Z
-    // yaw = -π/2 rotates local +X to world +Z
-    yaw = -Math.PI / 2;
-    pitchSign = 1;
+    yaw = -Math.PI / 2;  // local +X → world +Z (toward main building)
+    pitchSign = -1;      // -pitch around X tilts +Z toward +Y (up)
   } else { // back
-    // Main building at -Z (lower Z), need ridge (local +X) to point toward -Z
-    // yaw = +π/2 rotates local +X to world -Z
-    yaw = Math.PI / 2;
-    pitchSign = -1;
+    yaw = Math.PI / 2;   // local +X → world -Z (toward main building)
+    pitchSign = 1;       // +pitch around X tilts -Z toward +Y (up)
   }
 
   const qYaw = BABYLON.Quaternion.RotationAxis(new BABYLON.Vector3(0, 1, 0), yaw);
