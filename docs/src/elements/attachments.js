@@ -1581,19 +1581,19 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
 
   // Position the roof root so that the eaves corner lands at the target position
   roofRoot.position = new BABYLON.Vector3(
-    targetEavesX_m - eavesCorner.x,
+    targetRoofX_m - eavesCorner.x,
     targetY_m,
-    targetEavesZ_m - eavesCorner.z
+    targetRoofZ_m - eavesCorner.z
   );
 
   console.log("[attachments] Roof positioning - yaw:", (yaw * 180 / Math.PI).toFixed(1) + "°",
               "pitchSign:", pitchSign, "pitch:", (pitchAngle * 180 / Math.PI).toFixed(1) + "°");
   console.log("[attachments] Eaves corner after rotation:", eavesCorner);
-  console.log("[attachments] Target eaves position: X=" + targetEavesX_m.toFixed(4) + " Z=" + targetEavesZ_m.toFixed(4));
+  console.log("[attachments] Target roof position: X=" + targetRoofX_m.toFixed(4) + " Z=" + targetRoofZ_m.toFixed(4));
   console.log("[attachments] Roof root position:",
-              "x:", (targetEavesX_m - eavesCorner.x).toFixed(4),
+              "x:", (targetRoofX_m - eavesCorner.x).toFixed(4),
               "y:", targetY_m.toFixed(4),
-              "z:", (targetEavesZ_m - eavesCorner.z).toFixed(4));
+              "z:", (targetRoofZ_m - eavesCorner.z).toFixed(4));
 }
 
 /**
