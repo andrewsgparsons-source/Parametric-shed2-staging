@@ -1474,11 +1474,15 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
     yaw = Math.PI;  // 180° flip so +X points toward main building
     pitchSign = -1;
   } else if (attachWall === "front") {
-    yaw = Math.PI / 2;
-    pitchSign = -1;
-  } else { // back
+    // Main building at +Z, need ridge (local +X) to point toward +Z
+    // yaw = -π/2 rotates local +X to world +Z
     yaw = -Math.PI / 2;
     pitchSign = 1;
+  } else { // back
+    // Main building at -Z (lower Z), need ridge (local +X) to point toward -Z
+    // yaw = +π/2 rotates local +X to world -Z
+    yaw = Math.PI / 2;
+    pitchSign = -1;
   }
 
   const qYaw = BABYLON.Quaternion.RotationAxis(new BABYLON.Vector3(0, 1, 0), yaw);
@@ -1530,30 +1534,47 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // Calculate the verge offset (roof starts at -vergeL relative to wall span start)
   const vergeLOffset_m = ovhVergeL / 1000;
 
-  // Find the eaves corner (A=0, B=0) position after rotation
-  const eavesCorner = localToWorld(0, 0, 0);
+  // Position the roof based on where the geometry extends after rotation
+  // The roof is built with eaves at local origin (0,0,0), extending toward +X (ridge) and +Z (span)
+  // After yaw rotation, these directions change:
+  //   Left (yaw=0):     local +X → world +X, local +Z → world +Z
+  //   Right (yaw=π):    local +X → world -X, local +Z → world -Z
+  //   Front (yaw=-π/2): local +X → world +Z, local +Z → world +X
+  //   Back (yaw=+π/2):  local +X → world -Z, local +Z → world -X
 
-  // Determine target position for the eaves corner
-  // The eaves should overhang past the outer wall by eavesOffset
-  let targetEavesX_m, targetEavesZ_m;
+  const vergeROffset_m = (ovhVergeR || ovhVergeL) / 1000;
+
+  let targetRoofX_m, targetRoofZ_m;
   if (attachWall === "left") {
-    // Outer wall at X=0, eaves extends to X=-ovhEaves
-    targetEavesX_m = -eavesOffset_m;
-    targetEavesZ_m = -vergeLOffset_m;
+    // Roof extends +X (toward main), +Z (span)
+    // Eaves (origin) at outer edge: X = -ovhEaves
+    // Span starts at Z = -vergeL
+    targetRoofX_m = -eavesOffset_m;
+    targetRoofZ_m = -vergeLOffset_m;
   } else if (attachWall === "right") {
-    // Outer wall at X=extentX, eaves extends to X=extentX+ovhEaves
-    // With 180° yaw, eaves corner is now at maxX
-    targetEavesX_m = extentX / 1000 + eavesOffset_m;
-    targetEavesZ_m = -vergeLOffset_m;
+    // Roof extends -X (toward main), -Z (span) due to 180° yaw
+    // Eaves (origin) at outer edge: X = extentX + ovhEaves
+    // Span far edge (origin after Z flip) at: Z = extentZ + vergeR
+    targetRoofX_m = extentX / 1000 + eavesOffset_m;
+    targetRoofZ_m = extentZ / 1000 + vergeROffset_m;
   } else if (attachWall === "front") {
-    // Outer wall at Z=0, eaves extends to Z=-ovhEaves
-    targetEavesX_m = -vergeLOffset_m;
-    targetEavesZ_m = -eavesOffset_m;
+    // With yaw=-π/2: local +X → world +Z, local +Z → world +X
+    // Roof extends +Z (toward main), +X (span)
+    // Eaves (origin) at outer edge: Z = -ovhEaves
+    // Span starts at X = -vergeL
+    targetRoofX_m = -vergeLOffset_m;
+    targetRoofZ_m = -eavesOffset_m;
   } else { // back
-    // Outer wall at Z=extentZ, eaves extends to Z=extentZ+ovhEaves
-    targetEavesX_m = -vergeLOffset_m;
-    targetEavesZ_m = extentZ / 1000 + eavesOffset_m;
+    // With yaw=+π/2: local +X → world -Z, local +Z → world -X
+    // Roof extends -Z (toward main), -X (span)
+    // Eaves (origin) at outer edge: Z = extentZ + ovhEaves
+    // Span far edge (origin after X flip) at: X = extentX + vergeR
+    targetRoofX_m = extentX / 1000 + vergeROffset_m;
+    targetRoofZ_m = extentZ / 1000 + eavesOffset_m;
   }
+
+  // The eaves corner (0,0,0) stays at origin after rotation
+  const eavesCorner = localToWorld(0, 0, 0);
 
   // Y position: The BEARING POINT (where roof meets outer wall) should be at roofOuterY
   // The eaves extends ovhEaves beyond the outer wall, so it's LOWER than roofOuterY
