@@ -1554,18 +1554,22 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
     targetRoofX_m = extentX / 1000 + eavesOffset_m;
     targetRoofZ_m = extentZ / 1000 + vergeROffset_m;
   } else if (attachWall === "front") {
-    // With yaw=-π/2: local +X → world +Z, local +Z → world +X
-    // Roof extends +Z (toward main), +X (span)
+    // With yaw=-π/2: local +X → world +Z, local +Z → world -X (flipped!)
+    // Roof extends +Z (toward main), span extends toward -X
     // Eaves (origin) at outer edge: Z = -ovhEaves
-    // Span starts at X = -vergeL
-    targetRoofX_m = -vergeLOffset_m;
+    // Span: near edge at X=roofRoot.x, far edge at X=roofRoot.x - B
+    // Want coverage from X = -vergeL to X = extentX + vergeR
+    // So roofRoot.x = extentX + vergeR (far edge at -vergeL)
+    targetRoofX_m = extentX / 1000 + vergeROffset_m;
     targetRoofZ_m = -eavesOffset_m;
   } else { // back
-    // With yaw=+π/2: local +X → world -Z, local +Z → world -X
-    // Roof extends -Z (toward main), -X (span)
+    // With yaw=+π/2: local +X → world -Z, local +Z → world +X
+    // Roof extends -Z (toward main), span extends toward +X
     // Eaves (origin) at outer edge: Z = extentZ + ovhEaves
-    // Span far edge (origin after X flip) at: X = extentX + vergeR
-    targetRoofX_m = extentX / 1000 + vergeROffset_m;
+    // Span: near edge at X=roofRoot.x, far edge at X=roofRoot.x + B
+    // Want coverage from X = -vergeL to X = extentX + vergeR
+    // So roofRoot.x = -vergeL (far edge at extentX + vergeR)
+    targetRoofX_m = -vergeLOffset_m;
     targetRoofZ_m = extentZ / 1000 + eavesOffset_m;
   }
 
