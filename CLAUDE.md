@@ -3,9 +3,32 @@
 ## Project Overview
 3D parametric shed/building configurator using Babylon.js with CSG (Constructive Solid Geometry) operations.
 
-## Current Work (January 2025)
+## Current Work (January 2026)
 
-### Active Branch: `feature/building-attachments`
+### Active Branch: `clawdbot-experiments`
+
+### Recently Added: Realistic Dimension Constraints
+
+Added validation to enforce realistic limits for timber-framed garden buildings.
+
+**Rules:**
+- Minimum dimension: 1000mm (1m)
+- Maximum dimension: 8000mm (8m)
+- If either dimension exceeds 4000mm (4m), the other is capped at 4000mm
+- Allows builds up to 8m × 4m in either orientation, but not e.g. 5m × 5m
+
+**Files modified:**
+- `docs/src/index.js` - Added `clampBuildingDimensions()` function, integrated into `writeActiveDims()`
+- `docs/index.html` - Added min/max attributes to width/depth inputs, added hint text
+
+**Implementation:**
+- `clampBuildingDimensions(w, d)` returns clamped values and a `clamped` flag
+- If values are clamped, input fields are updated to reflect actual values
+- Console logs when clamping occurs for debugging
+
+---
+
+### Previous Branch: `feature/building-attachments`
 
 ### Recently Completed: Internal Divider Panels
 

@@ -3590,6 +3590,44 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       });
     }
 
+/**
+     * Clamp building dimensions to realistic limits for timber-framed garden buildings.
+     * Rules:
+     *   - Neither dimension can exceed 8000mm (8m)
+     *   - If either dimension exceeds 4000mm (4m), the other is capped at 4000mm
+     * This allows builds up to 8m x 4m in either orientation, but not e.g. 5m x 5m.
+     * @param {number} w - Width in mm
+     * @param {number} d - Depth in mm
+     * @returns {{w: number, d: number, clamped: boolean}} Clamped dimensions
+     */
+    function clampBuildingDimensions(w, d) {
+      var MAX_LONG = 8000;  // Maximum for the longer dimension
+      var MAX_SHORT = 4000; // Maximum for the shorter dimension when other > 4000
+      var MIN_DIM = 1000;   // Minimum dimension (1m)
+
+      var origW = w, origD = d;
+
+      // Enforce minimum
+      if (w < MIN_DIM) w = MIN_DIM;
+      if (d < MIN_DIM) d = MIN_DIM;
+
+      // Enforce absolute maximum of 8000mm
+      if (w > MAX_LONG) w = MAX_LONG;
+      if (d > MAX_LONG) d = MAX_LONG;
+
+      // If one dimension exceeds 4000mm, cap the other at 4000mm
+      if (w > MAX_SHORT && d > MAX_SHORT) {
+        // Both exceed 4000mm - cap the smaller one to 4000mm
+        if (w >= d) {
+          d = MAX_SHORT;
+        } else {
+          w = MAX_SHORT;
+        }
+      }
+
+      return { w: w, d: d, clamped: (w !== origW || d !== origD) };
+    }
+
 function writeActiveDims() {
       var s = store.getState();
       var unitMode = getUnitMode(s);
@@ -3606,6 +3644,18 @@ if (unitMode === "imperial") {
       } else {
         w = asPosInt(wInputEl ? wInputEl.value : null, 1000);
         d = asPosInt(dInputEl ? dInputEl.value : null, 1000);
+      }
+
+      // Apply realistic dimension constraints
+      var clamped = clampBuildingDimensions(w, d);
+      w = clamped.w;
+      d = clamped.d;
+
+      // If values were clamped, update the input fields to reflect the actual values
+      if (clamped.clamped) {
+        if (wInputEl) wInputEl.value = formatDimension(w, unitMode);
+        if (dInputEl) dInputEl.value = formatDimension(d, unitMode);
+        console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm (max 8m x 4m)");
       }
 
       var mode = (s && s.dimMode) ? String(s.dimMode) : "base";
