@@ -1328,12 +1328,10 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // Pitch angle
   const pitchAngle = Math.atan2(rise_mm, run_mm);
 
-  // Determine which direction the slope goes (increasing height)
-  // For left attachment: slope increases along +X (toward main building at right)
-  // For right attachment: slope increases along -X (toward main building at left)
-  // For front attachment: slope increases along +Z (toward main building at back)
-  // For back attachment: slope increases along -Z (toward main building at front)
-  const slopeIncreaseDir = (attachWall === "left" || attachWall === "front") ? 1 : -1;
+  // Slope direction is now handled by yaw rotation (see below)
+  // - Left/Right: slope runs along X axis
+  // - Front/Back: slope runs along Z axis
+  // The yaw rotation ensures the high end (inner edge) always points toward the main building
 
   // Create a roof root node at the low point of the roof
   // We'll build everything flat (y=0 at underside of rafters) then rotate and position
@@ -1450,28 +1448,41 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // The roof is built with A along local X, B along local Z
   // We need to rotate so A aligns with the world slope direction
 
-  // Determine target world axis for slope
-  const slopeAxisWorld = slopeAlongX ? new BABYLON.Vector3(1, 0, 0) : new BABYLON.Vector3(0, 0, 1);
+  // Determine pitch axis (perpendicular to slope direction)
   const pitchAxisWorld = slopeAlongX ? new BABYLON.Vector3(0, 0, 1) : new BABYLON.Vector3(1, 0, 0);
 
-  // Yaw rotation to align local X with world slope axis toward main building
-  // Local X is (1,0,0), we want it to point toward the main building
-  let yaw = 0;
-  if (!slopeAlongX) {
-    // Front: main building at +Z, so rotate +90° to align X with +Z
-    // Back: main building at -Z (lower Z), so rotate -90° to align X with -Z
-    yaw = attachWall === "front" ? Math.PI / 2 : -Math.PI / 2;
-  }
-  const qYaw = BABYLON.Quaternion.RotationAxis(new BABYLON.Vector3(0, 1, 0), yaw);
+  // Yaw rotation to align local +X (high end of slope) toward the main building
+  // Pitch sign determines which way to tilt to raise the inner edge
+  // 
+  // After yaw, local +X should point toward main building (inner edge)
+  // Then pitch rotation around the perpendicular axis tilts that edge UP
+  //
+  // Attachment | Yaw    | Inner edge direction | Pitch sign to raise inner
+  // -----------|--------|---------------------|---------------------------
+  // Left       | 0      | +X (toward main)    | +1 (tilts +X up)
+  // Right      | π      | -X (toward main)    | -1 (tilts -X up)
+  // Front      | π/2    | +Z (toward main)    | -1 (tilts +Z up via X rotation)
+  // Back       | -π/2   | -Z (toward main)    | +1 (tilts -Z up via X rotation)
 
-  // Pitch rotation around the span axis
-  // For pent roof sloping away from building: high end is at A=slopeLen (inner), low end is at A=0 (outer)
-  // We need to tilt the inner end (toward main building) UP
-  // For left/right: -pitchAngle around Z tilts the inner edge up
-  // For front/back: after yaw rotation, local X points toward main building
-  //   Front (yaw=+90°): X→+Z, -pitchAngle tilts +Z up
-  //   Back (yaw=-90°): X→-Z, -pitchAngle tilts -Z up (since -pitch around X tilts -Z toward +Y)
-  const qPitch = BABYLON.Quaternion.RotationAxis(pitchAxisWorld, -pitchAngle);
+  let yaw = 0;
+  let pitchSign = 1;
+
+  if (attachWall === "left") {
+    yaw = 0;
+    pitchSign = 1;
+  } else if (attachWall === "right") {
+    yaw = Math.PI;  // 180° flip so +X points toward main building
+    pitchSign = -1;
+  } else if (attachWall === "front") {
+    yaw = Math.PI / 2;
+    pitchSign = -1;
+  } else { // back
+    yaw = -Math.PI / 2;
+    pitchSign = 1;
+  }
+
+  const qYaw = BABYLON.Quaternion.RotationAxis(new BABYLON.Vector3(0, 1, 0), yaw);
+  const qPitch = BABYLON.Quaternion.RotationAxis(pitchAxisWorld, pitchSign * pitchAngle);
 
   roofRoot.rotationQuaternion = qPitch.multiply(qYaw);
 
@@ -1519,26 +1530,29 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // Calculate the verge offset (roof starts at -vergeL relative to wall span start)
   const vergeLOffset_m = ovhVergeL / 1000;
 
-  let targetX_m, targetZ_m;
+  // Find the eaves corner (A=0, B=0) position after rotation
+  const eavesCorner = localToWorld(0, 0, 0);
+
+  // Determine target position for the eaves corner
+  // The eaves should overhang past the outer wall by eavesOffset
+  let targetEavesX_m, targetEavesZ_m;
   if (attachWall === "left") {
     // Outer wall at X=0, eaves extends to X=-ovhEaves
-    // Span in Z direction, vergeL extends to Z=-ovhVergeL
-    targetX_m = -eavesOffset_m;
-    targetZ_m = -vergeLOffset_m;
+    targetEavesX_m = -eavesOffset_m;
+    targetEavesZ_m = -vergeLOffset_m;
   } else if (attachWall === "right") {
     // Outer wall at X=extentX, eaves extends to X=extentX+ovhEaves
-    targetX_m = extentX / 1000 - (A_mm / 1000) * Math.cos(pitchAngle) + eavesOffset_m;
-    targetZ_m = -vergeLOffset_m;
+    // With 180° yaw, eaves corner is now at maxX
+    targetEavesX_m = extentX / 1000 + eavesOffset_m;
+    targetEavesZ_m = -vergeLOffset_m;
   } else if (attachWall === "front") {
     // Outer wall at Z=0, eaves extends to Z=-ovhEaves
-    // Span in X direction, vergeL extends to X=-ovhVergeL
-    targetX_m = -vergeLOffset_m;
-    targetZ_m = -eavesOffset_m;
+    targetEavesX_m = -vergeLOffset_m;
+    targetEavesZ_m = -eavesOffset_m;
   } else { // back
     // Outer wall at Z=extentZ, eaves extends to Z=extentZ+ovhEaves
-    // With yaw=-90°, the eaves (A=0) are at maxZ, so we position maxZ at target
-    targetX_m = -vergeLOffset_m;
-    targetZ_m = extentZ / 1000 + eavesOffset_m;
+    targetEavesX_m = -vergeLOffset_m;
+    targetEavesZ_m = extentZ / 1000 + eavesOffset_m;
   }
 
   // Y position: The BEARING POINT (where roof meets outer wall) should be at roofOuterY
@@ -1548,22 +1562,21 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   const bearingPointY = localToWorld(bearingPointA_mm, 0, B_mm / 2).y;
   const targetY_m = roofOuterY / 1000 - bearingPointY;
 
-  // For back attachment with yaw=-90°, the eaves are at maxZ, so use maxZ for Z offset
-  const zOffset = attachWall === "back" ? maxZ : minZ;
+  // Position the roof root so that the eaves corner lands at the target position
   roofRoot.position = new BABYLON.Vector3(
-    targetX_m - minX,
+    targetEavesX_m - eavesCorner.x,
     targetY_m,
-    targetZ_m - zOffset
+    targetEavesZ_m - eavesCorner.z
   );
 
-  console.log("[attachments] Roof Y positioning - ovhEaves:", ovhEaves,
-              "bearingPointA_mm:", bearingPointA_mm.toFixed(1),
-              "bearingPointY:", bearingPointY.toFixed(4),
-              "roofOuterY:", roofOuterY, "targetY_m:", targetY_m.toFixed(4));
-  console.log("[attachments] Roof positioned at:",
-              "x:", (targetX_m - minX).toFixed(4),
+  console.log("[attachments] Roof positioning - yaw:", (yaw * 180 / Math.PI).toFixed(1) + "°",
+              "pitchSign:", pitchSign, "pitch:", (pitchAngle * 180 / Math.PI).toFixed(1) + "°");
+  console.log("[attachments] Eaves corner after rotation:", eavesCorner);
+  console.log("[attachments] Target eaves position: X=" + targetEavesX_m.toFixed(4) + " Z=" + targetEavesZ_m.toFixed(4));
+  console.log("[attachments] Roof root position:",
+              "x:", (targetEavesX_m - eavesCorner.x).toFixed(4),
               "y:", targetY_m.toFixed(4),
-              "z:", (targetZ_m - minZ).toFixed(4));
+              "z:", (targetEavesZ_m - eavesCorner.z).toFixed(4));
 }
 
 /**
