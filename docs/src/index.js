@@ -3939,6 +3939,59 @@ function parseOverhangInput(val) {
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });
     });
 
+    /**
+     * Find a free X position on a wall for a new opening
+     * Returns the X position, or null if no space available
+     */
+    function findFreeSpotOnWall(wall, width, openings, wallLength) {
+      var MIN_EDGE_GAP = 100;
+      var MIN_GAP = 50;
+      
+      // Get existing openings on this wall, sorted by X
+      var existing = [];
+      for (var i = 0; i < openings.length; i++) {
+        var o = openings[i];
+        if (o && o.enabled !== false && o.wall === wall) {
+          existing.push({ x: o.x_mm || 0, w: o.width_mm || 800 });
+        }
+      }
+      existing.sort(function(a, b) { return a.x - b.x; });
+      
+      // Try to find a gap that fits the new opening
+      var candidates = [];
+      
+      // Check gap at start of wall
+      var firstStart = existing.length > 0 ? existing[0].x : wallLength;
+      if (firstStart - MIN_EDGE_GAP >= width + MIN_GAP) {
+        candidates.push(MIN_EDGE_GAP);
+      }
+      
+      // Check gaps between existing openings
+      for (var j = 0; j < existing.length - 1; j++) {
+        var gapStart = existing[j].x + existing[j].w + MIN_GAP;
+        var gapEnd = existing[j + 1].x - MIN_GAP;
+        if (gapEnd - gapStart >= width) {
+          candidates.push(gapStart);
+        }
+      }
+      
+      // Check gap at end of wall
+      if (existing.length > 0) {
+        var lastEnd = existing[existing.length - 1].x + existing[existing.length - 1].w;
+        if (wallLength - MIN_EDGE_GAP - lastEnd - MIN_GAP >= width) {
+          candidates.push(lastEnd + MIN_GAP);
+        }
+      }
+      
+      // If no existing openings, center it
+      if (existing.length === 0) {
+        return Math.floor((wallLength - width) / 2);
+      }
+      
+      // Return first available candidate, or null if none
+      return candidates.length > 0 ? candidates[0] : null;
+    }
+
     if (addDoorBtnEl) {
       addDoorBtnEl.addEventListener("click", function () {
         var s = store.getState();
@@ -3950,7 +4003,28 @@ function parseOverhangInput(val) {
         var w = 900;
         var h = 2000;
         var L = lens[wall] || 1000;
-        var x = Math.floor((L - w) / 2);
+        
+        // Find a free spot instead of just centering
+        var x = findFreeSpotOnWall(wall, w, openings, L);
+        if (x === null) {
+          // No space on front wall, try other walls
+          var walls = ["back", "left", "right"];
+          for (var i = 0; i < walls.length; i++) {
+            var tryWall = walls[i];
+            var tryL = lens[tryWall] || 1000;
+            x = findFreeSpotOnWall(tryWall, w, openings, tryL);
+            if (x !== null) {
+              wall = tryWall;
+              L = tryL;
+              break;
+            }
+          }
+        }
+        
+        // If still no space, just center on front and let validation handle it
+        if (x === null) {
+          x = Math.floor((L - w) / 2);
+        }
 
         openings.push({ id: id, wall: wall, type: "door", enabled: true, x_mm: x, width_mm: w, height_mm: h });
         setOpenings(openings);
@@ -3984,7 +4058,28 @@ function parseOverhangInput(val) {
         var h = 600;
         var y = 900;
         var L = lens[wall] || 1000;
-        var x = Math.floor((L - w) / 2);
+        
+        // Find a free spot instead of just centering
+        var x = findFreeSpotOnWall(wall, w, openings, L);
+        if (x === null) {
+          // No space on front wall, try other walls
+          var walls = ["back", "left", "right"];
+          for (var i = 0; i < walls.length; i++) {
+            var tryWall = walls[i];
+            var tryL = lens[tryWall] || 1000;
+            x = findFreeSpotOnWall(tryWall, w, openings, tryL);
+            if (x !== null) {
+              wall = tryWall;
+              L = tryL;
+              break;
+            }
+          }
+        }
+        
+        // If still no space, just center on front and let validation handle it
+        if (x === null) {
+          x = Math.floor((L - w) / 2);
+        }
 
         openings.push({ id: id, wall: wall, type: "window", enabled: true, x_mm: x, y_mm: y, width_mm: w, height_mm: h });
         setOpenings(openings);
