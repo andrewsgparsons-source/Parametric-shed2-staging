@@ -345,11 +345,15 @@
   }
   
   .boHeader {
-    padding: 20px 16px 14px;
+    padding: 16px 16px 12px;
   }
   
   .boTitle1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+  
+  .boTitle2 {
+    font-size: 12px;
   }
   
   .boBox {
@@ -360,12 +364,52 @@
     gap: 10px;
   }
   
+  /* Larger labels on mobile */
+  #controlPanel label {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  
+  /* Larger sub-headers */
+  .boSubhead {
+    font-size: 12px;
+  }
+  
+  /* Larger section titles */
+  #controlPanel .boSection > summary {
+    font-size: 16px;
+    padding: 16px;
+  }
+  
+  /* Larger form controls */
   #controlPanel input[type="number"],
   #controlPanel input[type="text"],
-  #controlPanel select,
+  #controlPanel select {
+    padding: 14px 16px;
+    font-size: 16px;
+  }
+  
   #controlPanel button {
-    padding: 12px 14px;
+    padding: 14px 16px;
     font-size: 15px;
+  }
+  
+  /* Larger checkboxes/radios */
+  #controlPanel .check {
+    font-size: 15px;
+    padding: 6px 0;
+  }
+  
+  #controlPanel .check input[type="checkbox"],
+  #controlPanel .check input[type="radio"] {
+    width: 22px;
+    height: 22px;
+  }
+  
+  /* Hints */
+  #controlPanel .hint,
+  #controlPanel p.hint {
+    font-size: 12px;
   }
 }
 
