@@ -1457,8 +1457,8 @@ function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
   // Tie beam position setting: "eaves" (at bottom) or "raised" (1/3 up rafters)
   const tieBeamSetting = (apex && apex.tieBeam) || "eaves";
   
-  // For raised tie: calculate position at 1/3 up the rise
-  const raisedTieRatio = 1 / 3;
+  // For raised tie: calculate position at 3/8 up the rise
+  const raisedTieRatio = 3 / 8;
   const raisedTieY_mm = rise_mm * raisedTieRatio;
   // At this Y, the rafter X positions (from center) narrow proportionally
   const raisedTieHalfSpan_mm = halfSpan_mm * (1 - raisedTieRatio);
