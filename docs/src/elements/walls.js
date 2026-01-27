@@ -3363,7 +3363,11 @@ export function updateBOM(state) {
     const wallPlySummaryEl2 = document.getElementById('wallPlySummary2');
     const wallPlySectionEl2 = document.getElementById('wallPlySection2');
     
+    console.log('[WALLS_BOM] Checking variant for PIR/Ply sections:', variant);
+    console.log('[WALLS_BOM] Elements found - wallPirSectionEl2:', !!wallPirSectionEl2, 'wallPlySectionEl2:', !!wallPlySectionEl2);
+    
     if (variant === 'insulated') {
+      console.log('[WALLS_BOM] Insulated variant - showing PIR/Ply sections');
       // Show sections (both base BOM page and walls BOM page)
       if (wallPirSectionEl) wallPirSectionEl.style.display = '';
       if (wallPlySectionEl) wallPlySectionEl.style.display = '';
