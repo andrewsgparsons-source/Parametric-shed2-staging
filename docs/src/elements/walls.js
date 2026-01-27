@@ -3818,7 +3818,7 @@ export function updateBOM(state) {
   const sections = [];
   let totalFrameLength_mm = 0;  // Track total frame timber length
   const FRAME_STOCK_LENGTH = 6200;  // Frame timber stock length
-  const variant = state.walls?.variant || "insulated";
+  // variant already declared above
   const baseHeight = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
 
   const prof = resolveProfile(state, variant);
