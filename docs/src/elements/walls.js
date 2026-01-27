@@ -3355,11 +3355,20 @@ export function updateBOM(state) {
     const wallPlyBodyEl = document.getElementById('wallPlyBody');
     const wallPlySummaryEl = document.getElementById('wallPlySummary');
     const wallPlySectionEl = document.getElementById('wallPlySection');
+    // Also update the walls BOM page elements
+    const wallPirBodyEl2 = document.getElementById('wallPirBody2');
+    const wallPirSummaryEl2 = document.getElementById('wallPirSummary2');
+    const wallPirSectionEl2 = document.getElementById('wallPirSection2');
+    const wallPlyBodyEl2 = document.getElementById('wallPlyBody2');
+    const wallPlySummaryEl2 = document.getElementById('wallPlySummary2');
+    const wallPlySectionEl2 = document.getElementById('wallPlySection2');
     
     if (variant === 'insulated') {
-      // Show sections
+      // Show sections (both base BOM page and walls BOM page)
       if (wallPirSectionEl) wallPirSectionEl.style.display = '';
       if (wallPlySectionEl) wallPlySectionEl.style.display = '';
+      if (wallPirSectionEl2) wallPirSectionEl2.style.display = '';
+      if (wallPlySectionEl2) wallPlySectionEl2.style.display = '';
       
       const PIR_SHEET_W = 1200; // Standard PIR sheet width
       const PIR_SHEET_L = 2400; // Standard PIR sheet length
@@ -3421,9 +3430,12 @@ export function updateBOM(state) {
       }
       
       if (wallPirBodyEl) wallPirBodyEl.innerHTML = wallPirHtml || `<tr><td colspan="4">None</td></tr>`;
+      if (wallPirBodyEl2) wallPirBodyEl2.innerHTML = wallPirHtml || `<tr><td colspan="4">None</td></tr>`;
       const pirSheetArea = PIR_SHEET_W * PIR_SHEET_L;
       const pirMinSheets = pirSheetArea > 0 ? Math.ceil(totalPirArea / pirSheetArea) : 0;
-      if (wallPirSummaryEl) wallPirSummaryEl.textContent = `50mm PIR (Celotex) - Minimum sheets (${PIR_SHEET_W}×${PIR_SHEET_L}mm): ${pirMinSheets}`;
+      const pirSummaryText = `50mm PIR (Celotex) - Minimum sheets (${PIR_SHEET_W}×${PIR_SHEET_L}mm): ${pirMinSheets}`;
+      if (wallPirSummaryEl) wallPirSummaryEl.textContent = pirSummaryText;
+      if (wallPirSummaryEl2) wallPirSummaryEl2.textContent = pirSummaryText;
       
       // Calculate plywood lining pieces (8x4ft sheets)
       let wallPlyHtml = '';
@@ -3474,14 +3486,19 @@ export function updateBOM(state) {
       }
       
       if (wallPlyBodyEl) wallPlyBodyEl.innerHTML = wallPlyHtml || `<tr><td colspan="4">None</td></tr>`;
+      if (wallPlyBodyEl2) wallPlyBodyEl2.innerHTML = wallPlyHtml || `<tr><td colspan="4">None</td></tr>`;
       const plySheetArea = PLY_SHEET_W * PLY_SHEET_L;
       const plyMinSheets = plySheetArea > 0 ? Math.ceil(totalPlyArea / plySheetArea) : 0;
-      if (wallPlySummaryEl) wallPlySummaryEl.textContent = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
+      const plySummaryText = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
+      if (wallPlySummaryEl) wallPlySummaryEl.textContent = plySummaryText;
+      if (wallPlySummaryEl2) wallPlySummaryEl2.textContent = plySummaryText;
       
     } else {
-      // Hide sections for non-insulated variant
+      // Hide sections for non-insulated variant (both pages)
       if (wallPirSectionEl) wallPirSectionEl.style.display = 'none';
       if (wallPlySectionEl) wallPlySectionEl.style.display = 'none';
+      if (wallPirSectionEl2) wallPirSectionEl2.style.display = 'none';
+      if (wallPlySectionEl2) wallPlySectionEl2.style.display = 'none';
     }
 
     // ---- CLADDING CUTTING LIST (APEX) ----
