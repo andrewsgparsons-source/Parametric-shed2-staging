@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Parametric Shed — Views</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="./styles.css">
 </head>
 
@@ -31,7 +31,15 @@
 
   <div id="ui-layer" aria-hidden="true"></div>
 
+  <!-- Mobile "Design Your Shed" button -->
+  <button id="mobileOpenBtn" aria-label="Open design controls">
+    <span class="btn-icon">🏠</span> Design Your Shed
+  </button>
+
   <div id="controls" class="resizable" aria-label="Controls">
+    <!-- Mobile close button -->
+    <button id="mobileCloseBtn" aria-label="Close controls">✕</button>
+    
     <!-- Resize handles -->
     <div class="resize-handle resize-handle-right" data-resize="right"></div>
     <div class="resize-handle resize-handle-bottom" data-resize="bottom"></div>
@@ -734,5 +742,76 @@
   </script>
   <script type="module" src="./src/index.js"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
+
+  <!-- Mobile UX initialization -->
+  <script>
+    (function() {
+      // Check if mobile
+      function isMobile() {
+        return window.innerWidth <= 768;
+      }
+      
+      function initMobileUI() {
+        var openBtn = document.getElementById('mobileOpenBtn');
+        var closeBtn = document.getElementById('mobileCloseBtn');
+        var body = document.body;
+        
+        if (!openBtn || !closeBtn) return;
+        
+        // Auto-collapse on mobile
+        if (isMobile()) {
+          body.classList.add('mobile-panel-collapsed');
+        }
+        
+        // Open panel
+        openBtn.addEventListener('click', function() {
+          body.classList.remove('mobile-panel-collapsed');
+        });
+        
+        // Close panel
+        closeBtn.addEventListener('click', function() {
+          body.classList.add('mobile-panel-collapsed');
+        });
+        
+        // Handle orientation/resize changes
+        window.addEventListener('resize', function() {
+          if (!isMobile()) {
+            body.classList.remove('mobile-panel-collapsed');
+          }
+        });
+        
+        // Close panel when clicking on canvas (mobile only)
+        var canvas = document.getElementById('renderCanvas');
+        if (canvas) {
+          canvas.addEventListener('touchstart', function(e) {
+            if (isMobile() && !body.classList.contains('mobile-panel-collapsed')) {
+              // Only close if it's a simple tap, not a gesture
+              if (e.touches.length === 1) {
+                // Delay to allow for pinch gesture detection
+                var startTime = Date.now();
+                var startTouches = e.touches.length;
+                
+                canvas.addEventListener('touchend', function onEnd(te) {
+                  canvas.removeEventListener('touchend', onEnd);
+                  var duration = Date.now() - startTime;
+                  // If it was a quick tap (not a drag/pinch), close panel
+                  if (duration < 200 && te.changedTouches.length === 1) {
+                    body.classList.add('mobile-panel-collapsed');
+                  }
+                }, { once: true });
+              }
+            }
+          }, { passive: true });
+        }
+      }
+      
+      // Run when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMobileUI);
+      } else {
+        initMobileUI();
+      }
+    })();
+  </script>
 </body>
 </html>
