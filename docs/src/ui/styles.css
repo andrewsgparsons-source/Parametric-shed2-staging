@@ -479,7 +479,7 @@
     }
 
     /* Mobile styles */
-    @media (max-width: 768px) {
+    @media (max-width: 1024px) {
       /* Show mobile open button when panel is hidden */
       body.mobile-panel-collapsed #mobileOpenBtn {
         display: flex;
@@ -617,4 +617,3 @@
         grid-template-columns: 1fr 1fr;
       }
     }
-```0
