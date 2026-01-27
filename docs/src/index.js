@@ -4021,9 +4021,10 @@ function parseOverhangInput(val) {
           }
         }
         
-        // If still no space, just center on front and let validation handle it
+        // If still no space, don't add the door
         if (x === null) {
-          x = Math.floor((L - w) / 2);
+          alert("No space available for another door. Remove an existing opening or make the building larger.");
+          return;
         }
 
         openings.push({ id: id, wall: wall, type: "door", enabled: true, x_mm: x, width_mm: w, height_mm: h });
@@ -4076,9 +4077,10 @@ function parseOverhangInput(val) {
           }
         }
         
-        // If still no space, just center on front and let validation handle it
+        // If still no space, don't add the window
         if (x === null) {
-          x = Math.floor((L - w) / 2);
+          alert("No space available for another window. Remove an existing opening or make the building larger.");
+          return;
         }
 
         openings.push({ id: id, wall: wall, type: "window", enabled: true, x_mm: x, y_mm: y, width_mm: w, height_mm: h });
