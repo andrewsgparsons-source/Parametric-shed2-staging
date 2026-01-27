@@ -16,10 +16,12 @@ export const DEFAULTS = {
   vis: {
     base: true,
     frame: true,
-    ins: false,
+    ins: true,
     deck: true,
     wallsEnabled: true,
     walls: { front: true, back: true, left: true, right: true },
+    wallIns: true,
+    wallPly: true,
     cladding: true,
     roof: true
   },

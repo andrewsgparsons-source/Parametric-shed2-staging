@@ -431,6 +431,20 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vAttWallRightEl = $("vAttWallRight");
     var vAttWallOuterEl = $("vAttWallOuter");
 
+    // Developer panel attachment visibility controls (mirrors the main visibility section)
+    var devVAttBaseEl = $("devVAttBase");
+    var devVAttWallsEl = $("devVAttWalls");
+    var devVAttRoofEl = $("devVAttRoof");
+    var devVAttCladdingEl = $("devVAttCladding");
+    var devVAttBaseGridEl = $("devVAttBaseGrid");
+    var devVAttBaseFrameEl = $("devVAttBaseFrame");
+    var devVAttBaseDeckEl = $("devVAttBaseDeck");
+    var devVAttWallFrontEl = $("devVAttWallFront");
+    var devVAttWallBackEl = $("devVAttWallBack");
+    var devVAttWallLeftEl = $("devVAttWallLeft");
+    var devVAttWallRightEl = $("devVAttWallRight");
+    var devVAttWallOuterEl = $("devVAttWallOuter");
+
     var dimModeEl = $("dimMode");
     var wInputEl = $("wInput");
     var dInputEl = $("dInput");
@@ -3761,6 +3775,28 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       store.setState({ vis: { attachments: { wallOuter: on } } });
       console.log("[vis] attachment wall outer=", on ? "ON" : "OFF");
     });
+
+    // Developer panel attachment visibility controls (sync with main controls)
+    function syncDevAttToMain(devEl, mainEl) {
+      if (devEl && mainEl) {
+        devEl.addEventListener("change", function (e) {
+          mainEl.checked = e.target.checked;
+          mainEl.dispatchEvent(new Event("change"));
+        });
+      }
+    }
+    syncDevAttToMain(devVAttBaseEl, vAttBaseEl);
+    syncDevAttToMain(devVAttWallsEl, vAttWallsEl);
+    syncDevAttToMain(devVAttRoofEl, vAttRoofEl);
+    syncDevAttToMain(devVAttCladdingEl, vAttCladdingEl);
+    syncDevAttToMain(devVAttBaseGridEl, vAttBaseGridEl);
+    syncDevAttToMain(devVAttBaseFrameEl, vAttBaseFrameEl);
+    syncDevAttToMain(devVAttBaseDeckEl, vAttBaseDeckEl);
+    syncDevAttToMain(devVAttWallFrontEl, vAttWallFrontEl);
+    syncDevAttToMain(devVAttWallBackEl, vAttWallBackEl);
+    syncDevAttToMain(devVAttWallLeftEl, vAttWallLeftEl);
+    syncDevAttToMain(devVAttWallRightEl, vAttWallRightEl);
+    syncDevAttToMain(devVAttWallOuterEl, vAttWallOuterEl);
 
     if (dimModeEl) {
       dimModeEl.addEventListener("change", function () {
