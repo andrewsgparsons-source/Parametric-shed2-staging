@@ -2352,6 +2352,29 @@ mkBox(
       mat,
       { windowId: id }
     );
+
+    // Add cripple studs below the sill (from bottom plate to sill underside)
+    const crippleHeight = Math.max(0, y0 - prof.studH - plateY);
+    if (crippleHeight > prof.studW) {
+      // Calculate number of cripples needed based on window width and stud spacing
+      const windowInnerWidth = Math.max(0, x1 - x0);
+      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const crippleSpacing = windowInnerWidth / (numCripples + 1);
+      
+      for (let ci = 1; ci <= numCripples; ci++) {
+        const crippleX = origin.x + x0 + (ci * crippleSpacing) - (prof.studW / 2);
+        mkBox(
+          `wall-${wallId}-win-${id}-cripple-below-${ci}`,
+          prof.studW,
+          crippleHeight,
+          thickness,
+          { x: crippleX, y: plateY, z: origin.z },
+          mat,
+          { windowId: id, part: "cripple-below" }
+        );
+      }
+      console.log(`[WINDOW_CRIPPLE_X] Wall=${wallId}, WindowID=${id}, Added ${numCripples} cripple studs below sill, height=${crippleHeight}mm`);
+    }
   }
 
   function addWindowFramingAlongZ(wallId, origin, win) {
@@ -2423,6 +2446,30 @@ mkBox(
       mat,
       { windowId: id }
     );
+
+    // Add cripple studs below the sill (from bottom plate to sill underside)
+    const crippleHeight = Math.max(0, y0 - prof.studH - plateY);
+    if (crippleHeight > prof.studW) {
+      // Calculate number of cripples needed based on window width and stud spacing
+      const windowInnerWidth = Math.max(0, z1 - z0);
+      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const crippleSpacing = windowInnerWidth / (numCripples + 1);
+      
+      for (let ci = 1; ci <= numCripples; ci++) {
+        // For Z-axis walls, cripple position is along Z between the king studs
+        const crippleZ = origin.z + z0 - prof.studW + (ci * crippleSpacing) - (prof.studW / 2);
+        mkBox(
+          `wall-${wallId}-win-${id}-cripple-below-${ci}`,
+          thickness,
+          crippleHeight,
+          prof.studW,
+          { x: origin.x, y: plateY, z: crippleZ },
+          mat,
+          { windowId: id, part: "cripple-below" }
+        );
+      }
+      console.log(`[WINDOW_CRIPPLE_Z] Wall=${wallId}, WindowID=${id}, Added ${numCripples} cripple studs below sill, height=${crippleHeight}mm`);
+    }
   }
 
   function buildBasicPanel(wallPrefix, axis, panelLen, origin, offsetAlong, openings, studLenForPosStart) {
@@ -2919,63 +2966,104 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     
     console.log('[WALL_INS] Stud positions for', wallId, ':', studPositions);
     
-    // Build insulation panels between studs (skipping openings)
+    // Build insulation panels between studs (with partial fill around openings)
     let insCount = 0;
+    
+    // Helper to find which opening overlaps this bay and get its vertical extents
+    function getOverlappingOpening(start, end) {
+      for (let oi = 0; oi < wallOpenings.length; oi++) {
+        const o = wallOpenings[oi];
+        if (start < o.x1 && end > o.x0) {
+          return o;
+        }
+      }
+      return null;
+    }
+    
+    // Helper to create an insulation panel
+    function createInsPanel(name, bayStart, bayEnd, yBottom, yTop) {
+      const bayW = bayEnd - bayStart;
+      const insH = yTop - yBottom;
+      if (bayW < 10 || insH < 10) return null;
+      
+      const insDepth = wallThk - 10;
+      const insW = isAlongX ? bayW : insDepth;
+      const insD = isAlongX ? insDepth : bayW;
+      
+      const insX = isAlongX 
+        ? origin.x + bayStart + bayW / 2 
+        : origin.x + wallThk / 2;
+      const insZ = isAlongX 
+        ? origin.z + wallThk / 2 
+        : origin.z + bayStart + bayW / 2;
+      
+      const ins = BABYLON.MeshBuilder.CreateBox(name, {
+        width: insW * 0.001,
+        height: insH * 0.001,
+        depth: insD * 0.001
+      }, scene);
+      
+      ins.position = new BABYLON.Vector3(
+        insX * 0.001,
+        (yBottom + insH / 2) * 0.001,
+        insZ * 0.001
+      );
+      ins.material = insMat;
+      ins.parent = shedRoot;
+      ins.metadata = { dynamic: true, sectionId: sectionId || null, isWallInsulation: true };
+      ins.enableEdgesRendering();
+      ins.edgesWidth = 1;
+      ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+      return ins;
+    }
+    
     for (let i = 0; i < studPositions.length - 1; i++) {
       const studStart = studPositions[i] + studW; // After this stud
       const studEnd = studPositions[i + 1]; // Before next stud
       const bayWidth = studEnd - studStart;
       
-      // Skip if this bay overlaps with any opening
-      if (overlapsOpening(studStart, studEnd, wallOpenings)) {
-        console.log('[WALL_INS] Skipping bay', i, '- overlaps with opening');
-        continue;
-      }
+      if (bayWidth < 10) continue;
       
-      if (bayWidth > 10) { // Only if there's a meaningful gap
-        // Insulation fills the depth of the wall cavity (wallThk minus some clearance)
-        const insDepth = wallThk - 10; // Leave small gap for fit
-        const insW = isAlongX ? bayWidth : insDepth;
-        const insD = isAlongX ? insDepth : bayWidth;
+      const overlapping = getOverlappingOpening(studStart, studEnd);
+      
+      if (!overlapping) {
+        // No opening - fill entire bay with insulation
+        if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
+          insCount++;
+        }
+      } else {
+        // Bay overlaps with an opening - add partial insulation below and above
+        const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
+        const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
         
-        // Position insulation in middle of wall thickness
-        const insX = isAlongX 
-          ? origin.x + studStart + bayWidth / 2 
-          : origin.x + wallThk / 2;
-        const insZ = isAlongX 
-          ? origin.z + wallThk / 2 
-          : origin.z + studStart + bayWidth / 2;
+        // Insulation BELOW the opening (from plate to sill area)
+        // Account for sill thickness (prof.studH)
+        const sillThickness = prof.studH || 100;
+        const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
+        if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
+          if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
+          }
+        }
         
-        const ins = BABYLON.MeshBuilder.CreateBox(prefix + i, {
-          width: insW * 0.001,
-          height: insHeight * 0.001,
-          depth: insD * 0.001
-        }, scene);
-        
-        ins.position = new BABYLON.Vector3(
-          insX * 0.001,
-          (plateY + insHeight / 2) * 0.001,
-          insZ * 0.001
-        );
-        ins.material = insMat;
-        ins.parent = shedRoot;
-        ins.metadata = { dynamic: true, sectionId: sectionId || null, isWallInsulation: true };
-        ins.enableEdgesRendering();
-        ins.edgesWidth = 1;
-        ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
-        insCount++;
+        // Insulation ABOVE the opening (from header to top plate)
+        // Account for header thickness
+        const headerThickness = prof.studH || 100;
+        const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
+        const insAboveTop = plateY + insHeight;
+        if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
+          if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+          }
+        }
       }
     }
     
     console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
     
-    // Build internal plywood lining (skip for now if wall has openings - CSG cutting is complex)
-    // TODO: Add CSG boolean to cut openings from plywood
-    if (wallOpenings.length > 0) {
-      console.log('[WALL_INS] Skipping plywood lining for wall', wallId, '- has openings (CSG cut TODO)');
-      return;
-    }
-    
+    // Build internal plywood lining
     // Lining sits on inside face of wall (inside the stud cavity)
     const plyW = isAlongX ? wallLen : PLY_THICKNESS;
     const plyD = isAlongX ? PLY_THICKNESS : wallLen;
@@ -3014,6 +3102,91 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     ply.enableEdgesRendering();
     ply.edgesWidth = 2;
     ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+    
+    // If wall has openings, cut them out using CSG
+    if (wallOpenings.length > 0) {
+      console.log('[WALL_INS] Cutting', wallOpenings.length, 'openings from plywood for wall', wallId);
+      
+      const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+      
+      if (hasCSG) {
+        const cutters = [];
+        
+        for (let oi = 0; oi < wallOpenings.length; oi++) {
+          const op = wallOpenings[oi];
+          const opW = op.x1 - op.x0;
+          const opH = op.y1 - op.y0;
+          const opY = plateY + op.y0 + opH / 2;
+          
+          // Create cutter box for this opening
+          let cutterW, cutterD, cutterX, cutterZ;
+          if (isAlongX) {
+            cutterW = opW;
+            cutterD = PLY_THICKNESS + 20; // Extra depth to ensure clean cut
+            cutterX = origin.x + op.x0 + opW / 2;
+            cutterZ = plyZ;
+          } else {
+            cutterW = PLY_THICKNESS + 20;
+            cutterD = opW;
+            cutterX = plyX;
+            cutterZ = origin.z + op.x0 + opW / 2;
+          }
+          
+          const cutter = BABYLON.MeshBuilder.CreateBox(plyPrefix + "cutter-" + oi, {
+            width: cutterW * 0.001,
+            height: opH * 0.001,
+            depth: cutterD * 0.001
+          }, scene);
+          
+          cutter.position = new BABYLON.Vector3(
+            cutterX * 0.001,
+            opY * 0.001,
+            cutterZ * 0.001
+          );
+          
+          cutters.push(cutter);
+        }
+        
+        if (cutters.length > 0) {
+          try {
+            // Merge all cutters into one CSG
+            let cutterCSG = BABYLON.CSG.FromMesh(cutters[0]);
+            for (let ci = 1; ci < cutters.length; ci++) {
+              const c = BABYLON.CSG.FromMesh(cutters[ci]);
+              cutterCSG = cutterCSG.union(c);
+            }
+            
+            // Subtract from plywood
+            const plyCSG = BABYLON.CSG.FromMesh(ply);
+            const resultCSG = plyCSG.subtract(cutterCSG);
+            const resultMesh = resultCSG.toMesh(plyPrefix + "panel-cut", plyMat, scene, false);
+            
+            // Copy properties from original
+            resultMesh.parent = shedRoot;
+            resultMesh.metadata = { dynamic: true, sectionId: sectionId || null };
+            resultMesh.enableEdgesRendering();
+            resultMesh.edgesWidth = 2;
+            resultMesh.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+            
+            // Dispose original and cutters
+            ply.dispose(false, true);
+            for (let ci = 0; ci < cutters.length; ci++) {
+              cutters[ci].dispose(false, true);
+            }
+            
+            console.log('[WALL_INS] Successfully cut openings from plywood for wall', wallId);
+          } catch (e) {
+            console.warn('[WALL_INS] CSG cutting failed for wall', wallId, e);
+            // Dispose cutters but keep original ply
+            for (let ci = 0; ci < cutters.length; ci++) {
+              cutters[ci].dispose(false, true);
+            }
+          }
+        }
+      } else {
+        console.log('[WALL_INS] CSG not available - plywood will cover openings for wall', wallId);
+      }
+    }
   }
   
   const sideLenZ = Math.max(1, dims.d - 2 * wallThk);
