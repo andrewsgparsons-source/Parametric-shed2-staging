@@ -1925,8 +1925,149 @@ if (getWallsEnabled(state)) {
       return (state && state.walls && Array.isArray(state.walls.openings)) ? state.walls.openings : [];
     }
 
+    /**
+     * Get wall height for openings validation
+     * For pent roofs, use the minimum height (low wall) as the constraint
+     * For apex/hipped, use the eaves height
+     */
+    function getWallHeightForOpenings(state) {
+      var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
+      
+      if (roofStyle === "pent") {
+        var pentMinH = (state.roof && state.roof.pent && state.roof.pent.minHeight_mm) 
+          ? state.roof.pent.minHeight_mm : 2100;
+        return Math.max(1000, pentMinH);
+      } else if (roofStyle === "apex") {
+        var apexEaves = (state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm)
+          ? state.roof.apex.heightToEaves_mm : 1850;
+        return Math.max(800, apexEaves);
+      } else {
+        // Hipped or default
+        return 2000;
+      }
+    }
+
+    /**
+     * Validate and clamp openings to ensure:
+     * 1. Openings don't extend beyond wall boundaries
+     * 2. Openings don't overlap each other on the same wall
+     */
+    function validateAndClampOpenings(openings, state) {
+      if (!Array.isArray(openings) || openings.length === 0) return openings;
+      
+      var lens = getWallLengthsForOpenings(state);
+      var wallHeight = getWallHeightForOpenings(state);
+      var MIN_GAP = 50; // Minimum gap between openings in mm
+      var MIN_EDGE_GAP = 100; // Minimum gap from wall edge
+      
+      // Clone openings to avoid mutating original
+      var result = openings.map(function(o) {
+        return Object.assign({}, o);
+      });
+      
+      // Group openings by wall
+      var byWall = { front: [], back: [], left: [], right: [] };
+      for (var i = 0; i < result.length; i++) {
+        var o = result[i];
+        if (!o || !o.enabled) continue;
+        var wall = o.wall || "front";
+        if (byWall[wall]) byWall[wall].push({ index: i, opening: o });
+      }
+      
+      // Process each wall
+      ["front", "back", "left", "right"].forEach(function(wall) {
+        var wallLen = lens[wall] || 1000;
+        var items = byWall[wall];
+        if (!items || items.length === 0) return;
+        
+        // First pass: clamp each opening to wall boundaries
+        items.forEach(function(item) {
+          var o = item.opening;
+          var w = Math.max(100, o.width_mm || 800);
+          var h = Math.max(100, o.height_mm || (o.type === "door" ? 2000 : 600));
+          var x = o.x_mm || 0;
+          var y = o.y_mm || 0;
+          
+          // For doors, y is typically 0 (floor level)
+          if (o.type === "door") {
+            y = 0;
+            // Door height can't exceed wall height
+            if (h > wallHeight - MIN_EDGE_GAP) {
+              h = wallHeight - MIN_EDGE_GAP;
+            }
+          } else {
+            // Window: check y + height doesn't exceed wall height
+            if (y + h > wallHeight - MIN_EDGE_GAP) {
+              // Try lowering the window first
+              y = wallHeight - MIN_EDGE_GAP - h;
+              if (y < MIN_EDGE_GAP) {
+                y = MIN_EDGE_GAP;
+                h = wallHeight - 2 * MIN_EDGE_GAP;
+              }
+            }
+            if (y < MIN_EDGE_GAP) y = MIN_EDGE_GAP;
+          }
+          
+          // Clamp width to wall length
+          if (w > wallLen - 2 * MIN_EDGE_GAP) {
+            w = wallLen - 2 * MIN_EDGE_GAP;
+          }
+          
+          // Clamp x position
+          if (x < MIN_EDGE_GAP) x = MIN_EDGE_GAP;
+          if (x + w > wallLen - MIN_EDGE_GAP) {
+            x = wallLen - MIN_EDGE_GAP - w;
+          }
+          
+          // Update the opening
+          o.x_mm = Math.max(MIN_EDGE_GAP, Math.floor(x));
+          o.width_mm = Math.max(100, Math.floor(w));
+          o.height_mm = Math.max(100, Math.floor(h));
+          if (o.type === "window") {
+            o.y_mm = Math.max(MIN_EDGE_GAP, Math.floor(y));
+          }
+        });
+        
+        // Second pass: resolve overlaps (sort by x, then shift right if overlapping)
+        items.sort(function(a, b) {
+          return (a.opening.x_mm || 0) - (b.opening.x_mm || 0);
+        });
+        
+        for (var j = 1; j < items.length; j++) {
+          var prev = items[j - 1].opening;
+          var curr = items[j].opening;
+          
+          var prevEnd = (prev.x_mm || 0) + (prev.width_mm || 800);
+          var currStart = curr.x_mm || 0;
+          
+          // Check for overlap (X-axis only - Y overlap allowed for windows at different heights)
+          // For simplicity, treat all openings as needing X separation
+          if (currStart < prevEnd + MIN_GAP) {
+            // Shift current opening to the right
+            curr.x_mm = prevEnd + MIN_GAP;
+            
+            // If this pushes it off the wall, try shrinking it
+            if (curr.x_mm + curr.width_mm > wallLen - MIN_EDGE_GAP) {
+              var maxWidth = wallLen - MIN_EDGE_GAP - curr.x_mm;
+              if (maxWidth >= 100) {
+                curr.width_mm = maxWidth;
+              } else {
+                // Can't fit - disable this opening
+                console.warn("[validateOpenings] Opening " + curr.id + " doesn't fit on wall " + wall + ", disabling");
+                curr.enabled = false;
+              }
+            }
+          }
+        }
+      });
+      
+      return result;
+    }
+
     function setOpenings(nextOpenings) {
-      store.setState({ walls: { openings: nextOpenings } });
+      var state = store.getState();
+      var validated = validateAndClampOpenings(nextOpenings, state);
+      store.setState({ walls: { openings: validated } });
     }
 
     function getDoorsFromState(state) {
