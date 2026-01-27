@@ -3348,6 +3348,142 @@ export function updateBOM(state) {
       `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
     ]);
 
+    // ---- WALL INSULATION & PLYWOOD BOM (INSULATED VARIANT ONLY) ----
+    const wallPirBodyEl = document.getElementById('wallPirBody');
+    const wallPirSummaryEl = document.getElementById('wallPirSummary');
+    const wallPirSectionEl = document.getElementById('wallPirSection');
+    const wallPlyBodyEl = document.getElementById('wallPlyBody');
+    const wallPlySummaryEl = document.getElementById('wallPlySummary');
+    const wallPlySectionEl = document.getElementById('wallPlySection');
+    
+    if (variant === 'insulated') {
+      // Show sections
+      if (wallPirSectionEl) wallPirSectionEl.style.display = '';
+      if (wallPlySectionEl) wallPlySectionEl.style.display = '';
+      
+      const PIR_SHEET_W = 1200; // Standard PIR sheet width
+      const PIR_SHEET_L = 2400; // Standard PIR sheet length
+      const PLY_SHEET_W = 1220; // 4ft
+      const PLY_SHEET_L = 2440; // 8ft
+      const STUD_SPACING = prof.spacing || 400;
+      
+      // Calculate wall insulation pieces
+      let wallPirHtml = '';
+      let totalPirArea = 0;
+      const pirPieces = {};
+      
+      for (const wname of walls) {
+        const wallLen = lengths[wname];
+        const doorsW = getDoorIntervalsForWallFromState(state, wname);
+        const winsW = getWindowIntervalsForWallFromState(state, wname);
+        const allOpenings = doorsW.concat(winsW);
+        
+        // Calculate stud positions
+        const studPositions = [0];
+        let pos = STUD_SPACING;
+        while (pos < wallLen - prof.studW) {
+          studPositions.push(pos);
+          pos += STUD_SPACING;
+        }
+        studPositions.push(wallLen - prof.studW);
+        
+        // Count bays (excluding those with openings)
+        let bayCount = 0;
+        for (let i = 0; i < studPositions.length - 1; i++) {
+          const studStart = studPositions[i] + prof.studW;
+          const studEnd = studPositions[i + 1];
+          const bayWidth = studEnd - studStart;
+          
+          // Check if bay overlaps with any opening
+          let hasOpening = false;
+          for (const o of allOpenings) {
+            const ox0 = o.x0 || o.doorX0 || 0;
+            const ox1 = o.x1 || o.doorX1 || (ox0 + (o.w || 800));
+            if (studStart < ox1 && studEnd > ox0) {
+              hasOpening = true;
+              break;
+            }
+          }
+          
+          if (!hasOpening && bayWidth > 10) {
+            bayCount++;
+            const pieceH = studLen;
+            const pieceW = bayWidth;
+            const key = `${pieceH}x${pieceW}`;
+            pirPieces[key] = (pirPieces[key] || 0) + 1;
+            totalPirArea += pieceH * pieceW;
+          }
+        }
+        
+        if (bayCount > 0) {
+          wallPirHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${bayCount}</td><td>${studLen}mm × ~${Math.round(STUD_SPACING - prof.studW)}mm</td><td>Between studs</td></tr>`;
+        }
+      }
+      
+      if (wallPirBodyEl) wallPirBodyEl.innerHTML = wallPirHtml || `<tr><td colspan="4">None</td></tr>`;
+      const pirSheetArea = PIR_SHEET_W * PIR_SHEET_L;
+      const pirMinSheets = pirSheetArea > 0 ? Math.ceil(totalPirArea / pirSheetArea) : 0;
+      if (wallPirSummaryEl) wallPirSummaryEl.textContent = `50mm PIR (Celotex) - Minimum sheets (${PIR_SHEET_W}×${PIR_SHEET_L}mm): ${pirMinSheets}`;
+      
+      // Calculate plywood lining pieces (8x4ft sheets)
+      let wallPlyHtml = '';
+      let totalPlyArea = 0;
+      const plyPieces = {};
+      
+      for (const wname of walls) {
+        const wallLen = lengths[wname];
+        const doorsW = getDoorIntervalsForWallFromState(state, wname);
+        const winsW = getWindowIntervalsForWallFromState(state, wname);
+        
+        // For plywood, we need full wall panels minus openings
+        // For now, calculate as if full sheets are cut to wall size
+        const panelH = height;
+        const panelW = wallLen;
+        
+        // Calculate how many sheets needed for this wall
+        // Boards run horizontally (2440mm length along wall, 1220mm height)
+        const sheetsAcross = Math.ceil(panelW / PLY_SHEET_L);
+        const sheetsUp = Math.ceil(panelH / PLY_SHEET_W);
+        
+        // Deduct approximate area for openings
+        let openingArea = 0;
+        for (const d of doorsW) {
+          openingArea += (d.w || 800) * (d.h || 2000);
+        }
+        for (const w of winsW) {
+          openingArea += (w.w || 600) * (w.h || 400);
+        }
+        
+        const grossArea = panelH * panelW;
+        const netArea = Math.max(0, grossArea - openingArea);
+        totalPlyArea += netArea;
+        
+        // Determine piece sizes needed
+        for (let row = 0; row < sheetsUp; row++) {
+          const rowH = Math.min(PLY_SHEET_W, panelH - row * PLY_SHEET_W);
+          for (let col = 0; col < sheetsAcross; col++) {
+            const colW = Math.min(PLY_SHEET_L, panelW - col * PLY_SHEET_L);
+            if (rowH > 0 && colW > 0) {
+              const key = `${rowH}x${colW}`;
+              plyPieces[key] = (plyPieces[key] || 0) + 1;
+            }
+          }
+        }
+        
+        wallPlyHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${sheetsAcross * sheetsUp}</td><td>${panelH}mm × ${panelW}mm</td><td>${doorsW.length + winsW.length > 0 ? 'Cut for openings' : 'Full panel'}</td></tr>`;
+      }
+      
+      if (wallPlyBodyEl) wallPlyBodyEl.innerHTML = wallPlyHtml || `<tr><td colspan="4">None</td></tr>`;
+      const plySheetArea = PLY_SHEET_W * PLY_SHEET_L;
+      const plyMinSheets = plySheetArea > 0 ? Math.ceil(totalPlyArea / plySheetArea) : 0;
+      if (wallPlySummaryEl) wallPlySummaryEl.textContent = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
+      
+    } else {
+      // Hide sections for non-insulated variant
+      if (wallPirSectionEl) wallPirSectionEl.style.display = 'none';
+      if (wallPlySectionEl) wallPlySectionEl.style.display = 'none';
+    }
+
     // ---- CLADDING CUTTING LIST (APEX) ----
     sections.push(["", "", "", "", "", ""]);
     sections.push(["CLADDING", "", "", "", "", ""]);
