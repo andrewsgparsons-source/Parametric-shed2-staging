@@ -2776,18 +2776,20 @@ if (apexH && Number.isFinite(apexH.crest_mm)) {
     }
 
     if (isAlongX) {
-      let x = 400;
+      const spacingX = prof.spacing || 400;
+      let x = spacingX;
       while (x <= length - prof.studW) {
         if (Math.abs(x - (length - prof.studW)) < 1) break;
         if (!isInsideAnyOpening(x, openingsX)) placeStud(origin.x + x, origin.z, x);
-        x += prof.spacing;
+        x += spacingX;
       }
     } else {
-      let z = 400;
+      const spacingZ = prof.spacing || 400;
+      let z = spacingZ;
       while (z <= length - prof.studW) {
         if (Math.abs(z - (length - prof.studW)) < 1) break;
         if (!isInsideAnyOpening(z, openingsX)) placeStud(origin.x, origin.z + z, z);
-        z += prof.spacing;
+        z += spacingZ;
       }
     }
 
@@ -3677,10 +3679,11 @@ export function updateBOM(state) {
         } else {
           // Insulated stud count logic preserved (was previously per wall; now attributed under single panel)
           let count = 2;
-          let run = 400;
+          const spacingBOM = prof.spacing || 400;
+          let run = spacingBOM;
           while (run <= pan.len - prof.studW) {
             count += 1;
-            run += prof.spacing;
+            run += spacingBOM;
           }
           sections.push([`  Studs`, count, studLen, prof.studW, wallThk, "@400"]);
           totalFrameLength_mm += count * studLen;
@@ -3945,8 +3948,9 @@ export function updateBOM(state) {
           totalFrameLength_mm += 3 * studLenFlat;
         } else {
           let count = 2;
-          let run = 400;
-          while (run <= pan.len - prof.studW) { count += 1; run += prof.spacing; }
+          const spacingPent = prof.spacing || 400;
+          let run = spacingPent;
+          while (run <= pan.len - prof.studW) { count += 1; run += spacingPent; }
           sections.push([`  Studs`, count, studLenFlat, prof.studW, wallThk, `pent; ${wname}; @400`]);
           totalFrameLength_mm += count * studLenFlat;
         }
@@ -4011,7 +4015,8 @@ export function updateBOM(state) {
             addStudLen(Math.max(1, heightAtX(cx) - 2 * plateY));
           }
 
-          let x = 400;
+          const spacingSlope = prof.spacing || 400;
+          let x = spacingSlope;
           while (x <= len - prof.studW) {
             if (Math.abs(x - (len - prof.studW)) < 1) break;
             const posStart = offset + x;
@@ -4019,7 +4024,7 @@ export function updateBOM(state) {
               const cx = Math.floor(posStart + prof.studW / 2);
               addStudLen(Math.max(1, heightAtX(cx) - 2 * plateY));
             }
-            x += prof.spacing;
+            x += spacingSlope;
           }
         }
 
