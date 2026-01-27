@@ -2810,8 +2810,142 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
   if (flags.left) buildWall("left", "z", sideLenZ, { x: 0, z: wallThk });
   if (flags.right) buildWall("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 
+  // Build wall insulation and internal lining for insulated variant
+  if (variant === "insulated" && state.vis.ins) {
+    buildWallInsulationAndLining(
+      state, scene, materials, dims, height, prof, wallThk, plateY,
+      flags, meshPrefix, sectionId, sectionPos
+    );
+  }
+
   // Schedule one-shot deferred cladding build (one frame later)
   scheduleDeferredCladdingPass();
+}
+
+/**
+ * Build wall insulation (PIR 50mm between studs) and internal plywood lining (12mm)
+ * for insulated wall variant. Similar to floor insulation between joists.
+ */
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos) {
+  const PIR_THICKNESS = 50; // 50mm PIR insulation
+  const PLY_THICKNESS = 12; // 12mm plywood internal lining
+  const STUD_SPACING = prof.spacing || 400;
+  const studW = prof.studW;
+  
+  // Insulation material (yellow/cream PIR color)
+  const insMat = new BABYLON.StandardMaterial('wallInsMat', scene);
+  insMat.diffuseColor = new BABYLON.Color3(0.9, 0.85, 0.5);
+  
+  // Plywood material (light wood color)
+  const plyMat = new BABYLON.StandardMaterial('wallPlyMat', scene);
+  plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+
+  // Get root node for wall meshes
+  const shedRoot = scene.getTransformNodeByName("shedRoot") || scene;
+  
+  // Insulation height (between plates)
+  const insHeight = Math.max(1, height - 2 * plateY);
+  
+  // Build insulation and lining for each wall
+  function buildWallInsulation(wallId, axis, wallLen, origin) {
+    const isAlongX = axis === "x";
+    const prefix = meshPrefix + `wall-${wallId}-ins-`;
+    const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
+    
+    // Calculate stud positions (same logic as main wall builder)
+    const studPositions = [0]; // Start with corner stud
+    let pos = STUD_SPACING;
+    while (pos < wallLen - studW) {
+      studPositions.push(pos);
+      pos += STUD_SPACING;
+    }
+    studPositions.push(wallLen - studW); // End corner stud
+    
+    // Build insulation panels between studs
+    for (let i = 0; i < studPositions.length - 1; i++) {
+      const studStart = studPositions[i] + studW; // After this stud
+      const studEnd = studPositions[i + 1]; // Before next stud
+      const bayWidth = studEnd - studStart;
+      
+      if (bayWidth > 10) { // Only if there's a meaningful gap
+        const insW = isAlongX ? bayWidth : PIR_THICKNESS;
+        const insD = isAlongX ? PIR_THICKNESS : bayWidth;
+        
+        // Position insulation in middle of wall thickness
+        const insX = isAlongX 
+          ? origin.x + studStart + bayWidth / 2 
+          : origin.x + wallThk / 2;
+        const insZ = isAlongX 
+          ? origin.z + wallThk / 2 
+          : origin.z + studStart + bayWidth / 2;
+        
+        const ins = BABYLON.MeshBuilder.CreateBox(prefix + i, {
+          width: insW * 0.001,
+          height: insHeight * 0.001,
+          depth: insD * 0.001
+        }, scene);
+        
+        ins.position = new BABYLON.Vector3(
+          insX * 0.001,
+          (plateY + insHeight / 2) * 0.001,
+          insZ * 0.001
+        );
+        ins.material = insMat;
+        ins.parent = shedRoot;
+        ins.metadata = { dynamic: true, sectionId: sectionId || null };
+        ins.enableEdgesRendering();
+        ins.edgesWidth = 1;
+        ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+      }
+    }
+    
+    // Build internal plywood lining
+    // Lining sits on inside face of wall (inside the stud cavity)
+    const plyW = isAlongX ? wallLen : PLY_THICKNESS;
+    const plyD = isAlongX ? PLY_THICKNESS : wallLen;
+    const plyH = height; // Full wall height
+    
+    // Position on inside face of wall
+    let plyX, plyZ;
+    if (isAlongX) {
+      plyX = origin.x + wallLen / 2;
+      // Front wall: inside is +Z direction; Back wall: inside is -Z direction
+      plyZ = wallId === "front" 
+        ? origin.z + wallThk - PLY_THICKNESS / 2
+        : origin.z + PLY_THICKNESS / 2;
+    } else {
+      // Left wall: inside is +X direction; Right wall: inside is -X direction
+      plyX = wallId === "left"
+        ? origin.x + wallThk - PLY_THICKNESS / 2
+        : origin.x + PLY_THICKNESS / 2;
+      plyZ = origin.z + wallLen / 2;
+    }
+    
+    const ply = BABYLON.MeshBuilder.CreateBox(plyPrefix + "panel", {
+      width: plyW * 0.001,
+      height: plyH * 0.001,
+      depth: plyD * 0.001
+    }, scene);
+    
+    ply.position = new BABYLON.Vector3(
+      plyX * 0.001,
+      (plyH / 2) * 0.001,
+      plyZ * 0.001
+    );
+    ply.material = plyMat;
+    ply.parent = shedRoot;
+    ply.metadata = { dynamic: true, sectionId: sectionId || null };
+    ply.enableEdgesRendering();
+    ply.edgesWidth = 2;
+    ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+  }
+  
+  const sideLenZ = Math.max(1, dims.d - 2 * wallThk);
+  
+  if (flags.front) buildWallInsulation("front", "x", dims.w, { x: 0, z: 0 });
+  if (flags.back) buildWallInsulation("back", "x", dims.w, { x: 0, z: dims.d - wallThk });
+  if (flags.left) buildWallInsulation("left", "z", sideLenZ, { x: 0, z: wallThk });
+  if (flags.right) buildWallInsulation("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 }
 
 function resolveProfile(state, variant) {
