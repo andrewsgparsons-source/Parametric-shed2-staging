@@ -464,6 +464,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     // Apex roof: truss count + spacing readout (mm only)
     var roofApexTrussCountEl = $("roofApexTrussCount");
     var roofApexTrussSpacingEl = $("roofApexTrussSpacing");
+    var roofApexTieBeamEl = $("roofApexTieBeam");
 
     var overUniformEl = $("roofOverUniform");
     var overFrontEl = $("roofOverFront");
@@ -3180,6 +3181,13 @@ if (wInputEl && dInputEl) {
           if (roofApexTrussSpacingEl) {
             roofApexTrussSpacingEl.textContent = computeApexTrussSpacingText(state);
           }
+          if (roofApexTieBeamEl) {
+            var tieBeamVal = (state && state.roof && state.roof.apex && state.roof.apex.tieBeam) || "eaves";
+            roofApexTieBeamEl.value = tieBeamVal;
+            if (!roofApexTieBeamEl.classList.contains("profile-disabled")) {
+              roofApexTieBeamEl.disabled = (_roofStyleNow !== "apex");
+            }
+          }
         } catch (eApexUi) {}
 
 var isPent = isPentRoofStyle(state);
@@ -3569,6 +3577,18 @@ if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
         n = clamp(n, 2, 200);
 
         store.setState({ roof: { apex: { trussCount: n } } });
+      });
+    }
+
+    // Apex truss tie beam position
+    if (roofApexTieBeamEl) {
+      roofApexTieBeamEl.addEventListener("change", function () {
+        var s = store.getState();
+        var style = (s && s.roof && s.roof.style != null) ? String(s.roof.style) : "apex";
+        if (style !== "apex") return;
+
+        var val = roofApexTieBeamEl.value || "eaves";
+        store.setState({ roof: { apex: { tieBeam: val } } });
       });
     }
 

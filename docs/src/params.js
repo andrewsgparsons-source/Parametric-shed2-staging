@@ -51,7 +51,8 @@ export const DEFAULTS = {
     apex: {
       trussCount: 3,
       heightToEaves_mm: 1850,
-      heightToCrest_mm: 2200
+      heightToCrest_mm: 2200,
+      tieBeam: "eaves"  // "eaves" = tie at bottom (on walls), "raised" = tie 1/3 up rafters
     },
     pent: {
       minHeight_mm: 2300,

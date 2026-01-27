@@ -1454,7 +1454,17 @@ function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
   const rafterLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
   const slopeAng = Math.atan2(rise_mm, halfSpan_mm);
 
-function buildTruss(idx, z0_mm, gableDoor) {
+  // Tie beam position setting: "eaves" (at bottom) or "raised" (1/3 up rafters)
+  const tieBeamSetting = (apex && apex.tieBeam) || "eaves";
+  
+  // For raised tie: calculate position at 1/3 up the rise
+  const raisedTieRatio = 1 / 3;
+  const raisedTieY_mm = rise_mm * raisedTieRatio;
+  // At this Y, the rafter X positions (from center) narrow proportionally
+  const raisedTieHalfSpan_mm = halfSpan_mm * (1 - raisedTieRatio);
+  const raisedTieSpan_mm = raisedTieHalfSpan_mm * 2;
+
+function buildTruss(idx, z0_mm, gableDoor, isGableEnd) {
     // gableDoor: if provided, this is a gable-end truss with a door extending into it
     // - tie beam should be cut around the door
     // - kingpost should be skipped (walls.js generates the door cripple instead)
@@ -1515,20 +1525,43 @@ function buildTruss(idx, z0_mm, gableDoor) {
         );
       }
     } else {
+      // Check if this is a raised tie beam (only for internal trusses, not gable ends)
+      const useRaisedTie = tieBeamSetting === "raised" && !isGableEnd;
       
-      // Normal full tie beam
-      mkBoxBottomLocal(
-        `${meshPrefix}roof-truss-${idx}-tie`,
-        A_mm,
-        memberD_mm,
-        memberW_mm,
-        0,
-        0,
-        0,
-        tr,
-        joistMat,
-        { roof: "apex", part: "truss", member: "tie" }
-      );
+      if (useRaisedTie) {
+        // Raised tie beam - positioned 1/3 up the rafters
+        // The tie spans between the rafters at the raised height
+        const tieY_mm = raisedTieY_mm;
+        const tieStartX_mm = halfSpan_mm - raisedTieHalfSpan_mm;  // Left rafter intersection
+        const tieLen_mm = raisedTieSpan_mm;
+        
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-truss-${idx}-tie`,
+          tieLen_mm,
+          memberD_mm,
+          memberW_mm,
+          tieStartX_mm,
+          tieY_mm / 1000,
+          0,
+          tr,
+          joistMat,
+          { roof: "apex", part: "truss", member: "tie-raised" }
+        );
+      } else {
+        // Normal full tie beam at eaves (y=0)
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-truss-${idx}-tie`,
+          A_mm,
+          memberD_mm,
+          memberW_mm,
+          0,
+          0,
+          0,
+          tr,
+          joistMat,
+          { roof: "apex", part: "truss", member: "tie" }
+        );
+      }
     }
 
     // Left rafter: from x=0,y=0 up to ridge at x=halfSpan,y=rise
@@ -1572,7 +1605,10 @@ function buildTruss(idx, z0_mm, gableDoor) {
     // King post: single vertical strut from tie midpoint to apex
     // Skip if this is a gable-end truss with a door (walls.js generates the door cripple instead)
     if (!gableDoor) {
-      const bottomY_mm = memberD_mm; // top of tie beam (tie bottom at 0, height memberD_mm)
+      // For raised tie, king post starts from the raised tie position
+      const useRaisedTie = tieBeamSetting === "raised" && !isGableEnd;
+      const tieTopY_mm = useRaisedTie ? (raisedTieY_mm + memberD_mm) : memberD_mm;
+      const bottomY_mm = tieTopY_mm;
       const postH_mm = Math.max(1, Math.floor(rise_mm - bottomY_mm));
 
       const capH_mm = Math.max(20, Math.min(Math.floor(postH_mm * 0.35), Math.floor(memberW_mm * 0.9)));
@@ -1636,7 +1672,9 @@ if (roofParts.structure) {
         // Last truss is at back gable
         gableDoor = backGableDoor;
       }
-      buildTruss(i, trussPos[i], gableDoor);
+      // First and last trusses are at gable ends
+      const isGableEnd = (i === 0 || i === trussPos.length - 1);
+      buildTruss(i, trussPos[i], gableDoor, isGableEnd);
     }
 
     // Ridge beam along B at (x=A/2, y=rise)
