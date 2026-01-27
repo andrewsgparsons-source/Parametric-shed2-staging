@@ -1,0 +1,415 @@
+/* Modern Theme - IKEA-inspired clean aesthetic */
+
+:root {
+  /* Color palette */
+  --primary: #0058a3;        /* IKEA blue */
+  --primary-light: #e6f2fa;
+  --primary-hover: #004a8c;
+  --text-primary: #111;
+  --text-secondary: #484848;
+  --text-muted: #767676;
+  --bg-white: #fff;
+  --bg-light: #f5f5f5;
+  --bg-hover: #fafafa;
+  --border-light: #e0e0e0;
+  --border-focus: var(--primary);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --transition: 0.15s ease;
+}
+
+/* ===== PANEL CONTAINER ===== */
+#controls {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#controlPanel details {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
+}
+
+/* ===== PANEL HEADER ===== */
+#controlPanel > details > summary {
+  padding: 16px 20px;
+  background: var(--bg-white);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+#controlPanel > details > summary span:first-child {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+#controlPanel > details > summary span[style*="font-weight:700"] {
+  display: none; /* Hide "(toggle)" text */
+}
+
+/* ===== INNER CONTENT ===== */
+#controlPanel .inner {
+  padding: 0;
+  background: var(--bg-light);
+}
+
+/* ===== HEADER TITLE ===== */
+.boHeader {
+  padding: 24px 20px 16px;
+  background: var(--bg-white);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.boTitle1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.02em;
+}
+
+.boTitle2 {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ===== SECTIONS ===== */
+#controlPanel .boSection {
+  background: var(--bg-white);
+  margin: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+#controlPanel .boSection > summary {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background var(--transition);
+}
+
+#controlPanel .boSection > summary:hover {
+  background: var(--bg-hover);
+}
+
+#controlPanel .boSection > summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform var(--transition);
+}
+
+#controlPanel .boSection[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+/* ===== SECTION BOX ===== */
+.boBox {
+  padding: 16px;
+  background: var(--bg-white);
+  border-top: 1px solid var(--border-light);
+}
+
+/* ===== SUB-HEADERS ===== */
+.boSubhead {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 16px 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.boSubhead:first-child {
+  margin-top: 0;
+}
+
+/* ===== FORM ROWS ===== */
+#controlPanel .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+#controlPanel .row:last-child {
+  margin-bottom: 0;
+}
+
+/* ===== LABELS ===== */
+#controlPanel label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ===== INPUTS ===== */
+#controlPanel input[type="number"],
+#controlPanel input[type="text"],
+#controlPanel select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#controlPanel input[type="number"]:hover,
+#controlPanel input[type="text"]:hover,
+#controlPanel select:hover {
+  border-color: #ccc;
+}
+
+#controlPanel input[type="number"]:focus,
+#controlPanel input[type="text"]:focus,
+#controlPanel select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Select arrow */
+#controlPanel select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ===== CHECKBOXES & RADIOS ===== */
+#controlPanel .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+#controlPanel .check input[type="checkbox"],
+#controlPanel .check input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.unitModeRow {
+  display: flex;
+  gap: 16px;
+  margin-top: 2px;
+}
+
+/* ===== BUTTONS ===== */
+#controlPanel button {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+#controlPanel button:hover {
+  background: var(--bg-light);
+  border-color: #ccc;
+}
+
+#controlPanel button:active {
+  transform: scale(0.98);
+}
+
+/* Primary action buttons */
+#controlPanel button[id^="add"],
+#controlPanel button[id*="Add"] {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+#controlPanel button[id^="add"]:hover,
+#controlPanel button[id*="Add"]:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+/* Danger/remove buttons */
+#controlPanel button[id*="remove"],
+#controlPanel button[id*="Remove"] {
+  color: #c00;
+  border-color: #fdd;
+  background: #fff5f5;
+}
+
+#controlPanel button[id*="remove"]:hover,
+#controlPanel button[id*="Remove"]:hover {
+  background: #fee;
+  border-color: #fcc;
+}
+
+/* View buttons row */
+#controlPanel button[id^="snap"] {
+  padding: 8px 12px;
+  font-size: 12px;
+  background: var(--bg-light);
+}
+
+#controlPanel button[id^="snap"]:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ===== HINTS ===== */
+#controlPanel .hint,
+#controlPanel p.hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+/* ===== DYNAMIC LISTS (Doors, Windows, Dividers) ===== */
+#doorsList,
+#windowsList,
+#dividersList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#doorsList > div,
+#windowsList > div,
+#dividersList > div {
+  background: var(--bg-light);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  border: 1px solid var(--border-light);
+}
+
+/* ===== VIEW SELECT IN HEADER ===== */
+#controlPanel .panel-controls #viewSelect {
+  padding: 6px 28px 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-light);
+  background: var(--bg-white);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+/* ===== MOBILE IMPROVEMENTS ===== */
+@media (max-width: 1024px) {
+  #controlPanel .boSection {
+    margin: 8px;
+  }
+  
+  .boHeader {
+    padding: 20px 16px 14px;
+  }
+  
+  .boTitle1 {
+    font-size: 20px;
+  }
+  
+  .boBox {
+    padding: 14px;
+  }
+  
+  #controlPanel .row {
+    gap: 10px;
+  }
+  
+  #controlPanel input[type="number"],
+  #controlPanel input[type="text"],
+  #controlPanel select,
+  #controlPanel button {
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+}
+
+/* ===== MOBILE DRAWER HANDLE ===== */
+@media (max-width: 1024px) {
+  #controlPanel > details > summary::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    background: #ddd;
+    border-radius: 2px;
+  }
+  
+  #controlPanel > details > summary {
+    padding-top: 20px;
+    position: relative;
+  }
+}
+
+/* ===== ANIMATION FOR SECTION OPEN/CLOSE ===== */
+#controlPanel .boSection .boBox {
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== BUILD TAG ===== */
+#statusOverlay {
+  font-size: 10px;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  border-radius: 4px;
+}

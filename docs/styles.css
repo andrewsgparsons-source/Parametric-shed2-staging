@@ -1,5 +1,6 @@
 /* FILE: docs/styles.css */
 @import url("./src/ui/styles.css");
+@import url("./src/ui/modern-theme.css");
 
 /* Build Options UI (v1.8) — scoped to avoid impacting existing UI */
 #buildOptions {
