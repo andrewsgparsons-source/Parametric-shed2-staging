@@ -3081,19 +3081,21 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const plyD = isAlongX ? PLY_THICKNESS : wallLen;
     const plyH = height; // Full wall height
     
-    // Position on inside face of wall
+    // Position on inside face of wall (OUTSIDE the stud volume, on interior side)
     let plyX, plyZ;
     if (isAlongX) {
       plyX = origin.x + wallLen / 2;
-      // Front wall: inside is +Z direction; Back wall: inside is -Z direction
+      // Front wall: interior is +Z direction (behind studs)
+      // Back wall: interior is -Z direction (in front of studs)
       plyZ = wallId === "front" 
-        ? origin.z + wallThk - PLY_THICKNESS / 2
-        : origin.z + PLY_THICKNESS / 2;
+        ? origin.z + wallThk + PLY_THICKNESS / 2  // Place behind studs (interior side)
+        : origin.z - PLY_THICKNESS / 2;           // Place in front of studs (interior side)
     } else {
-      // Left wall: inside is +X direction; Right wall: inside is -X direction
+      // Left wall: interior is +X direction (behind studs)
+      // Right wall: interior is -X direction (in front of studs)
       plyX = wallId === "left"
-        ? origin.x + wallThk - PLY_THICKNESS / 2
-        : origin.x + PLY_THICKNESS / 2;
+        ? origin.x + wallThk + PLY_THICKNESS / 2  // Place behind studs (interior side)
+        : origin.x - PLY_THICKNESS / 2;           // Place in front of studs (interior side)
       plyZ = origin.z + wallLen / 2;
     }
     
