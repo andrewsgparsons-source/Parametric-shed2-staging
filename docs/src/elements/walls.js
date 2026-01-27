@@ -2811,7 +2811,10 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
   if (flags.right) buildWall("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 
   // Build wall insulation and internal lining for insulated variant
-  if (variant === "insulated" && state.vis.ins) {
+  // Uses vis.ins toggle (same as floor insulation visibility)
+  const showWallInsulation = variant === "insulated" && (state.vis && state.vis.ins !== false);
+  console.log('[WALLS] Wall insulation check - variant:', variant, 'vis.ins:', state.vis?.ins, 'showWallInsulation:', showWallInsulation);
+  if (showWallInsulation) {
     buildWallInsulationAndLining(
       state, scene, materials, dims, height, prof, wallThk, plateY,
       flags, meshPrefix, sectionId, sectionPos
@@ -2832,25 +2835,37 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
   const STUD_SPACING = prof.spacing || 400;
   const studW = prof.studW;
   
+  console.log('[WALL_INS] Building wall insulation - dims:', dims, 'height:', height, 'studW:', studW, 'spacing:', STUD_SPACING);
+  
   // Insulation material (yellow/cream PIR color)
-  const insMat = new BABYLON.StandardMaterial('wallInsMat', scene);
-  insMat.diffuseColor = new BABYLON.Color3(0.9, 0.85, 0.5);
+  const insMat = new BABYLON.StandardMaterial('wallInsMat-' + Date.now(), scene);
+  insMat.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4); // Brighter yellow
   
   // Plywood material (light wood color)
-  const plyMat = new BABYLON.StandardMaterial('wallPlyMat', scene);
+  const plyMat = new BABYLON.StandardMaterial('wallPlyMat-' + Date.now(), scene);
   plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
 
-  // Get root node for wall meshes
-  const shedRoot = scene.getTransformNodeByName("shedRoot") || scene;
+  // Get root node for wall meshes - try multiple methods
+  let shedRoot = scene.getTransformNodeByName("shedRoot");
+  if (!shedRoot) {
+    shedRoot = scene.getMeshByName("shedRoot");
+  }
+  if (!shedRoot) {
+    // Create a transform node if not found
+    shedRoot = new BABYLON.TransformNode("wallInsRoot", scene);
+  }
   
   // Insulation height (between plates)
   const insHeight = Math.max(1, height - 2 * plateY);
+  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY);
   
   // Build insulation and lining for each wall
   function buildWallInsulation(wallId, axis, wallLen, origin) {
     const isAlongX = axis === "x";
     const prefix = meshPrefix + `wall-${wallId}-ins-`;
     const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
+    
+    console.log('[WALL_INS] Building wall:', wallId, 'axis:', axis, 'wallLen:', wallLen, 'origin:', origin);
     
     // Calculate stud positions (same logic as main wall builder)
     const studPositions = [0]; // Start with corner stud
@@ -2859,17 +2874,26 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       studPositions.push(pos);
       pos += STUD_SPACING;
     }
-    studPositions.push(wallLen - studW); // End corner stud
+    if (studPositions[studPositions.length - 1] !== wallLen - studW) {
+      studPositions.push(wallLen - studW); // End corner stud
+    }
+    
+    console.log('[WALL_INS] Stud positions for', wallId, ':', studPositions);
     
     // Build insulation panels between studs
+    let insCount = 0;
     for (let i = 0; i < studPositions.length - 1; i++) {
       const studStart = studPositions[i] + studW; // After this stud
       const studEnd = studPositions[i + 1]; // Before next stud
       const bayWidth = studEnd - studStart;
       
+      console.log('[WALL_INS] Bay', i, '- studStart:', studStart, 'studEnd:', studEnd, 'bayWidth:', bayWidth);
+      
       if (bayWidth > 10) { // Only if there's a meaningful gap
-        const insW = isAlongX ? bayWidth : PIR_THICKNESS;
-        const insD = isAlongX ? PIR_THICKNESS : bayWidth;
+        // Insulation fills the depth of the wall cavity (wallThk minus some clearance)
+        const insDepth = wallThk - 10; // Leave small gap for fit
+        const insW = isAlongX ? bayWidth : insDepth;
+        const insD = isAlongX ? insDepth : bayWidth;
         
         // Position insulation in middle of wall thickness
         const insX = isAlongX 
@@ -2892,12 +2916,17 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         );
         ins.material = insMat;
         ins.parent = shedRoot;
-        ins.metadata = { dynamic: true, sectionId: sectionId || null };
+        ins.metadata = { dynamic: true, sectionId: sectionId || null, isWallInsulation: true };
         ins.enableEdgesRendering();
         ins.edgesWidth = 1;
         ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+        insCount++;
+        
+        console.log('[WALL_INS] Created insulation panel', i, 'at position:', ins.position);
       }
     }
+    
+    console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
     
     // Build internal plywood lining
     // Lining sits on inside face of wall (inside the stud cavity)
