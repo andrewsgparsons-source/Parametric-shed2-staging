@@ -4645,6 +4645,22 @@ function parseOverhangInput(val) {
           posRow.appendChild(posLabel);
           item.appendChild(posRow);
 
+          // Height mode row
+          var heightRow = document.createElement("div");
+          heightRow.className = "row";
+          heightRow.style.cssText = "margin-bottom:6px;";
+          var heightLabel = document.createElement("label");
+          heightLabel.innerHTML = "Height ";
+          var heightSelect = document.createElement("select");
+          heightSelect.innerHTML = '<option value="walls"' + ((div.heightMode || "walls") === "walls" ? " selected" : "") + '>To wall top</option>' +
+                                   '<option value="roof"' + (div.heightMode === "roof" ? " selected" : "") + '>Fill to roof</option>';
+          heightSelect.addEventListener("change", function() {
+            patchDividerById(divId, { heightMode: this.value });
+          });
+          heightLabel.appendChild(heightSelect);
+          heightRow.appendChild(heightLabel);
+          item.appendChild(heightRow);
+
           // Covering row
           var coverRow = document.createElement("div");
           coverRow.className = "row";
@@ -4807,6 +4823,7 @@ function parseOverhangInput(val) {
           enabled: true,
           axis: "x",
           position_mm: Math.floor(internal.internalW / 2),
+          heightMode: "walls", // "walls" = stop at wall top, "roof" = fill to roof profile
           coveringLeft: "none",
           coveringRight: "none",
           openings: []

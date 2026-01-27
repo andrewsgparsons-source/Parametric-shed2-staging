@@ -74,19 +74,42 @@ export function build3D(state, ctx, sectionContext) {
   const internalW = internalEndX - internalOriginX;
   const internalD = internalEndZ - internalOriginZ;
 
-  // Wall/divider height - use wall height or derive from roof
-  let dividerHeight = 2400;
-  if (state && state.walls && state.walls.height_mm) {
-    dividerHeight = Math.max(100, Math.floor(Number(state.walls.height_mm)));
-  } else if (state && state.roof && state.roof.style === "apex" && state.roof.apex) {
-    const eavesH = Number(state.roof.apex.heightToEaves_mm || state.roof.apex.eavesHeight_mm) || 1850;
-    dividerHeight = Math.max(100, eavesH - WALL_RISE_MM);
+  // Get roof info for height calculations
+  const roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+  let eavesHeight = 2400;
+  let crestHeight = 2400;
+  let pentMinH = 2100;
+  let pentMaxH = 2300;
+  
+  if (roofStyle === "apex" && state.roof && state.roof.apex) {
+    eavesHeight = Number(state.roof.apex.heightToEaves_mm || state.roof.apex.eavesHeight_mm) || 1850;
+    crestHeight = Number(state.roof.apex.heightToCrest_mm || state.roof.apex.crestHeight_mm) || 2200;
+  } else if (roofStyle === "pent" && state.roof && state.roof.pent) {
+    pentMinH = Number(state.roof.pent.minHeight_mm) || 2100;
+    pentMaxH = Number(state.roof.pent.maxHeight_mm) || 2300;
+    eavesHeight = pentMinH;
+    crestHeight = pentMaxH;
+  } else if (state && state.walls && state.walls.height_mm) {
+    eavesHeight = Math.floor(Number(state.walls.height_mm));
+    crestHeight = eavesHeight;
   }
 
   // Build each divider
   for (let i = 0; i < dividers.length; i++) {
     const divider = dividers[i];
     if (!divider || divider.enabled === false) continue;
+    
+    // Calculate height based on heightMode
+    const heightMode = divider.heightMode || "walls";
+    let dividerHeight;
+    
+    if (heightMode === "roof") {
+      // For roof mode, use crest height (simplified - full gable profile could be added later)
+      dividerHeight = Math.max(100, crestHeight - WALL_RISE_MM);
+    } else {
+      // For walls mode, use eaves height
+      dividerHeight = Math.max(100, eavesHeight - WALL_RISE_MM);
+    }
 
     buildDivider(
       divider,
