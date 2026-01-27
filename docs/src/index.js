@@ -3308,7 +3308,10 @@ function commitPentHeightsFromInputs() {
       if (!roofMinHeightEl || !roofMaxHeightEl) return;
       var s = store.getState();
       var unitMode = getUnitMode(s);
-      var base = (s && s.walls && s.walls.height_mm != null) ? clampHeightMm(s.walls.height_mm, 2400) : 2400;
+      
+      // Pent height constraints: 1000-2400mm for both walls
+      var PENT_MIN = 1000;
+      var PENT_MAX = 2400;
       
       var minVal = parseFloat(roofMinHeightEl.value) || 0;
       var maxVal = parseFloat(roofMaxHeightEl.value) || 0;
@@ -3318,8 +3321,22 @@ function commitPentHeightsFromInputs() {
         maxVal = Math.round(maxVal * 25.4);
       }
       
-      var minH = clampHeightMm(minVal, base);
-      var maxH = clampHeightMm(maxVal, base);
+      // Clamp to valid range
+      var minH = clamp(Math.floor(minVal), PENT_MIN, PENT_MAX);
+      var maxH = clamp(Math.floor(maxVal), PENT_MIN, PENT_MAX);
+      
+      // Ensure max > min (need some pitch)
+      if (maxH <= minH) {
+        maxH = Math.min(minH + 100, PENT_MAX); // Add 100mm pitch minimum
+        if (maxH <= minH) minH = maxH - 100; // If at max, lower the min instead
+      }
+      
+      // Update UI to reflect clamped values
+      try { 
+        roofMinHeightEl.value = String(minH); 
+        roofMaxHeightEl.value = String(maxH);
+      } catch (e) {}
+      
       store.setState({ roof: { pent: { minHeight_mm: minH, maxHeight_mm: maxH } } });
     }
 
@@ -3330,6 +3347,12 @@ function commitApexHeightsFromInputs() {
       var s = store.getState();
       if (!isApexRoofStyle(s)) return;
       
+      // Apex height constraints: eaves 800-2400mm, crest 1000-4500mm
+      var APEX_EAVE_MIN = 800;
+      var APEX_EAVE_MAX = 2400;
+      var APEX_CREST_MIN = 1000;
+      var APEX_CREST_MAX = 4500;
+      
       var unitMode = getUnitMode(s);
       var eavesVal = parseFloat(roofApexEavesHeightEl.value) || 0;
       var crestVal = parseFloat(roofApexCrestHeightEl.value) || 0;
@@ -3339,15 +3362,24 @@ function commitApexHeightsFromInputs() {
         crestVal = Math.round(crestVal * 25.4);
       }
 
-      var eaves = clampHeightMm(eavesVal, 2400);
-      var crest = clampHeightMm(crestVal, eaves);
+      // Clamp to valid ranges
+      var eaves = clamp(Math.floor(eavesVal), APEX_EAVE_MIN, APEX_EAVE_MAX);
+      var crest = clamp(Math.floor(crestVal), APEX_CREST_MIN, APEX_CREST_MAX);
 
-      // Deterministic validity rule:
-      // If crest < eaves, clamp crest UP to eaves (never invert the roof).
-      if (crest < eaves) crest = eaves;
+      // Ensure crest > eaves (need some pitch)
+      if (crest <= eaves) {
+        crest = eaves + 100; // Minimum 100mm above eaves
+        if (crest > APEX_CREST_MAX) {
+          crest = APEX_CREST_MAX;
+          eaves = crest - 100; // If at max crest, lower eaves
+        }
+      }
 
       // Reflect clamp immediately in UI so the user sees the correction.
-      try { roofApexCrestHeightEl.value = String(crest); } catch (e0) {}
+      try { 
+        roofApexEavesHeightEl.value = String(eaves);
+        roofApexCrestHeightEl.value = String(crest); 
+      } catch (e0) {}
 
       store.setState({ roof: { apex: { heightToEaves_mm: eaves, heightToCrest_mm: crest } } });
     }

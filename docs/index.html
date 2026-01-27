@@ -196,15 +196,16 @@
                     <div class="row">
                       <label>
                         Height to Eaves (mm)
-                        <input id="roofApexEaveHeight" type="number" min="100" step="10" value="1850" />
+                        <input id="roofApexEaveHeight" type="number" min="800" max="2400" step="10" value="1850" />
                         <span id="roofApexEaveFtIn" class="ftInHint" style="display:none;"></span>
                       </label>
                       <label>
                         Height to Crest (mm)
-                        <input id="roofApexCrestHeight" type="number" min="100" step="10" value="2200" />
+                        <input id="roofApexCrestHeight" type="number" min="1000" max="4500" step="10" value="2200" />
                         <span id="roofApexCrestFtIn" class="ftInHint" style="display:none;"></span>
                       </label>
                     </div>
+                    <p class="hint" style="margin:4px 0 8px 0;">Eaves: 800–2400mm | Crest: 1000–4500mm (must be higher than eaves)</p>
                     <div class="row">
                       <label>
                         Roof Pitch
@@ -232,15 +233,16 @@
                     <div class="row">
                       <label>
                         Minimum Height (mm)
-                        <input id="roofMinHeight" type="number" min="100" step="10" value="2100" />
+                        <input id="roofMinHeight" type="number" min="1000" max="2400" step="10" value="2100" />
                         <span id="roofMinFtIn" class="ftInHint" style="display:none;"></span>
                       </label>
                       <label>
                         Maximum Height (mm)
-                        <input id="roofMaxHeight" type="number" min="100" step="10" value="2300" />
+                        <input id="roofMaxHeight" type="number" min="1000" max="2400" step="10" value="2300" />
                         <span id="roofMaxFtIn" class="ftInHint" style="display:none;"></span>
                       </label>
                     </div>
+                    <p class="hint" style="margin:4px 0 8px 0;">Both walls: 1000–2400mm (max must be higher than min)</p>
                     <div class="row">
                       <label>
                         Roof Pitch
@@ -255,11 +257,13 @@
                     <div class="row">
                       <label>
                         Height to Eaves (mm)
-                        <input id="roofHippedEaveHeight" type="number" min="100" step="10" value="2000" />
+                        <!-- TODO: Hipped geometry not yet implemented - constraints ready -->
+                        <input id="roofHippedEaveHeight" type="number" min="800" max="2400" step="10" value="2000" />
                       </label>
                       <label>
                         Height to Crest (mm)
-                        <input id="roofHippedCrestHeight" type="number" min="100" step="10" value="2400" />
+                        <!-- TODO: Hipped geometry not yet implemented - constraints ready -->
+                        <input id="roofHippedCrestHeight" type="number" min="1000" max="4500" step="10" value="2400" />
                       </label>
                     </div>
                     <div class="row">
