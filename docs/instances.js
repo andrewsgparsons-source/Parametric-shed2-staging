@@ -457,8 +457,8 @@ export function getBuiltInPresets() {
               "wall": "front",
               "type": "door",
               "enabled": true,
-              "x_mm": 720,
-              "width_mm": 900,
+              "x_mm": 730,
+              "width_mm": 880,
               "height_mm": 2000,
               "style": "standard",
               "hinge": "left"
@@ -469,9 +469,9 @@ export function getBuiltInPresets() {
               "type": "window",
               "enabled": true,
               "x_mm": 200,
-              "y_mm": 600,
+              "y_mm": 650,
               "width_mm": 350,
-              "height_mm": 1400
+              "height_mm": 1220
             },
             {
               "id": "win2",
@@ -479,19 +479,19 @@ export function getBuiltInPresets() {
               "type": "window",
               "enabled": true,
               "x_mm": 1790,
-              "y_mm": 600,
+              "y_mm": 650,
               "width_mm": 350,
-              "height_mm": 1400
+              "height_mm": 1220
             },
             {
               "id": "win3",
               "wall": "left",
               "type": "window",
               "enabled": true,
-              "x_mm": 850,
-              "y_mm": 600,
-              "width_mm": 1200,
-              "height_mm": 1400
+              "x_mm": 890,
+              "y_mm": 760,
+              "width_mm": 1120,
+              "height_mm": 1100
             }
           ]
         },
