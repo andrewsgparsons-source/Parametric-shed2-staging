@@ -3350,7 +3350,7 @@ if (state && state.overhang) {
         if (vBaseAllEl) vBaseAllEl.checked = getBaseEnabled(state);
         if (vBaseEl) vBaseEl.checked = !!(state && state.vis && state.vis.base);
         if (vFrameEl) vFrameEl.checked = !!(state && state.vis && state.vis.frame);
-        if (vInsEl) vInsEl.checked = !!(state && state.vis && state.vis.ins);
+        if (vInsEl) vInsEl.checked = (state && state.vis && state.vis.ins !== false);
         if (vDeckEl) vDeckEl.checked = !!(state && state.vis && state.vis.deck);
 
         if (vWallsEl) vWallsEl.checked = getWallsEnabled(state);
