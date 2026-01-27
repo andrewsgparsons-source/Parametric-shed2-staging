@@ -2817,7 +2817,7 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
   if (showWallInsulation) {
     buildWallInsulationAndLining(
       state, scene, materials, dims, height, prof, wallThk, plateY,
-      flags, meshPrefix, sectionId, sectionPos
+      flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll
     );
   }
 
@@ -2829,7 +2829,7 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
  * Build wall insulation (PIR 50mm between studs) and internal plywood lining (12mm)
  * for insulated wall variant. Similar to floor insulation between joists.
  */
-function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos) {
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
   const PLY_THICKNESS = 12; // 12mm plywood internal lining
   const STUD_SPACING = prof.spacing || 400;
@@ -2859,13 +2859,52 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
   const insHeight = Math.max(1, height - 2 * plateY);
   console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY);
   
+  // Helper: get openings (doors + windows) for a specific wall
+  function getOpeningsForWall(wallId) {
+    const openings = [];
+    // Add doors
+    for (let i = 0; i < (doorsAll || []).length; i++) {
+      const d = doorsAll[i];
+      if (String(d.wall || "front") !== wallId) continue;
+      const w = Math.max(100, Math.floor(d.width_mm || 800));
+      const x0 = Math.floor(d.x_mm ?? 0);
+      const h = Math.max(100, Math.floor(d.height_mm || 2000));
+      openings.push({ x0, x1: x0 + w, y0: 0, y1: h, type: 'door' });
+    }
+    // Add windows
+    for (let i = 0; i < (winsAll || []).length; i++) {
+      const win = winsAll[i];
+      if (String(win.wall || "front") !== wallId) continue;
+      const w = Math.max(100, Math.floor(win.width_mm || 600));
+      const h = Math.max(100, Math.floor(win.height_mm || 400));
+      const x0 = Math.floor(win.x_mm ?? 0);
+      const y0 = Math.floor(win.y_mm ?? 1000);
+      openings.push({ x0, x1: x0 + w, y0, y1: y0 + h, type: 'window' });
+    }
+    return openings;
+  }
+  
+  // Helper: check if a horizontal range overlaps with any opening
+  function overlapsOpening(start, end, openings) {
+    for (let i = 0; i < openings.length; i++) {
+      const o = openings[i];
+      // Check horizontal overlap
+      if (start < o.x1 && end > o.x0) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
   // Build insulation and lining for each wall
   function buildWallInsulation(wallId, axis, wallLen, origin) {
     const isAlongX = axis === "x";
     const prefix = meshPrefix + `wall-${wallId}-ins-`;
     const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
     
-    console.log('[WALL_INS] Building wall:', wallId, 'axis:', axis, 'wallLen:', wallLen, 'origin:', origin);
+    // Get openings for this wall
+    const wallOpenings = getOpeningsForWall(wallId);
+    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length);
     
     // Calculate stud positions (same logic as main wall builder)
     const studPositions = [0]; // Start with corner stud
@@ -2880,14 +2919,18 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     
     console.log('[WALL_INS] Stud positions for', wallId, ':', studPositions);
     
-    // Build insulation panels between studs
+    // Build insulation panels between studs (skipping openings)
     let insCount = 0;
     for (let i = 0; i < studPositions.length - 1; i++) {
       const studStart = studPositions[i] + studW; // After this stud
       const studEnd = studPositions[i + 1]; // Before next stud
       const bayWidth = studEnd - studStart;
       
-      console.log('[WALL_INS] Bay', i, '- studStart:', studStart, 'studEnd:', studEnd, 'bayWidth:', bayWidth);
+      // Skip if this bay overlaps with any opening
+      if (overlapsOpening(studStart, studEnd, wallOpenings)) {
+        console.log('[WALL_INS] Skipping bay', i, '- overlaps with opening');
+        continue;
+      }
       
       if (bayWidth > 10) { // Only if there's a meaningful gap
         // Insulation fills the depth of the wall cavity (wallThk minus some clearance)
@@ -2921,14 +2964,18 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         ins.edgesWidth = 1;
         ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
         insCount++;
-        
-        console.log('[WALL_INS] Created insulation panel', i, 'at position:', ins.position);
       }
     }
     
     console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
     
-    // Build internal plywood lining
+    // Build internal plywood lining (skip for now if wall has openings - CSG cutting is complex)
+    // TODO: Add CSG boolean to cut openings from plywood
+    if (wallOpenings.length > 0) {
+      console.log('[WALL_INS] Skipping plywood lining for wall', wallId, '- has openings (CSG cut TODO)');
+      return;
+    }
+    
     // Lining sits on inside face of wall (inside the stud cavity)
     const plyW = isAlongX ? wallLen : PLY_THICKNESS;
     const plyD = isAlongX ? PLY_THICKNESS : wallLen;
