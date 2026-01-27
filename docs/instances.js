@@ -23,7 +23,7 @@ export function getBuiltInPresets() {
         "vis": {
           "base": true,
           "frame": true,
-          "ins": false,
+          "ins": true,
           "deck": true,
           "wallsEnabled": true,
           "walls": {
@@ -263,7 +263,7 @@ export function getBuiltInPresets() {
         "vis": {
           "base": true,
           "frame": true,
-          "ins": false,
+          "ins": true,
           "deck": true,
           "wallsEnabled": true,
           "walls": {
