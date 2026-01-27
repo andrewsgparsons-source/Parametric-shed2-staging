@@ -413,6 +413,8 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vWallBackEl = $("vWallBack");
     var vWallLeftEl = $("vWallLeft");
     var vWallRightEl = $("vWallRight");
+    var vWallInsulationEl = $("vWallInsulation");
+    var vWallPlywoodEl = $("vWallPlywood");
 
     // Attachment visibility elements
     var vAttachmentsSectionEl = $("vAttachmentsSection");
@@ -3345,6 +3347,8 @@ if (state && state.overhang) {
         if (vWallBackEl) vWallBackEl.checked = !!parts.back;
         if (vWallLeftEl) vWallLeftEl.checked = !!parts.left;
         if (vWallRightEl) vWallRightEl.checked = !!parts.right;
+        if (vWallInsulationEl) vWallInsulationEl.checked = state?.vis?.wallIns !== false;
+        if (vWallPlywoodEl) vWallPlywoodEl.checked = state?.vis?.wallPly !== false;
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
@@ -3669,6 +3673,8 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     if (vWallBackEl)  vWallBackEl.addEventListener("change",  function (e) { patchWallPart("back",  !!e.target.checked); });
     if (vWallLeftEl)  vWallLeftEl.addEventListener("change",  function (e) { patchWallPart("left",  !!e.target.checked); });
     if (vWallRightEl) vWallRightEl.addEventListener("change", function (e) { patchWallPart("right", !!e.target.checked); });
+    if (vWallInsulationEl) vWallInsulationEl.addEventListener("change", function (e) { store.setState({ vis: { wallIns: !!e.target.checked } }); });
+    if (vWallPlywoodEl) vWallPlywoodEl.addEventListener("change", function (e) { store.setState({ vis: { wallPly: !!e.target.checked } }); });
 
     // ==================== ATTACHMENT VISIBILITY EVENT HANDLERS ====================
 

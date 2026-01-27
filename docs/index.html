@@ -344,59 +344,82 @@
             </details>
 
             <details open class="boSection">
-              <summary>Visibility (Advanced)</summary>
-              <div class="checks" role="group" aria-label="Visibility: Whole assemblies">
-                  <div class="hint" style="margin:0 0 6px 0;">Whole Assemblies</div>
-                  <label class="check"><input id="vBaseAll" type="checkbox" checked /> Base</label>
-                  <label class="check"><input id="vWalls" type="checkbox" checked /> Walls</label>
-                  <label class="check"><input id="vRoof" type="checkbox" checked /> Roof</label>
-                  <label class="check"><input id="vCladding" type="checkbox" checked /> Cladding</label>
-                  <label class="check"><input id="vOpenings" type="checkbox" checked /> Doors & Windows</label>
+              <summary>Visibility</summary>
+              <div class="boBox" style="padding: 12px;">
+                
+                <!-- Main Assemblies -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Main Assemblies</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vBaseAll" type="checkbox" checked /> Base</label>
+                    <label class="check"><input id="vWalls" type="checkbox" checked /> Walls</label>
+                    <label class="check"><input id="vRoof" type="checkbox" checked /> Roof</label>
+                    <label class="check"><input id="vCladding" type="checkbox" checked /> Cladding</label>
+                    <label class="check"><input id="vOpenings" type="checkbox" checked /> Doors & Windows</label>
+                  </div>
                 </div>
 
-                <div class="checks" role="group" aria-label="Visibility: Base components" style="margin-top:10px;">
-                  <div class="hint" style="margin:0 0 6px 0;">Base Components</div>
-                  <label class="check"><input id="vBase" type="checkbox" checked /> Base Grid</label>
-                  <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
-                  <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
-                  <label class="check"><input id="vDeck" type="checkbox" checked /> Decking</label>
+                <!-- Base Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Base</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vBase" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
+                    <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vDeck" type="checkbox" checked /> Decking (OSB)</label>
+                  </div>
                 </div>
 
-                <div class="checks" role="group" aria-label="Visibility: Wall components" style="margin-top:10px;">
-                  <div class="hint" style="margin:0 0 6px 0;">Wall Components</div>
-                  <label class="check"><input id="vWallFront" type="checkbox" checked /> Front</label>
-                  <label class="check"><input id="vWallBack" type="checkbox" checked /> Back</label>
-                  <label class="check"><input id="vWallLeft" type="checkbox" checked /> Left</label>
-                  <label class="check"><input id="vWallRight" type="checkbox" checked /> Right</label>
+                <!-- Wall Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Walls</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vWallFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vWallBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vWallLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vWallRight" type="checkbox" checked /> Right</label>
+                    <label class="check"><input id="vWallInsulation" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vWallPlywood" type="checkbox" checked /> Interior Plywood</label>
+                  </div>
                 </div>
 
-                <div class="checks" role="group" aria-label="Visibility: Roof components" style="margin-top:10px;">
-                  <div class="hint" style="margin:0 0 6px 0;">Roof Components</div>
-                  <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure (future-safe)</label>
-                  <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing (future-safe)</label>
-                  <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Roof Covering</label>
+                <!-- Roof Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Roof</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure</label>
+                    <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
+                    <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                  </div>
                 </div>
 
-                <!-- Attached Buildings visibility - only shown when attachments exist -->
-                <div id="vAttachmentsSection" class="checks" role="group" aria-label="Visibility: Attached Buildings" style="margin-top:10px; display:none;">
-                  <div class="hint" style="margin:0 0 6px 0;">Attached Buildings</div>
-                  <label class="check"><input id="vAttBase" type="checkbox" checked /> Base</label>
-                  <label class="check"><input id="vAttWalls" type="checkbox" checked /> Walls</label>
-                  <label class="check"><input id="vAttRoof" type="checkbox" checked /> Roof</label>
-                  <label class="check"><input id="vAttCladding" type="checkbox" checked /> Cladding</label>
-
-                  <div class="hint" style="margin:10px 0 6px 0;">Base Components</div>
-                  <label class="check"><input id="vAttBaseGrid" type="checkbox" checked /> Base Grid</label>
-                  <label class="check"><input id="vAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
-                  <label class="check"><input id="vAttBaseDeck" type="checkbox" checked /> Decking (OSB)</label>
-
-                  <div class="hint" style="margin:10px 0 6px 0;">Wall Components</div>
-                  <label class="check"><input id="vAttWallFront" type="checkbox" checked /> Front</label>
-                  <label class="check"><input id="vAttWallBack" type="checkbox" checked /> Back</label>
-                  <label class="check"><input id="vAttWallLeft" type="checkbox" checked /> Left</label>
-                  <label class="check"><input id="vAttWallRight" type="checkbox" checked /> Right</label>
-                  <label class="check"><input id="vAttWallOuter" type="checkbox" checked /> Outer</label>
+                <!-- Attached Buildings - only shown when attachments exist -->
+                <div id="vAttachmentsSection" style="margin-bottom: 16px; display: none;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Attached Buildings</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vAttBase" type="checkbox" checked /> Base</label>
+                    <label class="check"><input id="vAttWalls" type="checkbox" checked /> Walls</label>
+                    <label class="check"><input id="vAttRoof" type="checkbox" checked /> Roof</label>
+                    <label class="check"><input id="vAttCladding" type="checkbox" checked /> Cladding</label>
+                  </div>
+                  
+                  <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Base</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vAttBaseGrid" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
+                    <label class="check"><input id="vAttBaseDeck" type="checkbox" checked /> Decking (OSB)</label>
+                  </div>
+                  
+                  <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Walls</div>
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                    <label class="check"><input id="vAttWallFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vAttWallBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vAttWallLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vAttWallRight" type="checkbox" checked /> Right</label>
+                    <label class="check"><input id="vAttWallOuter" type="checkbox" checked /> Outer</label>
+                  </div>
                 </div>
+
               </div>
             </details>
 

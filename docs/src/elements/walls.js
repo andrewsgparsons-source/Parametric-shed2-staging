@@ -2862,13 +2862,15 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
   if (flags.right) buildWall("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 
   // Build wall insulation and internal lining for insulated variant
-  // Uses vis.ins toggle (same as floor insulation visibility)
-  const showWallInsulation = variant === "insulated" && (state.vis && state.vis.ins !== false);
-  console.log('[WALLS] Wall insulation check - variant:', variant, 'vis.ins:', state.vis?.ins, 'showWallInsulation:', showWallInsulation);
-  if (showWallInsulation) {
+  // Uses vis.wallIns and vis.wallPly toggles (default to vis.ins for backwards compat)
+  const showWallInsulation = variant === "insulated" && (state.vis?.wallIns !== false) && (state.vis?.ins !== false);
+  const showWallPlywood = variant === "insulated" && (state.vis?.wallPly !== false);
+  console.log('[WALLS] Wall insulation check - variant:', variant, 'vis.wallIns:', state.vis?.wallIns, 'vis.wallPly:', state.vis?.wallPly, 'showWallInsulation:', showWallInsulation, 'showWallPlywood:', showWallPlywood);
+  if (showWallInsulation || showWallPlywood) {
     buildWallInsulationAndLining(
       state, scene, materials, dims, height, prof, wallThk, plateY,
-      flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll
+      flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll,
+      showWallInsulation, showWallPlywood
     );
   }
 
@@ -2880,7 +2882,7 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
  * Build wall insulation (PIR 50mm between studs) and internal plywood lining (12mm)
  * for insulated wall variant. Similar to floor insulation between joists.
  */
-function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll) {
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
   const PLY_THICKNESS = 12; // 12mm plywood internal lining
   const STUD_SPACING = prof.spacing || 400;
@@ -3021,51 +3023,57 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       return ins;
     }
     
-    for (let i = 0; i < studPositions.length - 1; i++) {
-      const studStart = studPositions[i] + studW; // After this stud
-      const studEnd = studPositions[i + 1]; // Before next stud
-      const bayWidth = studEnd - studStart;
-      
-      if (bayWidth < 10) continue;
-      
-      const overlapping = getOverlappingOpening(studStart, studEnd);
-      
-      if (!overlapping) {
-        // No opening - fill entire bay with insulation
-        if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
-          insCount++;
-        }
-      } else {
-        // Bay overlaps with an opening - add partial insulation below and above
-        const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
-        const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
+    // Only build insulation if showInsulation flag is true
+    if (showInsulation) {
+      for (let i = 0; i < studPositions.length - 1; i++) {
+        const studStart = studPositions[i] + studW; // After this stud
+        const studEnd = studPositions[i + 1]; // Before next stud
+        const bayWidth = studEnd - studStart;
         
-        // Insulation BELOW the opening (from plate to sill area)
-        // Account for sill thickness (prof.studH)
-        const sillThickness = prof.studH || 100;
-        const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-        if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
-          if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+        if (bayWidth < 10) continue;
+        
+        const overlapping = getOverlappingOpening(studStart, studEnd);
+        
+        if (!overlapping) {
+          // No opening - fill entire bay with insulation
+          if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
             insCount++;
-            console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
           }
-        }
-        
-        // Insulation ABOVE the opening (from header to top plate)
-        // Account for header thickness
-        const headerThickness = prof.studH || 100;
-        const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
-        const insAboveTop = plateY + insHeight;
-        if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
-          if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
-            insCount++;
-            console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+        } else {
+          // Bay overlaps with an opening - add partial insulation below and above
+          const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
+          const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
+          
+          // Insulation BELOW the opening (from plate to sill area)
+          // Account for sill thickness (prof.studH)
+          const sillThickness = prof.studH || 100;
+          const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
+          if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
+            if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
+            }
+          }
+          
+          // Insulation ABOVE the opening (from header to top plate)
+          // Account for header thickness
+          const headerThickness = prof.studH || 100;
+          const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
+          const insAboveTop = plateY + insHeight;
+          if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
+            if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+            }
           }
         }
       }
+      
+      console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
     }
     
-    console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
+    // Only build plywood if showPlywood flag is true
+    if (!showPlywood) return;
     
     // Build internal plywood lining
     // Lining sits on inside face of wall (inside the stud cavity)
