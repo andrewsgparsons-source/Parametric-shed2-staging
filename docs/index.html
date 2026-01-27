@@ -9,20 +9,15 @@
 </head>
 
 <body data-view="3d">
-  <!-- Access restriction: require valid profile parameter -->
+  <!-- Profile handling: default to admin if no profile specified (shared links work) -->
   <script>
     (function() {
+      // No access restriction - all links work
+      // Profile system handles permissions (admin default if not specified)
       var params = new URLSearchParams(window.location.search);
       var profile = params.get("profile");
-      // Allow: viewer, customer, builder, admin, or localhost development
-      var isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      var isFileProtocol = window.location.protocol === "file:";
-      var validProfiles = ["viewer", "admin", "customer", "builder"];
-      var hasValidProfile = validProfiles.indexOf(profile) >= 0;
-
-      if (!isLocalhost && !isFileProtocol && !hasValidProfile) {
-        document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#f5f5f5;"><div style="text-align:center;padding:40px;background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"><h1 style="color:#333;margin-bottom:10px;">Link Invalid</h1><p style="color:#666;">This link has expired or is invalid.</p><p style="color:#999;font-size:14px;">Please contact the sender for a new link.</p></div></div>';
-        throw new Error("Access denied - no valid profile");
+      if (!profile) {
+        console.log("[access] No profile specified, will use default (admin)");
       }
     })();
   </script>
