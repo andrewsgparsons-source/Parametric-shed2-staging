@@ -2358,7 +2358,8 @@ mkBox(
     if (crippleHeight > prof.studW) {
       // Calculate number of cripples needed based on window width and stud spacing
       const windowInnerWidth = Math.max(0, x1 - x0);
-      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const studSpacing = prof.spacing || 400; // Default to 400mm if null
+      const numCripples = Math.max(1, Math.min(10, Math.floor(windowInnerWidth / studSpacing))); // Cap at 10
       const crippleSpacing = windowInnerWidth / (numCripples + 1);
       
       for (let ci = 1; ci <= numCripples; ci++) {
@@ -2452,7 +2453,8 @@ mkBox(
     if (crippleHeight > prof.studW) {
       // Calculate number of cripples needed based on window width and stud spacing
       const windowInnerWidth = Math.max(0, z1 - z0);
-      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const studSpacing = prof.spacing || 400; // Default to 400mm if null
+      const numCripples = Math.max(1, Math.min(10, Math.floor(windowInnerWidth / studSpacing))); // Cap at 10
       const crippleSpacing = windowInnerWidth / (numCripples + 1);
       
       for (let ci = 1; ci <= numCripples; ci++) {
