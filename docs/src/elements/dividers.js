@@ -233,9 +233,28 @@ function buildDivider(divider, scene, materials, height, bounds, prefix, section
     buildFrameAlongX(namePrefix, origin, length, height, studLen, doorIntervals, isInsideOpening, mkBox, materials);
   }
 
-  // Build gable frame if heightMode is "roof" and this is an apex roof with X-axis divider
-  if (heightMode === "roof" && roofInfo.style === "apex" && axis === "x") {
-    buildGableFrame(namePrefix, origin, length, height, roofInfo, mkBox, materials);
+  // Build roof fill based on heightMode and roof style
+  if (heightMode === "roof" && roofInfo.style === "apex") {
+    if (axis === "z") {
+      // Z-axis divider runs along X (perpendicular to ridge) - needs triangular gable
+      buildGableFrame(namePrefix, origin, length, height, roofInfo, mkBox, materials, axis);
+    } else {
+      // X-axis divider runs along Z (parallel to ridge) - flat top at roof height for this X
+      // Calculate roof height at this X position
+      const dividerX = bounds.internalOriginX + pos; // Actual X position of divider
+      const buildingCenterX = (bounds.internalEndX + bounds.internalOriginX) / 2;
+      const distFromRidge = Math.abs(dividerX - buildingCenterX);
+      const halfSpan = (bounds.internalEndX - bounds.internalOriginX) / 2;
+      const rise = roofInfo.crestHeight - roofInfo.eavesHeight;
+      
+      // Height at this X = crest - (distance from ridge / half span) * rise
+      const roofHeightAtX = roofInfo.crestHeight - (distFromRidge / halfSpan) * rise;
+      const extraHeight = roofHeightAtX - height;
+      
+      if (extraHeight > PLATE_Y) {
+        buildFlatRoofFill(namePrefix, origin, length, height, extraHeight, mkBox, materials);
+      }
+    }
   }
 
   // Add coverings
@@ -403,68 +422,95 @@ function addDoorFramingAlongX(prefix, origin, door, height, studLen, mkBox, mate
 }
 
 /**
- * Build gable frame above the rectangular wall frame for apex roofs
- * Creates a triangular truss-like structure with:
- * - Angled top plates following the roof pitch
- * - Vertical studs tapering up to the apex
+ * Build a flat roof fill for X-axis dividers (parallel to ridge)
+ * Just extends the wall frame up to the roof height at that X position
  */
-function buildGableFrame(prefix, origin, length, wallHeight, roofInfo, mkBox, materials) {
+function buildFlatRoofFill(prefix, origin, length, wallHeight, extraHeight, mkBox, materials) {
+  const fillOrigin = {
+    x: origin.x,
+    y: origin.y + wallHeight,
+    z: origin.z
+  };
+  
+  // Bottom plate (collar tie)
+  mkBox(prefix + "roof-fill-bottom", STUD_H, PLATE_Y, length,
+    { x: fillOrigin.x, y: fillOrigin.y, z: fillOrigin.z }, materials.plate || materials.timber);
+  
+  // Top plate
+  mkBox(prefix + "roof-fill-top", STUD_H, PLATE_Y, length,
+    { x: fillOrigin.x, y: fillOrigin.y + extraHeight - PLATE_Y, z: fillOrigin.z }, materials.plate || materials.timber);
+  
+  // Studs
+  const studHeight = extraHeight - 2 * PLATE_Y;
+  if (studHeight > STUD_W) {
+    let zPos = STUD_W;
+    let studIdx = 0;
+    while (zPos < length - STUD_W) {
+      mkBox(prefix + "roof-fill-stud-" + studIdx++, STUD_H, studHeight, STUD_W,
+        { x: fillOrigin.x, y: fillOrigin.y + PLATE_Y, z: fillOrigin.z + zPos }, materials.timber);
+      zPos += SPACING;
+    }
+  }
+}
+
+/**
+ * Build triangular gable frame for Z-axis dividers (perpendicular to ridge)
+ * Creates a proper truss-like structure with studs that taper to the apex
+ */
+function buildGableFrame(prefix, origin, length, wallHeight, roofInfo, mkBox, materials, axis) {
   const eavesH = roofInfo.eavesHeight || wallHeight;
   const crestH = roofInfo.crestHeight || wallHeight;
   const rise = crestH - eavesH; // Height from eaves to ridge
   
   if (rise <= 0) return; // No gable needed
   
-  // The divider runs along Z (front-to-back), so the gable spans the building width (X direction)
-  // But we need the width at the divider position to calculate the gable shape
-  // For internal dividers, we use the full internal width as reference
-  const buildingW = roofInfo.buildingWidth || 3000;
-  const halfSpan = buildingW / 2;
+  const halfSpan = length / 2; // Half the divider length (divider spans full width)
+  const centerX = length / 2; // Center point where ridge is
   
   // Gable sits on top of the wall frame
-  const gableBase = wallHeight; // Top of wall frame (where top plate is)
+  const gableBase = wallHeight;
   const gableOrigin = {
     x: origin.x,
     y: origin.y + gableBase,
     z: origin.z
   };
   
-  // Calculate roof pitch
-  const pitchRad = Math.atan2(rise, halfSpan);
-  
-  // Build collar tie (horizontal beam at base of gable)
-  mkBox(prefix + "gable-collar", STUD_H, PLATE_Y, length,
+  // Build collar tie (horizontal beam at base of gable, full length)
+  mkBox(prefix + "gable-collar", length, PLATE_Y, STUD_H,
     { x: gableOrigin.x, y: gableOrigin.y, z: gableOrigin.z }, materials.plate || materials.timber);
   
-  // Build angled rafters/plates on each side
-  // For a simplified model, we'll use several horizontal members at different heights
-  // A full implementation would use angled geometry
-  
-  // Build vertical studs at intervals, getting shorter toward the apex
-  const studSpacing = 400; // Standard stud spacing
-  let zPos = 0;
+  // Build vertical studs at intervals, each with height based on position
+  // Height at position X = rise * (1 - |X - centerX| / halfSpan)
+  const studSpacing = SPACING;
+  let xPos = STUD_W;
   let studIdx = 0;
   
-  while (zPos < length) {
-    // Calculate the height at this Z position
-    // The divider runs along Z, but the gable shape is determined by X position
-    // For an internal divider, we calculate gable height based on distance from ridge
+  while (xPos < length - STUD_W) {
+    // Distance from center (ridge)
+    const distFromCenter = Math.abs(xPos - centerX);
     
-    // For now, build studs at full gable height (simplified)
-    // This creates a flat-top extension - we'll refine this
-    const studHeight = rise - PLATE_Y;
+    // Height at this position follows the roof slope
+    // At center: full rise. At edges: 0
+    const heightAtX = rise * (1 - distFromCenter / halfSpan);
+    const studHeight = heightAtX - PLATE_Y; // Account for collar tie
     
-    if (studHeight > STUD_W && zPos >= STUD_W / 2 && zPos <= length - STUD_W / 2) {
-      mkBox(prefix + "gable-stud-" + studIdx++, STUD_H, studHeight, STUD_W,
-        { x: gableOrigin.x, y: gableOrigin.y + PLATE_Y, z: gableOrigin.z + zPos }, materials.timber);
+    if (studHeight > STUD_W) {
+      mkBox(prefix + "gable-stud-" + studIdx++, STUD_W, studHeight, STUD_H,
+        { x: gableOrigin.x + xPos, y: gableOrigin.y + PLATE_Y, z: gableOrigin.z }, materials.timber);
     }
     
-    zPos += studSpacing;
+    xPos += studSpacing;
   }
   
-  // Top plate at ridge level
-  mkBox(prefix + "gable-ridge", STUD_H, PLATE_Y, length,
-    { x: gableOrigin.x, y: gableOrigin.y + rise - PLATE_Y, z: gableOrigin.z }, materials.plate || materials.timber);
+  // Add a center stud (king stud) at the ridge if not already covered
+  const kingStudHeight = rise - PLATE_Y;
+  if (kingStudHeight > STUD_W) {
+    mkBox(prefix + "gable-king-stud", STUD_W, kingStudHeight, STUD_H,
+      { x: gableOrigin.x + centerX - STUD_W / 2, y: gableOrigin.y + PLATE_Y, z: gableOrigin.z }, materials.timber);
+  }
+  
+  // Note: For a full gable truss, you'd also add angled top plates (rafters)
+  // This simplified version uses vertical studs only
 }
 
 /**
