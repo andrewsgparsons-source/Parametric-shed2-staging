@@ -32,7 +32,8 @@ export function getBuiltInPresets() {
             "left": true,
             "right": true
           },
-          "cladding": true
+          "cladding": true,
+          "roof": true
         },
         "dimMode": "frame",
         "dimGap_mm": 50,
@@ -248,6 +249,272 @@ export function getBuiltInPresets() {
               height_mm: 1900
             }
           ]
+        }
+      }
+    },
+    {
+      id: "preset.potting_shed",
+      name: "Potting Shed 2m × 3.6m",
+      category: "Garden",
+      description: "Light-filled potting shed with three large windows and gentle pent roof.",
+      state: {
+        "w": 1800,
+        "d": 2400,
+        "vis": {
+          "base": true,
+          "frame": true,
+          "ins": false,
+          "deck": true,
+          "wallsEnabled": true,
+          "walls": {
+            "front": true,
+            "back": true,
+            "left": true,
+            "right": true
+          },
+          "cladding": true,
+          "roof": true
+        },
+        "dimMode": "frame",
+        "dimGap_mm": 50,
+        "dim": {
+          "frameW_mm": 2000,
+          "frameD_mm": 3600
+        },
+        "overhang": {
+          "uniform_mm": 75,
+          "front_mm": null,
+          "back_mm": null,
+          "left_mm": null,
+          "right_mm": 200
+        },
+        "dimInputs": {
+          "baseW_mm": 1950,
+          "baseD_mm": 3550,
+          "frameW_mm": 2000,
+          "frameD_mm": 3600,
+          "roofW_mm": 2275,
+          "roofD_mm": 3750
+        },
+        "roof": {
+          "style": "pent",
+          "apex": {
+            "trussCount": 3,
+            "heightToEaves_mm": 1850,
+            "heightToCrest_mm": 2200
+          },
+          "pent": {
+            "minHeight_mm": 2200,
+            "maxHeight_mm": 2350
+          }
+        },
+        "walls": {
+          "variant": "basic",
+          "height_mm": 2100,
+          "insulated": {
+            "section": {
+              "w": 50,
+              "h": 75
+            },
+            "spacing": 400
+          },
+          "basic": {
+            "section": {
+              "w": 50,
+              "h": 75
+            },
+            "spacing": null
+          },
+          "openings": [
+            {
+              "id": "door1",
+              "wall": "front",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 800,
+              "width_mm": 800,
+              "height_mm": 1800
+            },
+            {
+              "id": "win1",
+              "wall": "right",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 200,
+              "y_mm": 400,
+              "width_mm": 1000,
+              "height_mm": 1400
+            },
+            {
+              "id": "win2",
+              "wall": "right",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 1300,
+              "y_mm": 400,
+              "width_mm": 1000,
+              "height_mm": 1400
+            },
+            {
+              "id": "win3",
+              "wall": "right",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 2400,
+              "y_mm": 400,
+              "width_mm": 1000,
+              "height_mm": 1400
+            }
+          ],
+          "invalidDoorIds": [],
+          "invalidWindowIds": []
+        },
+        "frame": {
+          "thickness_mm": 50,
+          "depth_mm": 75
+        },
+        "cladding": {
+          "style": "shiplap"
+        },
+        "sections": {
+          "enabled": false,
+          "main": {
+            "id": "main",
+            "type": "rectangular",
+            "dimensions": null,
+            "roof": null,
+            "walls": null
+          },
+          "attachments": []
+        },
+        "dividers": {
+          "items": []
+        }
+      }
+    },
+    {
+      id: "preset.avon-view-garden-room",
+      name: "Avon View Garden Room 2.34m × 2.9m",
+      category: "Garden Room",
+      description: "Insulated garden room with apex roof. Door centered on front, flanked by narrow windows. Picture window on left side. Based on customer enquiry.",
+      state: {
+        "w": 2340,
+        "d": 2900,
+        "vis": {
+          "base": true,
+          "frame": true,
+          "ins": true,
+          "deck": true,
+          "wallsEnabled": true,
+          "walls": {
+            "front": true,
+            "back": true,
+            "left": true,
+            "right": true
+          },
+          "cladding": true,
+          "roof": true
+        },
+        "dimMode": "frame",
+        "dimGap_mm": 50,
+        "dim": {
+          "frameW_mm": 2340,
+          "frameD_mm": 2900
+        },
+        "overhang": {
+          "uniform_mm": 150,
+          "front_mm": 300,
+          "back_mm": null,
+          "left_mm": 150,
+          "right_mm": 150
+        },
+        "dimInputs": {
+          "baseW_mm": 2290,
+          "baseD_mm": 2850,
+          "frameW_mm": 2340,
+          "frameD_mm": 2900,
+          "roofW_mm": 2640,
+          "roofD_mm": 3200
+        },
+        "roof": {
+          "style": "apex",
+          "apex": {
+            "trussCount": 5,
+            "heightToEaves_mm": 2000,
+            "heightToCrest_mm": 2400
+          },
+          "pent": {
+            "minHeight_mm": 2100,
+            "maxHeight_mm": 2300
+          }
+        },
+        "walls": {
+          "variant": "insulated",
+          "height_mm": 1832,
+          "openings": [
+            {
+              "id": "door1",
+              "wall": "front",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 730,
+              "width_mm": 880,
+              "height_mm": 2000,
+              "style": "standard",
+              "hinge": "left"
+            },
+            {
+              "id": "win1",
+              "wall": "front",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 200,
+              "y_mm": 650,
+              "width_mm": 350,
+              "height_mm": 1220
+            },
+            {
+              "id": "win2",
+              "wall": "front",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 1790,
+              "y_mm": 650,
+              "width_mm": 350,
+              "height_mm": 1220
+            },
+            {
+              "id": "win3",
+              "wall": "left",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 890,
+              "y_mm": 760,
+              "width_mm": 1120,
+              "height_mm": 1100
+            }
+          ]
+        },
+        "cladding": {
+          "style": "shiplap"
+        },
+        "wallSection": {
+          "thickness_mm": 50,
+          "depth_mm": 50
+        },
+        "sections": {
+          "enabled": false,
+          "main": {
+            "id": "main",
+            "type": "rectangular",
+            "dimensions": null,
+            "roof": null,
+            "walls": null
+          },
+          "attachments": []
+        },
+        "dividers": {
+          "items": []
         }
       }
     }

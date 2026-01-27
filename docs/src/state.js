@@ -27,19 +27,21 @@ export function createStateStore(initial) {
 }
 
 // Deep merge tailored to project shapes (objects/arrays of POJOs).
-function deepMerge(target, patch) {
+export function deepMerge(target, patch, depth = 0) {
   if (patch === null || typeof patch !== 'object') return patch;
-  if (Array.isArray(patch)) return patch.map((v) => deepMerge(undefined, v));
+  if (Array.isArray(patch)) return patch.map((v) => deepMerge(undefined, v, depth + 1));
   const out = { ...(target || {}) };
+
   for (const k of Object.keys(patch)) {
     const pv = patch[k];
     const tv = out[k];
     if (pv && typeof pv === 'object' && !Array.isArray(pv)) {
-      out[k] = deepMerge(tv && typeof tv === 'object' ? tv : {}, pv);
+      out[k] = deepMerge(tv && typeof tv === 'object' ? tv : {}, pv, depth + 1);
     } else {
-      out[k] = deepMerge(tv, pv);
+      out[k] = deepMerge(tv, pv, depth + 1);
     }
   }
+
   return out;
 }
 

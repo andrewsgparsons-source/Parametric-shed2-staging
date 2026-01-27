@@ -15,12 +15,20 @@
  * @param {object} state - The shed state containing walls.openings
  * @param {{scene: BABYLON.Scene, materials: object}} ctx - Babylon context
  */
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx;
 
-  // Clean up existing door meshes
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
+
+  // Dispose existing meshes for this section (or all door meshes in legacy mode)
+  const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+  const doorPrefix = meshPrefix + "door-";
+
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("door-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(doorPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
@@ -62,40 +70,40 @@ export function build3D(state, ctx) {
     const isLeftRight = (wallId === "left" || wallId === "right");
     const adjustedDoorX = isLeftRight ? (doorX + 45) : (doorX - prof.studW / 2);
 
-   // Calculate door position based on wall
+   // Calculate door position based on wall (with section offset)
     console.log("DOOR_POS_DEBUG", { wallId, doorX, adjustedDoorX, doorWidth, doorHeight, wallThk, dimsW: dims.w, dimsD: dims.d });
-    const pos = getDoorPosition(wallId, dims, wallThk, adjustedDoorX, doorWidth, doorHeight, plateY, WALL_RISE_MM);
+    const pos = getDoorPosition(wallId, dims, wallThk, adjustedDoorX, doorWidth, doorHeight, plateY, WALL_RISE_MM, sectionPos);
     console.log("DOOR_POS_RESULT", pos);
 
     // Build the appropriate door style
     switch (style) {
       case "french":
-        buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials);
+        buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;
       case "double-standard":
         // Double standard doors only available for widths >= 1200mm
         if (doorWidth >= 1200) {
-          buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials);
+          buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         } else {
           // Fall back to single standard door if width too small
-          buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials);
+          buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         }
         break;
       case "double-mortise-tenon":
         // Double mortise-tenon doors only available for widths >= 1200mm
         if (doorWidth >= 1200) {
-          buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials);
+          buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         } else {
           // Fall back to single mortise-tenon door if width too small
-          buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials);
+          buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         }
         break;
       case "mortise-tenon":
-        buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials);
+        buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;
       case "standard":
       default:
-        buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials);
+        buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;
     }
   });
@@ -151,8 +159,9 @@ function ensureDoorMaterials(scene, materials) {
 
 /**
  * Calculate door world position based on wall
+ * sectionPos is optional - defaults to origin (0,0,0) for legacy mode
  */
-function getDoorPosition(wallId, dims, wallThk, doorX, doorWidth, doorHeight, plateY, wallRise) {
+function getDoorPosition(wallId, dims, wallThk, doorX, doorWidth, doorHeight, plateY, wallRise, sectionPos = { x: 0, y: 0, z: 0 }) {
   const offset = 2; // Small offset to place door just outside wall surface
   // Door center Y is at half door height, shifted by wall rise and plate
   const yCenter = wallRise + plateY + doorHeight / 2;
@@ -160,45 +169,45 @@ function getDoorPosition(wallId, dims, wallThk, doorX, doorWidth, doorHeight, pl
   switch (wallId) {
     case "front":
       return {
-        x: doorX + doorWidth / 2,
-        y: yCenter,
-        z: -offset,
+        x: sectionPos.x + doorX + doorWidth / 2,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z - offset,
         rotation: Math.PI, // Door faces outward (negative Z)
         outward: -1
       };
     case "back":
       return {
-        x: doorX + doorWidth / 2,
-        y: yCenter,
-        z: dims.d + offset,
+        x: sectionPos.x + doorX + doorWidth / 2,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + dims.d + offset,
         rotation: 0, // Door faces outward (positive Z)
         outward: 1
       };
     case "left":
       return {
-        x: -offset,
-        y: yCenter,
-        z: doorX + doorWidth / 2,
+        x: sectionPos.x - offset,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + doorX + doorWidth / 2,
         rotation: -Math.PI / 2, // Door faces outward (negative X)
         outward: -1
       };
     case "right":
       return {
-        x: dims.w + offset,
-        y: yCenter,
-        z: doorX + doorWidth / 2,
+        x: sectionPos.x + dims.w + offset,
+        y: sectionPos.y + yCenter,
+        z: sectionPos.z + doorX + doorWidth / 2,
         rotation: Math.PI / 2, // Door faces outward (positive X)
         outward: 1
       };
     default:
-      return { x: 0, y: yCenter, z: 0, rotation: 0, outward: 1 };
+      return { x: sectionPos.x, y: sectionPos.y + yCenter, z: sectionPos.z, rotation: 0, outward: 1 };
   }
 }
 
 /**
  * Build a standard ledged and braced door
  */
-function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials) {
+function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const hingeSide = door.handleSide || "left";
   const isOpen = door.isOpen || false;
 
@@ -211,7 +220,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   const numBoards = Math.ceil(doorWidth / boardWidth_mm);
 
   // Create door group (transform node for rotation)
-  const doorGroup = new BABYLON.TransformNode(`door-${index}-group`, scene);
+  const doorGroup = new BABYLON.TransformNode(`${meshPrefix}door-${index}-group`, scene);
 
 // For side walls (left/right), hinge direction is inverted due to rotation
   const isLeftRightWall = door.wall === "left" || door.wall === "right";
@@ -249,7 +258,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
       : boardWidth_mm;
 
     const board = BABYLON.MeshBuilder.CreateBox(
-      `door-${index}-board-${i}`,
+      `${meshPrefix}door-${index}-board-${i}`,
       {
         width: (boardW - 8) / 1000,  // Increased gap from 5mm to 8mm for better visibility
         height: (doorHeight - 40) / 1000,
@@ -276,7 +285,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   // Create three horizontal ledges
   [topLedgeY, middleLedgeY, bottomLedgeY].forEach((ledgeY, li) => {
     const ledge = BABYLON.MeshBuilder.CreateBox(
-      `door-${index}-ledge-${li}`,
+      `${meshPrefix}door-${index}-ledge-${li}`,
       {
         width: (doorWidth - 5) / 1000,
         height: ledgeHeight_mm / 1000,
@@ -305,7 +314,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   );
 
   const upperBrace = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-brace-upper`,
+    `${meshPrefix}door-${index}-brace-upper`,
     {
       width: upperBraceLength / 1000,
       height: braceHeight_mm / 1000,
@@ -336,7 +345,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   );
 
   const lowerBrace = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-brace-lower`,
+    `${meshPrefix}door-${index}-brace-lower`,
     {
       width: lowerBraceLength / 1000,
       height: braceHeight_mm / 1000,
@@ -362,8 +371,8 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
   lowerBrace.metadata = { dynamic: true, doorId: door.id };
 
   // T-Hinges
-  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top");
-  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom");
+  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom", meshPrefix);
 
   // Handle open state
   if (isOpen) {
@@ -377,7 +386,7 @@ function buildStandardDoor(scene, door, pos, doorWidth, doorHeight, index, mater
  * Build double standard ledged and braced doors
  * Creates two standard doors hinged on opposite sides
  */
-function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials) {
+function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const isOpen = door.isOpen || false;
 
   // Each door is half the total width minus a small center gap
@@ -395,7 +404,7 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
   // Hinge is at -doorWidth/2 from center (left edge of full opening)
   buildSingleDoorPanel(
     scene,
-    `door-${index}-left`,
+    `${meshPrefix}door-${index}-left`,
     pos,
     singleDoorWidth,
     doorHeight,
@@ -406,14 +415,16 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
     clearanceX,
     clearanceZ,
     mats,
-    door.id
+    door.id,
+    meshPrefix,
+    index
   );
 
   // Build RIGHT door (hinged on RIGHT EDGE of opening)
   // Hinge is at +doorWidth/2 from center (right edge of full opening)
   buildSingleDoorPanel(
     scene,
-    `door-${index}-right`,
+    `${meshPrefix}door-${index}-right`,
     pos,
     singleDoorWidth,
     doorHeight,
@@ -424,7 +435,9 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
     clearanceX,
     clearanceZ,
     mats,
-    door.id
+    door.id,
+    meshPrefix,
+    index
   );
 }
 
@@ -433,7 +446,7 @@ function buildDoubleStandardDoor(scene, door, pos, doorWidth, doorHeight, index,
  * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
  * @param doorWidth - Width of this single panel (half the opening width)
  */
-function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId) {
+function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0) {
   console.log(`[DOUBLE_DOOR] Building ${name}: doorWidth=${doorWidth}mm, offsetX=${offsetX}mm, hingeSide=${hingeSide}, isLeftRightWall=${isLeftRightWall}`);
 
   // Dimensions in mm
@@ -618,8 +631,8 @@ function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide
   // For left door: hinge at left edge (x = -doorWidth/2 from panel center)
   // For right door: hinge at right edge (x = +doorWidth/2 from panel center)
   const hingeX = hingeSide === "left" ? -doorWidth / 2 : doorWidth / 2;
-  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, name, "top");
-  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, name, "bottom");
+  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom", meshPrefix);
 
   // Handle open state
   if (isOpen) {
@@ -632,7 +645,7 @@ function buildSingleDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide
 /**
  * Build a T-hinge
  */
-function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, material, doorIndex, position) {
+function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, material, doorIndex, position, meshPrefix = "") {
   const hingeWidth_mm = 150;
   const hingeBarWidth_mm = 20;
   const hingeThickness_mm = 3;
@@ -640,7 +653,7 @@ function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, materi
 
   // Hinge bar (vertical piece at hinge edge)
   const hingeBar = BABYLON.MeshBuilder.CreateBox(
-    `door-${doorIndex}-hinge-${position}-bar`,
+    `${meshPrefix}door-${doorIndex}-hinge-${position}-bar`,
     {
       width: hingeBarWidth_mm / 1000,
       height: 250 / 1000,
@@ -659,7 +672,7 @@ function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, materi
 
   // Hinge plate (horizontal piece extending onto door)
   const hingePlate = BABYLON.MeshBuilder.CreateBox(
-    `door-${doorIndex}-hinge-${position}-plate`,
+    `${meshPrefix}door-${doorIndex}-hinge-${position}-plate`,
     {
       width: hingeWidth_mm / 1000,
       height: hingeBarWidth_mm / 1000,
@@ -679,7 +692,7 @@ function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, materi
 
   // Hinge pin (cylinder)
   const hingePin = BABYLON.MeshBuilder.CreateCylinder(
-    `door-${doorIndex}-hinge-${position}-pin`,
+    `${meshPrefix}door-${doorIndex}-hinge-${position}-pin`,
     {
       diameter: hingeThickness_mm / 1000,
       height: (hingeWidth_mm + hingeBarWidth_mm) / 1000
@@ -699,224 +712,67 @@ function buildTHinge(scene, parent, xPos, yPos, hingeSide, doorThickness, materi
 
 /**
  * Build French doors (double doors with glass panels)
+ * Each door panel pivots from its outer edge (like standard double doors)
  */
-function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials) {
+function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const isOpen = door.isOpen || false;
-  const handleSide = door.handleSide || "right";
 
-  // Dimensions in mm
-  const doorThickness_mm = 40;
-  const frameWidth_mm = 60;
-  const kickboardHeight_mm = Math.floor(doorHeight * 0.18);
-  const glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
-  const panelWidth_mm = doorWidth / 2;
-  const centerStileWidth_mm = 50;
+  // Each door is half the total width minus a small center gap
+  const centerGap = 10; // 10mm gap between the two doors
+  const singleDoorWidth = (doorWidth - centerGap) / 2;
+
+  const isLeftRightWall = door.wall === "left" || door.wall === "right";
+  const clearanceAdjust = 2.5;
+  const clearanceX = isLeftRightWall ? 0 : clearanceAdjust;
+  const clearanceZ = isLeftRightWall ? clearanceAdjust : 0;
 
   const mats = scene._doorMaterials;
 
-  // Create door group
-  const doorGroup = new BABYLON.TransformNode(`door-${index}-french-group`, scene);
-  doorGroup.position = new BABYLON.Vector3(pos.x / 1000, pos.y / 1000, pos.z / 1000);
-  doorGroup.rotation.y = pos.rotation;
-
-  // Build left panel
-  buildFrenchDoorPanel(
-    scene, doorGroup,
-    -panelWidth_mm / 2,
-    panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
-    frameWidth_mm, doorThickness_mm,
-    mats, index, "left"
+  // Build LEFT door (hinged on LEFT EDGE of opening)
+  buildSingleFrenchDoorPanel(
+    scene,
+    `${meshPrefix}door-${index}-french-left`,
+    pos,
+    singleDoorWidth,
+    doorHeight,
+    "left",  // hinge on left
+    -doorWidth / 2,  // hinge position at left edge of full opening
+    isOpen,
+    isLeftRightWall,
+    clearanceX,
+    clearanceZ,
+    mats,
+    door.id,
+    meshPrefix,
+    index
   );
 
-  // Build right panel
-  buildFrenchDoorPanel(
-    scene, doorGroup,
-    panelWidth_mm / 2,
-    panelWidth_mm, doorHeight, glassHeight_mm, kickboardHeight_mm,
-    frameWidth_mm, doorThickness_mm,
-    mats, index, "right"
+  // Build RIGHT door (hinged on RIGHT EDGE of opening)
+  buildSingleFrenchDoorPanel(
+    scene,
+    `${meshPrefix}door-${index}-french-right`,
+    pos,
+    singleDoorWidth,
+    doorHeight,
+    "right",  // hinge on right
+    doorWidth / 2,  // hinge position at right edge of full opening
+    isOpen,
+    isLeftRightWall,
+    clearanceX,
+    clearanceZ,
+    mats,
+    door.id,
+    meshPrefix,
+    index
   );
-
-  // Center stile (where doors meet)
-  const centerStile = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-center-stile`,
-    {
-      width: centerStileWidth_mm / 1000,
-      height: (doorHeight - 20) / 1000,
-      depth: doorThickness_mm / 1000
-    },
-    scene
-  );
-  centerStile.position = new BABYLON.Vector3(0, 0, 10 / 1000);
-  centerStile.parent = doorGroup;
-  centerStile.material = mats.door;
-  centerStile.metadata = { dynamic: true, doorId: door.id };
-
-  // Hinges on outer edges
-  const hingeY_top = doorHeight / 2 - 150;
-  const hingeY_bottom = -doorHeight / 2 + 150;
-
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_left");
-  buildFrenchHinge(scene, doorGroup, -doorWidth / 2 + 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_left");
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_top, doorThickness_mm, mats.hinge, index, "top_right");
-  buildFrenchHinge(scene, doorGroup, doorWidth / 2 - 30, hingeY_bottom, doorThickness_mm, mats.hinge, index, "bottom_right");
-
-  if (isOpen) {
-    const openAngle = handleSide === "left" ? -Math.PI / 2 : Math.PI / 2;
-    doorGroup.rotation.y += openAngle;
-  }
-
-  doorGroup.metadata = { dynamic: true, doorId: door.id };
-}
-
-/**
- * Build a single panel of a French door
- */
-function buildFrenchDoorPanel(scene, parent, xOffset, panelWidth, doorHeight, glassHeight, kickboardHeight, frameWidth, doorThickness, mats, index, side) {
-  const innerWidth = panelWidth - frameWidth * 2 - 20;
-
-  // Top rail
-  const topRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-top-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  topRail.position = new BABYLON.Vector3(
-    xOffset / 1000,
-    (doorHeight / 2 - frameWidth / 2) / 1000,
-    10 / 1000
-  );
-  topRail.parent = parent;
-  topRail.material = mats.door;
-  topRail.metadata = { dynamic: true };
-
-  // Bottom rail
-  const bottomRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-bottom-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  bottomRail.position = new BABYLON.Vector3(
-    xOffset / 1000,
-    (-doorHeight / 2 + frameWidth / 2) / 1000,
-    10 / 1000
-  );
-  bottomRail.parent = parent;
-  bottomRail.material = mats.door;
-  bottomRail.metadata = { dynamic: true };
-
-  // Outer stile
-  const outerStileX = side === "left"
-    ? xOffset - panelWidth / 2 + frameWidth / 2
-    : xOffset + panelWidth / 2 - frameWidth / 2;
-
-  const outerStile = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-outer-stile-${side}`,
-    {
-      width: frameWidth / 1000,
-      height: (doorHeight - frameWidth * 2) / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  outerStile.position = new BABYLON.Vector3(outerStileX / 1000, 0, 10 / 1000);
-  outerStile.parent = parent;
-  outerStile.material = mats.door;
-  outerStile.metadata = { dynamic: true };
-
-  // Inner stile
-  const innerStileX = side === "left"
-    ? xOffset + panelWidth / 2 - frameWidth / 2 - 10
-    : xOffset - panelWidth / 2 + frameWidth / 2 + 10;
-
-  const innerStile = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-inner-stile-${side}`,
-    {
-      width: frameWidth / 1000,
-      height: (doorHeight - frameWidth * 2) / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  innerStile.position = new BABYLON.Vector3(innerStileX / 1000, 0, 10 / 1000);
-  innerStile.parent = parent;
-  innerStile.material = mats.door;
-  innerStile.metadata = { dynamic: true };
-
-  // Middle rail (separates glass from kickboard)
-  const midRailY = -doorHeight / 2 + kickboardHeight + frameWidth / 2;
-
-  const midRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-mid-rail-${side}`,
-    {
-      width: (panelWidth - 20) / 1000,
-      height: frameWidth / 1000,
-      depth: doorThickness / 1000
-    },
-    scene
-  );
-  midRail.position = new BABYLON.Vector3(xOffset / 1000, midRailY / 1000, 10 / 1000);
-  midRail.parent = parent;
-  midRail.material = mats.door;
-  midRail.metadata = { dynamic: true };
-
-  // Glass pane
-  const glassY = midRailY + frameWidth / 2 + glassHeight / 2;
-
-  const glass = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-french-glass-${side}`,
-    {
-      width: (innerWidth - frameWidth) / 1000,
-      height: (glassHeight - frameWidth) / 1000,
-      depth: 6 / 1000
-    },
-    scene
-  );
-  glass.position = new BABYLON.Vector3(xOffset / 1000, glassY / 1000, 10 / 1000);
-  glass.parent = parent;
-  glass.material = mats.glass;
-  glass.metadata = { dynamic: true };
-
-  // Kickboard - tongue and groove boards
-  const kickboardY = -doorHeight / 2 + frameWidth + kickboardHeight / 2;
-  const boardWidth = 60;
-  const numBoards = Math.ceil(innerWidth / boardWidth);
-
-  for (let i = 0; i < numBoards; i++) {
-    const boardX = xOffset - innerWidth / 2 + boardWidth / 2 + i * boardWidth + frameWidth / 2;
-    if (boardX > xOffset + innerWidth / 2 - frameWidth / 2) break;
-
-    const board = BABYLON.MeshBuilder.CreateBox(
-      `door-${index}-french-kickboard-${side}-${i}`,
-      {
-        width: (boardWidth - 4) / 1000,
-        height: (kickboardHeight - frameWidth - 20) / 1000,
-        depth: (doorThickness - 10) / 1000
-      },
-      scene
-    );
-    board.position = new BABYLON.Vector3(boardX / 1000, kickboardY / 1000, 10 / 1000);
-    board.parent = parent;
-
-    board.material = mats.door;
-    board.metadata = { dynamic: true };
-  }
 }
 
 /**
  * Build a French door hinge (simple cylinder)
  */
-function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, position) {
+function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, position, meshPrefix = "") {
   const hinge = BABYLON.MeshBuilder.CreateCylinder(
-    `door-${index}-french-hinge-${position}`,
+    `${meshPrefix}door-${index}-french-hinge-${position}`,
     {
       height: 80 / 1000,
       diameter: 20 / 1000
@@ -931,9 +787,204 @@ function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, p
 }
 
 /**
+ * Build a single French door panel (used by double French doors)
+ * Similar to buildSingleDoorPanel but with French door styling
+ * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
+ * @param doorWidth - Width of this single panel (half the opening width)
+ */
+function buildSingleFrenchDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0) {
+  // Dimensions in mm
+  const doorThickness_mm = 40;
+  const frameWidth_mm = 60;
+  const kickboardHeight_mm = Math.floor(doorHeight * 0.18);
+  const glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
+
+  // Create door group (transform node for rotation)
+  // Door group is positioned at the HINGE POINT (outer edge of opening)
+  const doorGroup = new BABYLON.TransformNode(`${name}-group`, scene);
+
+  // For left/right walls, invert the offset sign to match single door behavior
+  let adjustedOffsetX = offsetX;
+  if (isLeftRightWall) {
+    adjustedOffsetX = -offsetX;
+  }
+
+  // Apply rotation to transform to world coordinates
+  const cosR = Math.cos(pos.rotation);
+  const sinR = Math.sin(pos.rotation);
+  const hingeWorldX = pos.x + adjustedOffsetX * cosR + clearanceX;
+  const hingeWorldZ = pos.z + adjustedOffsetX * sinR + clearanceZ;
+
+  doorGroup.position = new BABYLON.Vector3(
+    hingeWorldX / 1000,
+    pos.y / 1000,
+    hingeWorldZ / 1000
+  );
+  doorGroup.rotation.y = pos.rotation;
+
+  // All components positioned relative to hinge (at x=0 in door local space)
+  // For left-hinged door: components extend from 0 to +doorWidth
+  // For right-hinged door: components extend from -doorWidth to 0
+
+  // Inner dimensions for glass and kickboard
+  const innerWidth = doorWidth - frameWidth_mm * 2 - 20;
+
+  // Top rail
+  const topRailX = hingeSide === "left" ? doorWidth / 2 : -doorWidth / 2;
+  const topRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-top-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  topRail.position = new BABYLON.Vector3(
+    topRailX / 1000,
+    (doorHeight / 2 - frameWidth_mm / 2) / 1000,
+    10 / 1000
+  );
+  topRail.parent = doorGroup;
+  topRail.material = mats.door;
+  topRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Bottom rail
+  const bottomRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-bottom-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  bottomRail.position = new BABYLON.Vector3(
+    topRailX / 1000,
+    (-doorHeight / 2 + frameWidth_mm / 2) / 1000,
+    10 / 1000
+  );
+  bottomRail.parent = doorGroup;
+  bottomRail.material = mats.door;
+  bottomRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Outer stile (at hinge edge)
+  const outerStileX = hingeSide === "left" ? frameWidth_mm / 2 : -frameWidth_mm / 2;
+  const outerStile = BABYLON.MeshBuilder.CreateBox(
+    `${name}-outer-stile`,
+    {
+      width: frameWidth_mm / 1000,
+      height: (doorHeight - frameWidth_mm * 2) / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  outerStile.position = new BABYLON.Vector3(outerStileX / 1000, 0, 10 / 1000);
+  outerStile.parent = doorGroup;
+  outerStile.material = mats.door;
+  outerStile.metadata = { dynamic: true, doorId: doorId };
+
+  // Inner stile (at meeting edge)
+  const innerStileX = hingeSide === "left"
+    ? doorWidth - frameWidth_mm / 2 - 10
+    : -doorWidth + frameWidth_mm / 2 + 10;
+  const innerStile = BABYLON.MeshBuilder.CreateBox(
+    `${name}-inner-stile`,
+    {
+      width: frameWidth_mm / 1000,
+      height: (doorHeight - frameWidth_mm * 2) / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  innerStile.position = new BABYLON.Vector3(innerStileX / 1000, 0, 10 / 1000);
+  innerStile.parent = doorGroup;
+  innerStile.material = mats.door;
+  innerStile.metadata = { dynamic: true, doorId: doorId };
+
+  // Middle rail (separates glass from kickboard)
+  const midRailY = -doorHeight / 2 + kickboardHeight_mm + frameWidth_mm / 2;
+  const midRail = BABYLON.MeshBuilder.CreateBox(
+    `${name}-mid-rail`,
+    {
+      width: (doorWidth - 20) / 1000,
+      height: frameWidth_mm / 1000,
+      depth: doorThickness_mm / 1000
+    },
+    scene
+  );
+  midRail.position = new BABYLON.Vector3(topRailX / 1000, midRailY / 1000, 10 / 1000);
+  midRail.parent = doorGroup;
+  midRail.material = mats.door;
+  midRail.metadata = { dynamic: true, doorId: doorId };
+
+  // Glass pane
+  const glassY = midRailY + frameWidth_mm / 2 + glassHeight_mm / 2;
+  const glass = BABYLON.MeshBuilder.CreateBox(
+    `${name}-glass`,
+    {
+      width: (innerWidth - frameWidth_mm) / 1000,
+      height: (glassHeight_mm - frameWidth_mm) / 1000,
+      depth: 6 / 1000
+    },
+    scene
+  );
+  glass.position = new BABYLON.Vector3(topRailX / 1000, glassY / 1000, 10 / 1000);
+  glass.parent = doorGroup;
+  glass.material = mats.glass;
+  glass.metadata = { dynamic: true, doorId: doorId };
+
+  // Kickboard - tongue and groove boards
+  const kickboardY = -doorHeight / 2 + frameWidth_mm + kickboardHeight_mm / 2;
+  const boardWidth = 60;
+  const numBoards = Math.ceil(innerWidth / boardWidth);
+
+  for (let i = 0; i < numBoards; i++) {
+    // Calculate board position relative to hinge
+    let boardX;
+    if (hingeSide === "left") {
+      boardX = frameWidth_mm + boardWidth / 2 + i * boardWidth;
+      if (boardX > doorWidth - frameWidth_mm - 10) break;
+    } else {
+      boardX = -frameWidth_mm - boardWidth / 2 - i * boardWidth;
+      if (boardX < -doorWidth + frameWidth_mm + 10) break;
+    }
+
+    const board = BABYLON.MeshBuilder.CreateBox(
+      `${name}-kickboard-${i}`,
+      {
+        width: (boardWidth - 4) / 1000,
+        height: (kickboardHeight_mm - frameWidth_mm - 20) / 1000,
+        depth: (doorThickness_mm - 10) / 1000
+      },
+      scene
+    );
+    board.position = new BABYLON.Vector3(boardX / 1000, kickboardY / 1000, 10 / 1000);
+    board.parent = doorGroup;
+    board.material = mats.door;
+    board.metadata = { dynamic: true, doorId: doorId };
+  }
+
+  // Hinges on outer edge (hinge side)
+  const hingeY_top = doorHeight / 2 - 150;
+  const hingeY_bottom = -doorHeight / 2 + 150;
+  const hingeX = hingeSide === "left" ? 30 : -30;
+
+  buildFrenchHinge(scene, doorGroup, hingeX, hingeY_top, doorThickness_mm, mats.hinge, doorIndex, `${hingeSide}_top`, meshPrefix);
+  buildFrenchHinge(scene, doorGroup, hingeX, hingeY_bottom, doorThickness_mm, mats.hinge, doorIndex, `${hingeSide}_bottom`, meshPrefix);
+
+  // Handle open state - each door rotates from its own hinge
+  if (isOpen) {
+    doorGroup.rotation.y += hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;
+  }
+
+  doorGroup.metadata = { dynamic: true, doorId: doorId };
+}
+
+/**
  * Build mortise-tenon door (traditional joinery)
  */
-function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials) {
+function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const hingeSide = door.handleSide || "left";
   const isOpen = door.isOpen || false;
 
@@ -945,7 +996,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   const mats = scene._doorMaterials;
 
   // Create door group at hinge edge
-  const doorGroup = new BABYLON.TransformNode(`door-${index}-mortise-group`, scene);
+  const doorGroup = new BABYLON.TransformNode(`${meshPrefix}door-${index}-mortise-group`, scene);
 
  // For side walls (left/right), hinge direction is inverted due to rotation
   const isLeftRightWall = door.wall === "left" || door.wall === "right";
@@ -973,7 +1024,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
       : boardWidth_mm;
 
     const board = BABYLON.MeshBuilder.CreateBox(
-      `door-${index}-mortise-board-${i}`,
+      `${meshPrefix}door-${index}-mortise-board-${i}`,
       {
         width: (boardW - 5) / 1000,
         height: (doorHeight - 20) / 1000,
@@ -1000,7 +1051,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   // Left stile
   const leftStileOffset = hingeSide === "left" ? stileWidth / 2 : -doorWidth + stileWidth / 2;
   const leftStile = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-left-stile`,
+    `${meshPrefix}door-${index}-mortise-left-stile`,
     {
       width: stileWidth / 1000,
       height: doorHeight / 1000,
@@ -1016,7 +1067,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   // Right stile
   const rightStileOffset = hingeSide === "left" ? doorWidth - stileWidth / 2 : -stileWidth / 2;
   const rightStile = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-right-stile`,
+    `${meshPrefix}door-${index}-mortise-right-stile`,
     {
       width: stileWidth / 1000,
       height: doorHeight / 1000,
@@ -1031,7 +1082,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
 
   // Top rail
   const topRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-top-rail`,
+    `${meshPrefix}door-${index}-mortise-top-rail`,
     {
       width: (doorWidth - stileWidth * 2) / 1000,
       height: railHeight / 1000,
@@ -1050,7 +1101,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
 
   // Middle rail
   const middleRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-mid-rail`,
+    `${meshPrefix}door-${index}-mortise-mid-rail`,
     {
       width: (doorWidth - stileWidth * 2) / 1000,
       height: railHeight / 1000,
@@ -1065,7 +1116,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
 
   // Bottom rail
   const bottomRail = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-bottom-rail`,
+    `${meshPrefix}door-${index}-mortise-bottom-rail`,
     {
       width: (doorWidth - stileWidth * 2) / 1000,
       height: railHeight / 1000,
@@ -1093,7 +1144,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
 
   // Upper diagonal
   const upperDiag = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-upper-diag`,
+    `${meshPrefix}door-${index}-mortise-upper-diag`,
     {
       width: upperDiagLength / 1000,
       height: braceWidth / 1000,
@@ -1119,7 +1170,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   const lowerDiagLength = Math.sqrt(braceHorizontalSpan * braceHorizontalSpan + lowerSectionHeight * lowerSectionHeight);
 
   const lowerDiag = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-lower-diag`,
+    `${meshPrefix}door-${index}-mortise-lower-diag`,
     {
       width: lowerDiagLength / 1000,
       height: braceWidth / 1000,
@@ -1145,7 +1196,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   const handleX = hingeSide === "left" ? doorWidth - 80 : -doorWidth + 80;
 
   const handlePlate = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-handle-plate`,
+    `${meshPrefix}door-${index}-mortise-handle-plate`,
     {
       width: 30 / 1000,
       height: 120 / 1000,
@@ -1163,7 +1214,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   handlePlate.metadata = { dynamic: true, doorId: door.id };
 
   const handleLever = BABYLON.MeshBuilder.CreateBox(
-    `door-${index}-mortise-handle-lever`,
+    `${meshPrefix}door-${index}-mortise-handle-lever`,
     {
       width: 80 / 1000,
       height: 15 / 1000,
@@ -1185,8 +1236,8 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
   const topLedgeY = doorHeight / 2 - 150;
   const bottomLedgeY = -doorHeight / 2 + 150;
 
-  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top");
-  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom");
+  buildTHinge(scene, doorGroup, 0, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, 0, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, index, "bottom", meshPrefix);
 
   if (isOpen) {
     const openAngle = hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;
@@ -1200,7 +1251,7 @@ function buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, mater
  * Build double mortise-tenon doors
  * Creates two mortise-tenon door panels hinged on opposite sides
  */
-function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index) {
+function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix = "") {
   const isOpen = door.isOpen || false;
 
   // Each door is half the total width minus a small center gap
@@ -1220,7 +1271,7 @@ function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index)
   // Use the same positioning as standard double doors
   buildSingleMortiseTenonPanelV2(
     scene,
-    `door-${index}-mortise-left`,
+    `${meshPrefix}door-${index}-mortise-left`,
     pos,
     singleDoorWidth,
     doorHeight,
@@ -1238,7 +1289,7 @@ function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index)
   // Build RIGHT door (hinged on RIGHT EDGE of opening)
   buildSingleMortiseTenonPanelV2(
     scene,
-    `door-${index}-mortise-right`,
+    `${meshPrefix}door-${index}-mortise-right`,
     pos,
     singleDoorWidth,
     doorHeight,
@@ -1259,7 +1310,7 @@ function buildDoubleMortiseTenon(scene, door, pos, doorWidth, doorHeight, index)
  * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
  * @param doorWidth - Width of this single panel (half the opening width)
  */
-function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, doorIndex) {
+function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, doorIndex, meshPrefix = "") {
   // Dimensions in mm
   const doorThickness_mm = 35;
   const boardWidth_mm = 100;
@@ -1511,8 +1562,8 @@ function buildSingleMortiseTenonPanelV2(scene, name, pos, doorWidth, doorHeight,
   // For left door: hinge at left edge (x = -doorWidth/2 from panel center)
   // For right door: hinge at right edge (x = +doorWidth/2 from panel center)
   const hingeX = hingeSide === "left" ? -doorWidth / 2 : doorWidth / 2;
-  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top");
-  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom");
+  buildTHinge(scene, doorGroup, hingeX, topLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "top", meshPrefix);
+  buildTHinge(scene, doorGroup, hingeX, bottomLedgeY, hingeSide, doorThickness_mm, mats.hinge, doorIndex, "bottom", meshPrefix);
 
   if (isOpen) {
     const openAngle = hingeSide === "left" ? -Math.PI / 2 : Math.PI / 2;

@@ -1,10 +1,15 @@
 // FILE: docs/src/elements/base.js
 import { CONFIG } from '../params.js';
 
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene } = ctx;
 
-  const shedRoot = getRoot(scene);
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: 0 } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
+
+  const shedRoot = getRoot(scene, sectionId, sectionPos);
   const meshes = getMeshes(scene);
 
   Object.values(meshes).flat().forEach(m => m.dispose());
@@ -12,6 +17,7 @@ export function build3D(state, ctx) {
   meshes.frame = [];
   meshes.ins = [];
   meshes.deck = [];
+  meshes.ply = [];
 
   const gauge = getFrameGauge(state);
   const frameT = gauge.thickness_mm;
@@ -35,7 +41,7 @@ export function build3D(state, ctx) {
         b.position = new BABYLON.Vector3((x + bw / 2) * 0.001, yB * 0.001, (z + bd / 2) * 0.001);
         b.material = mat;
         b.parent = shedRoot;
-        b.metadata = { dynamic: true };
+        b.metadata = { dynamic: true, sectionId: sectionId || null };
         if (b.enableEdgesRendering) {
           b.enableEdgesRendering();
           b.edgesWidth = 1;
@@ -63,7 +69,7 @@ export function build3D(state, ctx) {
         : new BABYLON.Vector3((L.rimLen / 2) * 0.001, yF * 0.001, (o + (frameT / 2)) * 0.001);
       r.material = mat;
       r.parent = shedRoot;
-      r.metadata = { dynamic: true };
+      r.metadata = { dynamic: true, sectionId: sectionId || null };
       meshes.frame.push(r);
     });
 
@@ -79,7 +85,7 @@ export function build3D(state, ctx) {
         : new BABYLON.Vector3(p * 0.001, yF * 0.001, mid);
       j.material = mat;
       j.parent = shedRoot;
-      j.metadata = { dynamic: true };
+      j.metadata = { dynamic: true, sectionId: sectionId || null };
       meshes.frame.push(j);
     });
   }
@@ -104,7 +110,7 @@ export function build3D(state, ctx) {
           : new BABYLON.Vector3(mB, yI * 0.001, mS);
         ins.material = mat;
         ins.parent = shedRoot;
-        ins.metadata = { dynamic: true };
+        ins.metadata = { dynamic: true, sectionId: sectionId || null };
         meshes.ins.push(ins);
         ins.enableEdgesRendering();
         ins.edgesWidth = 2;
@@ -141,11 +147,49 @@ export function build3D(state, ctx) {
       );
       d.material = mat;
       d.parent = shedRoot;
-      d.metadata = { dynamic: true };
+      d.metadata = { dynamic: true, sectionId: sectionId || null };
       d.enableEdgesRendering();
       d.edgesWidth = 4;
       d.edgesColor = new BABYLON.Color4(0, 0, 0, 1);
       meshes.deck.push(d);
+    }
+  }
+
+  // Plywood floor covering (12mm) - for insulated variant only
+  // Sits on top of OSB decking, uses same 8x4ft sheet layout
+  const isInsulated = state.walls?.variant === 'insulated';
+  if (state.vis.deck && isInsulated) {
+    const plyThickness = 12; // 12mm plywood
+    const yPly = yD + 18 + (plyThickness / 2); // On top of 18mm OSB deck
+
+    const mat = new BABYLON.StandardMaterial('plyMat', scene);
+    mat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65); // Slightly lighter than OSB
+
+    const extA = L.joistSpan;
+    const extB = L.rimLen;
+    const piecesAB = computeDeckPiecesAB_NoStagger(extA, extB);
+
+    for (const p of piecesAB) {
+      const mapped = mapABtoXZ(p, L.isWShort);
+
+      const ply = BABYLON.MeshBuilder.CreateBox('ply', {
+        width: mapped.wX * 0.001,
+        height: plyThickness * 0.001,
+        depth: mapped.dZ * 0.001
+      }, scene);
+
+      ply.position = new BABYLON.Vector3(
+        (mapped.x0 + mapped.wX / 2) * 0.001,
+        yPly * 0.001,
+        (mapped.z0 + mapped.dZ / 2) * 0.001
+      );
+      ply.material = mat;
+      ply.parent = shedRoot;
+      ply.metadata = { dynamic: true, sectionId: sectionId || null };
+      ply.enableEdgesRendering();
+      ply.edgesWidth = 2;
+      ply.edgesColor = new BABYLON.Color4(0.3, 0.25, 0.2, 1);
+      meshes.ply.push(ply);
     }
   }
 }
@@ -197,6 +241,27 @@ export function updateBOM(state) {
 
   document.getElementById('timberTableBody').innerHTML = timberHtml;
   document.getElementById('timberTotals').textContent = `Total pieces: ${timberCount}`;
+
+  // ----- TOTAL FRAME Summary -----
+  const FRAME_STOCK_LENGTH = 6200;
+  let totalFrameLength_mm = 0;
+  totalFrameLength_mm += 2 * L.rimLen;                          // Rim Joists
+  totalFrameLength_mm += L.positions.length * L.innerJoistLen;  // Inner Joists
+
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  const totalFrameLinearM = Math.round(totalFrameLength_mm / 1000 * 10) / 10;
+
+  // Add to timber table as summary row
+  const timberBody = document.getElementById('timberTableBody');
+  if (timberBody) {
+    timberBody.innerHTML += `<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">
+      <td>TOTAL FRAME</td>
+      <td>${totalFrameStockPieces}</td>
+      <td class="highlight">${FRAME_STOCK_LENGTH}mm</td>
+      <td>${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths</td>
+    </tr>`;
+  }
+  pushCsv('Timber Frame', 'TOTAL FRAME', totalFrameStockPieces, FRAME_STOCK_LENGTH, '', `${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`);
 
   // ----- OSB Decking (mirrors build3D; no stagger; rotation-invariant) -----
   const extA = L.joistSpan;
@@ -328,6 +393,68 @@ export function updateBOM(state) {
   const osbSummaryEl = document.getElementById('osbSummary');
   if (osbSummaryEl) osbSummaryEl.textContent = `Minimum full sheets required (by area): ${minSheets}`;
 
+  // ----- Plywood Floor Covering (12mm) - Insulated variant only -----
+  // Uses same 8x4ft sheet layout as OSB decking
+  const isInsulated = state.walls?.variant === 'insulated';
+  const plyBodyEl = document.getElementById('plyBody');
+  const plySummaryEl = document.getElementById('plySummary');
+  const plySectionEl = document.getElementById('plySection');
+  
+  if (isInsulated && plyBodyEl) {
+    // Show the section
+    if (plySectionEl) plySectionEl.style.display = '';
+    
+    // Calculate plywood pieces (same logic as OSB)
+    const plyMap = {};
+    const plyStd = {};
+    const plyRip = {};
+    let totalPlyArea = 0;
+    
+    for (const p of piecesAB) {
+      const mapped = mapABtoXZ(p, L.isWShort);
+      const w = Math.round(mapped.wX);
+      const h = Math.round(mapped.dZ);
+      if (w > 0 && h > 0) {
+        const key = `${w}x${h}`;
+        plyMap[key] = (plyMap[key] || 0) + 1;
+        totalPlyArea += w * h;
+        // Classify as standard (full sheet) or rip/trim
+        const isFullW = (w === sheetShort || w === sheetLong);
+        const isFullH = (h === sheetShort || h === sheetLong);
+        if (isFullW && isFullH) {
+          plyStd[key] = (plyStd[key] || 0) + 1;
+        } else {
+          plyRip[key] = (plyRip[key] || 0) + 1;
+        }
+      }
+    }
+    
+    let plyHtml = '';
+    let plyCount = 0;
+    Object.keys(plyMap).sort((a, b) => {
+      const [aw, ah] = a.split('x').map(Number), [bw, bh] = b.split('x').map(Number);
+      return ah - bh || aw - bw;
+    }).forEach(key => {
+      const [wStr, hStr] = key.split('x');
+      const w = parseInt(wStr, 10), h = parseInt(hStr, 10);
+      const qty = plyMap[key];
+      const isStd = plyStd[key] > 0;
+      const notes = isStd ? 'Full Sheet' : 'Cut to size';
+      plyHtml += `<tr><td>Ply ${w}x${h}</td><td>${qty}</td><td class="highlight">${fmtSize(w, h)}</td><td>${notes}</td></tr>`;
+      pushCsv('Plywood Floor', `Piece ${w}x${h}`, qty, w, h, notes);
+      plyCount += qty;
+    });
+    
+    plyBodyEl.innerHTML = plyHtml || `<tr><td colspan="4">None</td></tr>`;
+    
+    const plyMinSheets = sheetArea > 0 ? Math.ceil(totalPlyArea / sheetArea) : 0;
+    if (plySummaryEl) plySummaryEl.textContent = `12mm plywood - Minimum full sheets required (by area): ${plyMinSheets}`;
+  } else if (plyBodyEl) {
+    // Hide the section for non-insulated variant
+    if (plySectionEl) plySectionEl.style.display = 'none';
+    plyBodyEl.innerHTML = `<tr><td colspan="4">N/A (Insulated variant only)</td></tr>`;
+  }
+
   // ----- Renumber BOM section headings -----
   const h4s = Array.from(document.querySelectorAll('#bomPage .schedule-section > h4'));
   h4s.forEach((h, idx) => { h.textContent = `${idx + 1}. ${h.textContent.replace(/^\d+\.\s*/, '')}`; });
@@ -455,10 +582,20 @@ function getLayout(state, gauge) {
   return { isWShort, rimLen, joistSpan, innerJoistLen, positions };
 }
 
-function getRoot(scene) {
-  if (!scene._shedRoot) scene._shedRoot = new BABYLON.TransformNode('root', scene);
-  scene._shedRoot.metadata = { dynamic: true };
-  return scene._shedRoot;
+function getRoot(scene, sectionId, sectionPos = { x: 0, y: 0, z: 0 }) {
+  const rootName = sectionId ? `section-${sectionId}-root` : 'root';
+  const rootKey = sectionId ? `_section${sectionId}Root` : '_shedRoot';
+
+  if (!scene[rootKey]) {
+    scene[rootKey] = new BABYLON.TransformNode(rootName, scene);
+    scene[rootKey].position = new BABYLON.Vector3(
+      sectionPos.x * 0.001,
+      sectionPos.y * 0.001,
+      sectionPos.z * 0.001
+    );
+  }
+  scene[rootKey].metadata = { dynamic: true, sectionId: sectionId || null };
+  return scene[rootKey];
 }
 
 function getMeshes(scene) {

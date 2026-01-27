@@ -21,24 +21,25 @@
       touch-action: none;
     }
 
-    #topbar{
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 2147483000;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      pointer-events: auto;
-    }
-    #viewSelect{
-      padding: 10px 14px;
-      border-radius: 8px;
+    /* View selector in panel header */
+    #controlPanel .panel-controls #viewSelect {
+      padding: 4px 8px;
+      border-radius: 6px;
       cursor: pointer;
-      border: none;
-      box-shadow: var(--shadow);
-      font-weight: 700;
+      border: 1px solid #ddd;
+      font-size: 12px;
+      font-weight: 600;
       background: #fff;
+      height: 24px;
+    }
+
+    #controlPanel .panel-controls #viewSelect:hover {
+      border-color: #999;
+    }
+
+    #controlPanel .panel-controls #viewSelect:focus {
+      outline: none;
+      border-color: #1976d2;
     }
 
     #ui-layer{
@@ -53,15 +54,128 @@
       position: fixed;
       top: 16px;
       left: 16px;
-      z-index: 2147482500;
+      z-index: 2147483000;
       pointer-events: auto;
-      max-width: min(420px, calc(100vw - 32px));
+      width: 420px;
+      max-width: calc(100vw - 32px);
+      min-width: 280px;
+      transition: none;
+    }
+
+    /* Resizable panel styles */
+    #controls.resizable {
+      resize: none; /* We handle this manually */
+    }
+
+    /* When panel has explicit height set (via resize or maximize) */
+    #controls.has-height {
+      display: flex !important;
+      flex-direction: column;
+    }
+
+    #controls.has-height #controlPanel {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #controls.has-height #controlPanel > details {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    #controls.has-height #controlPanel > details > summary {
+      flex-shrink: 0;
+    }
+
+    #controls.has-height #controlPanel > details > .inner {
+      /* Height and overflow are set via JavaScript in panel-resize.js */
+      overflow-x: hidden;
+    }
+
+    #controls .resize-handle {
+      position: absolute;
+      background: transparent;
+      z-index: 10;
+    }
+
+    #controls .resize-handle-right {
+      right: -4px;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: ew-resize;
+    }
+
+    #controls .resize-handle-bottom {
+      bottom: -4px;
+      left: 0;
+      right: 0;
+      height: 8px;
+      cursor: ns-resize;
+    }
+
+    #controls .resize-handle-corner {
+      right: -4px;
+      bottom: -4px;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+    }
+
+    #controls .resize-handle:hover,
+    #controls .resize-handle.active {
+      background: rgba(25, 118, 210, 0.3);
+    }
+
+    /* Maximize button in panel header */
+    #controlPanel .panel-controls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    #controlPanel .panel-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    #controlPanel .panel-btn:hover {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    /* Maximized state */
+    #controls.maximized {
+      top: 8px !important;
+      left: 8px !important;
+      width: calc(100vw - 16px) !important;
+      height: calc(100vh - 16px) !important;
+      max-width: none !important;
     }
 
     /* Controls visible ONLY in 3D */
     body[data-view="base"]  #controls,
-    body[data-view="walls"] #controls { display:none !important; }
+    body[data-view="walls"] #controls,
+    body[data-view="roof"]  #controls,
+    body[data-view="openings"] #controls { display:none !important; }
     body[data-view="3d"] #controls { display:block; }
+    body[data-view="3d"] #controls.has-height { display:flex; }
 
     #controlPanel details{
       background: #fff;
@@ -84,7 +198,7 @@
     #controlPanel summary::-webkit-details-marker{ display:none; }
     #controlPanel .inner{
       padding: 10px 12px 12px 12px;
-      max-height: min(70vh, 560px);
+      max-height: min(85vh, 800px);
       overflow: auto;
     }
     #controlPanel form{ display:grid; gap:10px; margin:0; }
@@ -130,6 +244,39 @@
       font-weight: 700;
     }
     #controlPanel button:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+    /* Save/Load Design section - make the content scrollable */
+    #saveLoadBox {
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+
+    /* Profile Editor nested details - lighter styling than top-level sections */
+    #devPanel details.boSection {
+      box-shadow: none;
+      border: 1px solid #ddd;
+      margin-top: 12px;
+      overflow: visible;
+    }
+    #devPanel details.boSection > summary {
+      padding: 8px 10px;
+      font-size: 13px;
+      background: #f5f5f5;
+    }
+    #devPanel .boBox {
+      padding: 10px;
+      max-height: none;
+      overflow: visible;
+    }
+    /* Profile controls container - allow it to scroll if very long */
+    #profileControlsContainer {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      padding: 8px;
+      background: #fafafa;
+    }
 
     .doorItem, .windowItem{
       border: 1px solid #eee;
@@ -178,6 +325,31 @@
       z-index: 1000;
     }
     .schedule-section{ margin-bottom: 30px; }
+
+    /* Page header with back button */
+    .page-header{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 0 10px;
+    }
+    .page-header h2{ margin: 0; text-align: left; }
+    .back-to-3d-btn{
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .back-to-3d-btn:hover{ background: #1565c0; }
+    .back-to-3d-btn:active{ background: #0d47a1; }
+
     h2{ margin: 0 0 20px 0; text-align:center; }
     h4{
       background:#333;
@@ -197,7 +369,7 @@
     }
     th, td{ padding:12px; text-align:left; border-bottom:1px solid #eee; font-size:13px; }
     th{ background:#f8f9fa; color:#555; }
-    .sticky-table thead th{ position:sticky; top:80px; z-index:1; }
+    /* Removed sticky headers - they were obscuring data when scrolling */
     .totals-row td{ font-weight:bold; }
     .subtle{ color:#666; font-size:12px; margin:6px 0 12px 0; }
 
@@ -234,7 +406,7 @@
     }
 
     @media print{
-      #topbar, #renderCanvas, #statusOverlay, #controls { display:none !important; }
+      #renderCanvas, #statusOverlay, #controls { display:none !important; }
       body, html { overflow: visible !important; height:auto !important; background:#fff !important; }
       .page{
         padding: 0 10mm !important;
@@ -245,6 +417,208 @@
         height:auto !important;
       }
       #bomToolbar{ display:none !important; }
-      .sticky-table thead th{ top:0; }
     }
-```0
+
+    /* ===== MOBILE UX IMPROVEMENTS ===== */
+    
+    /* Mobile "Design Your Shed" button - shows when panel is collapsed */
+    #mobileOpenBtn {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2147483001;
+      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(25, 118, 210, 0.4), 0 2px 8px rgba(0,0,0,0.15);
+      animation: mobileBtnPulse 2s ease-in-out infinite;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    #mobileOpenBtn:active {
+      transform: translateX(-50%) scale(0.96);
+      box-shadow: 0 2px 10px rgba(25, 118, 210, 0.3);
+    }
+    
+    #mobileOpenBtn .btn-icon {
+      margin-right: 8px;
+    }
+    
+    @keyframes mobileBtnPulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(25, 118, 210, 0.4), 0 2px 8px rgba(0,0,0,0.15); }
+      50% { box-shadow: 0 4px 30px rgba(25, 118, 210, 0.6), 0 2px 12px rgba(0,0,0,0.2); }
+    }
+    
+    /* Mobile close button for panel */
+    #mobileCloseBtn {
+      display: none;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: #f0f0f0;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 10;
+      color: #666;
+    }
+    
+    #mobileCloseBtn:hover {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    /* Mobile styles */
+    @media (max-width: 1024px) {
+      /* Show mobile open button when panel is hidden */
+      body.mobile-panel-collapsed #mobileOpenBtn {
+        display: flex;
+        align-items: center;
+      }
+      
+      /* Show close button in panel on mobile */
+      body:not(.mobile-panel-collapsed) #mobileCloseBtn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      /* Hide panel when collapsed on mobile */
+      body.mobile-panel-collapsed #controls {
+        display: none !important;
+      }
+      
+      /* Panel as bottom drawer on mobile */
+      #controls {
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        max-height: 55vh;
+        border-radius: 20px 20px 0 0;
+        overflow: visible;
+      }
+      
+      /* Hide resize handles on mobile */
+      #controls .resize-handle {
+        display: none;
+      }
+      
+      #controlPanel details {
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+        max-height: 55vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      
+      #controlPanel summary {
+        padding: 16px 16px 12px 16px;
+        padding-right: 50px; /* Space for close button */
+      }
+      
+      #controlPanel .inner {
+        padding: 12px 16px 80px 16px;
+        max-height: calc(55vh - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      /* Larger touch targets */
+      #controlPanel input[type="number"],
+      #controlPanel input[type="text"],
+      #controlPanel select {
+        padding: 12px 14px;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+        min-height: 48px;
+      }
+      
+      #controlPanel button {
+        padding: 12px 14px;
+        font-size: 15px;
+        min-height: 48px;
+      }
+      
+      #controlPanel .check {
+        padding: 8px 0;
+        min-height: 44px;
+        align-items: center;
+      }
+      
+      #controlPanel .check input[type="checkbox"],
+      #controlPanel .check input[type="radio"] {
+        width: 20px;
+        height: 20px;
+      }
+      
+      /* More spacing between rows */
+      #controlPanel .row,
+      #controlPanel .row3,
+      #controlPanel .row4 {
+        gap: 12px;
+      }
+      
+      #controlPanel form {
+        gap: 14px;
+      }
+      
+      /* Drawer handle indicator */
+      #controlPanel summary::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 4px;
+        background: #ddd;
+        border-radius: 2px;
+      }
+      
+      #controlPanel details {
+        position: relative;
+      }
+      
+      /* Hide panel maximize button on mobile */
+      #panelMaximizeBtn {
+        display: none;
+      }
+      
+      /* Status overlay adjustment */
+      #statusOverlay {
+        top: auto;
+        bottom: 80px;
+      }
+    }
+    
+    /* Small phones */
+    @media (max-width: 480px) {
+      #mobileOpenBtn {
+        padding: 14px 24px;
+        font-size: 15px;
+        bottom: 20px;
+      }
+      
+      #controlPanel .row,
+      #controlPanel .row3 {
+        grid-template-columns: 1fr;
+      }
+      
+      #controlPanel .row4 {
+        grid-template-columns: 1fr 1fr;
+      }
+    }

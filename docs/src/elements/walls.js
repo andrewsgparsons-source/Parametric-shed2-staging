@@ -31,9 +31,14 @@ import { CONFIG, resolveDims } from "../params.js";
  * @param {any} state Derived state for walls (w/d already resolved to frame outer dims)
  * @param {{scene:BABYLON.Scene, materials:any}} ctx
  */
-export function build3D(state, ctx) {
+export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx;
   const variant = state.walls?.variant || "insulated";
+
+  // Section context is OPTIONAL - when undefined, behaves exactly as legacy single-building mode
+  // sectionContext = { sectionId: string, position: { x: number, y: number, z: number } }
+  const sectionId = sectionContext?.sectionId;
+  const sectionPos = sectionContext?.position || { x: 0, y: 0, z: 0 };
 
   // Precompute apex roof underside model once per rebuild (used only for gable cladding trim + height).
   const apexRoofModel = (state && state.roof && String(state.roof.style || "") === "apex")
@@ -64,20 +69,26 @@ export function build3D(state, ctx) {
     }
   }
 
+  // Dispose existing meshes for this section (or all wall meshes in legacy mode)
+  const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+  const wallPrefix = meshPrefix + "wall-";
+  const cladPrefix = meshPrefix + "clad-";
+  const cornerPrefix = meshPrefix + "corner-board-";
+
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("wall-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(wallPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
 
-scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("clad-"))
+  scene.meshes
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(cladPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
 
   scene.meshes
-    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith("corner-board-"))
+    .filter((m) => m.metadata && m.metadata.dynamic === true && m.name.startsWith(cornerPrefix))
     .forEach((m) => {
       if (!m.isDisposed()) m.dispose(false, true);
     });
@@ -93,16 +104,41 @@ scene.meshes
   const plateY = prof.studW;
   const wallThk = prof.studH;
 
-  // ---- Cladding (Phase 1): external shiplap, geometry only ----
-  const CLAD_H = 140;
-  const CLAD_T = 20;
-  const CLAD_DRIP = 30;
-  const CLAD_BOTTOM_DROP_MM = 60;
+  // ---- Cladding (Phase 1): external cladding, geometry only ----
+  // Get cladding style from state (default to shiplap)
+  const claddingStyle = state?.cladding?.style || "shiplap";
 
-  const CLAD_Rt = 5;
-  const CLAD_Ht = 45;
-  const CLAD_Rb = 5;
-  const CLAD_Hb = 20;
+  // Cladding profile constants based on style
+  let CLAD_H, CLAD_T, CLAD_DRIP, CLAD_BOTTOM_DROP_MM;
+  let CLAD_Rt, CLAD_Ht, CLAD_Rb, CLAD_Hb;
+  let CLAD_T_TOP, CLAD_T_BOTTOM; // For overlap wedge profile
+
+  if (claddingStyle === "overlap") {
+    // Overlap (featheredge) cladding - wedge profile
+    CLAD_H = 150;           // Board height (exposed face)
+    CLAD_T = 22;            // Max thickness (at top)
+    CLAD_T_TOP = 22;        // Thick edge at top
+    CLAD_T_BOTTOM = 6;      // Thin edge at bottom
+    CLAD_DRIP = 30;         // Bottom overhang
+    CLAD_BOTTOM_DROP_MM = 60;
+    // For overlap, we use a simpler two-box approach
+    CLAD_Rt = 0;
+    CLAD_Ht = 0;
+    CLAD_Rb = 0;
+    CLAD_Hb = CLAD_H;       // Entire board is one piece
+  } else {
+    // Shiplap (default) - rabbeted profile
+    CLAD_H = 140;
+    CLAD_T = 20;
+    CLAD_T_TOP = 20;
+    CLAD_T_BOTTOM = 20;
+    CLAD_DRIP = 30;
+    CLAD_BOTTOM_DROP_MM = 60;
+    CLAD_Rt = 5;
+    CLAD_Ht = 45;
+    CLAD_Rb = 5;
+    CLAD_Hb = 20;
+  }
 
   // DIAGNOSTIC: disabled (must not restrict walls/panels/courses)
   const __DIAG_ONE_FRONT_ONE_BOARD = false;
@@ -250,7 +286,7 @@ if (isPent) {
       (pos.z + Lz / 2) / 1000
     );
     mesh.material = mat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     return mesh;
   }
 
@@ -324,7 +360,7 @@ if (isPent) {
     } catch (e) {}
 
     mesh.material = useMat;
-    mesh.metadata = Object.assign({ dynamic: true }, meta || {});
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
     return mesh;
   }
 
@@ -397,7 +433,10 @@ if (isPent) {
 
     // Calculate courses with extra padding to ensure we extend past the wall top
     // The roof trim will cut it back to the correct height
-    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + 2); // Add 2 extra courses
+    // For apex roofs, only front/back (gable) walls need extra courses - left/right stop at eaves
+    const isApexGableWall = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
+    const needsExtraCourses = roofStyle === "pent" || isApexGableWall;
+    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0));
     if (__DIAG_ONE_FRONT_ONE_BOARD) courses = 1;
     
     console.log("CLAD_DEBUG", {
@@ -717,7 +756,95 @@ console.log("CLAD_COURSES_FINAL", {
       const isFirst = i === 0;
 const yBase = claddingAnchorY_mm + i * CLAD_H;
 
+      // OVERLAP CLADDING: Create single wedge-like boards per course
+      if (claddingStyle === "overlap") {
+        const boardHeight = CLAD_H + (isFirst ? CLAD_DRIP : 0);
+        const yBoard = yBase - (isFirst ? CLAD_DRIP : 0);
+        // Overlap boards: bottom edge sits further out than top edge
+        // This creates the characteristic shadow line
+        const overlapOffset = 8; // mm offset for overlap effect
 
+        if (isAlongX) {
+          const wallOutsideFaceWorld = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+          const outwardNormalZ = outwardSignZ;
+          const xShift_mm = (Number.isFinite(xMin_mm) ? Math.max(0, xMin_mm - (origin.x + panelStart)) : 0);
+          const panelLenAdj = Math.max(1, panelLen - xShift_mm);
+
+          // Bottom part of board (thicker, sits further out)
+          const bottomPartHeight = Math.floor(boardHeight * 0.4);
+          const boardCenterZ_bottom = wallOutsideFaceWorld + outwardNormalZ * (CLAD_T_TOP / 2 + overlapOffset / 2);
+          const zMin_bottom = boardCenterZ_bottom - (CLAD_T_TOP / 2);
+
+          const b0 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+            panelLenAdj,
+            bottomPartHeight,
+            CLAD_T_TOP,
+            { x: origin.x + panelStart + xShift_mm, y: yBoard, z: zMin_bottom },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "bottom", style: "overlap" }
+          );
+          parts.push(b0);
+
+          // Top part of board (thinner, sits closer to wall)
+          const topPartHeight = boardHeight - bottomPartHeight;
+          const boardCenterZ_top = wallOutsideFaceWorld + outwardNormalZ * (CLAD_T_BOTTOM / 2);
+          const zMin_top = boardCenterZ_top - (CLAD_T_BOTTOM / 2);
+
+          const b1 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+            panelLenAdj,
+            topPartHeight,
+            CLAD_T_BOTTOM,
+            { x: origin.x + panelStart + xShift_mm, y: yBoard + bottomPartHeight, z: zMin_top },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "upper", style: "overlap" }
+          );
+          parts.push(b1);
+        } else {
+          // LEFT/RIGHT walls (along Z axis)
+          const wallOutsideFaceWorld = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+          const outwardNormalX = outwardSignX;
+          const zStart_mm = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
+          const zEnd_mm = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
+          const panelLenAdj = Math.max(1, zEnd_mm - zStart_mm);
+
+          // Bottom part of board
+          const bottomPartHeight = Math.floor(boardHeight * 0.4);
+          const boardCenterX_bottom = wallOutsideFaceWorld + outwardNormalX * (CLAD_T_TOP / 2 + overlapOffset / 2);
+          const xMin_bottom = boardCenterX_bottom - (CLAD_T_TOP / 2);
+
+          const b0 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+            CLAD_T_TOP,
+            bottomPartHeight,
+            panelLenAdj,
+            { x: xMin_bottom, y: yBoard, z: zStart_mm },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "bottom", style: "overlap" }
+          );
+          parts.push(b0);
+
+          // Top part of board
+          const topPartHeight = boardHeight - bottomPartHeight;
+          const boardCenterX_top = wallOutsideFaceWorld + outwardNormalX * (CLAD_T_BOTTOM / 2);
+          const xMin_top = boardCenterX_top - (CLAD_T_BOTTOM / 2);
+
+          const b1 = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+            CLAD_T_BOTTOM,
+            topPartHeight,
+            panelLenAdj,
+            { x: xMin_top, y: yBoard + bottomPartHeight, z: zStart_mm },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", part: "upper", style: "overlap" }
+          );
+          parts.push(b1);
+        }
+        continue; // Skip the shiplap code below
+      }
+
+      // SHIPLAP CLADDING (default): Two-part profile with rabbets
       // Drip: first course only; bottom edge at (claddingAnchorY_mm - 30mm)
       // Implemented as bottom-only extension (no change to X/Z extents)
       const yBottomStrip = yBase - (isFirst ? CLAD_DRIP : 0);
@@ -748,7 +875,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const panelLenAdj = Math.max(1, panelLen - xShift_mm);
 
         const b0 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
           panelLenAdj,
           hBottomStrip,
           CLAD_T,
@@ -763,7 +890,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const zUpperMin = boardCenterWorldZ_upper - (tUpper / 2);
 
         const b1 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
           panelLenAdj,
           hUpperStrip,
           tUpper,
@@ -819,7 +946,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         console.log(`[CLADDING_Z_POSITION] Wall=${wallId}, Panel=${panelIndex}, Course=${i}, zMin_mm=${zMin_mm}, origin.z=${origin.z}, panelStart=${panelStart}, zStart_mm=${zStart_mm}, expected=${origin.z + panelStart}, DIFF=${zStart_mm - (origin.z + panelStart)}`);
 
         const b0 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-bottom`,
           CLAD_T,
           hBottomStrip,
           panelLenAdj,
@@ -834,7 +961,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
         const xUpperMin = boardCenterWorldX_upper - (tUpper / 2);
 
         const b1 = mkBox(
-          `clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-upper`,
           tUpper,
           hUpperStrip,
           panelLenAdj,
@@ -1040,7 +1167,7 @@ for (let i = 0; i < wins.length; i++) {
               try {
                 const baseCSG = BABYLON.CSG.FromMesh(merged);
                 const resCSG = baseCSG.subtract(cutterCSG);
-                resMesh = resCSG.toMesh(`clad-${wallId}-panel-${panelIndex}`, mat, scene, false);
+                resMesh = resCSG.toMesh(`${meshPrefix}clad-${wallId}-panel-${panelIndex}`, mat, scene, false);
               } catch (e) {
                 resMesh = null;
               }
@@ -1098,6 +1225,8 @@ console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
                 const y1 = Math.floor(Number(yLine1_mm));
 
                 const yTop = Math.max(y0, y1) + 20000;
+
+                console.log('[WEDGE_DEBUG]', name, { x0, x1, y0, y1, yTop, z0r, z1r });
 
                 const positions = [
                   x0, y0, z0r,
@@ -1196,6 +1325,8 @@ if (apexRoofModel) {
 
                   const yAt = (x_mm) => Math.floor(apexRoofModel.yUnderAtWorldX_mm(x_mm));
 
+                  console.log('[APEX_WEDGE_CALC] ridgeX=', ridgeX, 'yAt(xA0)=', yAt(xA0), 'yAt(ridgeX)=', yAt(ridgeX), 'yAt(xA1)=', yAt(xA1));
+
                   // Piecewise-linear: split at ridge if the span crosses it (slope flips).
                   if (Number.isFinite(ridgeX) && ridgeX > xA0 && ridgeX < xA1) {
                     wedges.push(
@@ -1226,9 +1357,16 @@ if (apexRoofModel) {
                     try {
                       cutterCSG = BABYLON.CSG.FromMesh(wedges[0]);
                       for (let wi = 1; wi < wedges.length; wi++) {
-                        try { cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[wi])); } catch (e) {}
+                        try {
+                          cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[wi]));
+                        } catch (e) {
+                          console.error('APEX CSG union error:', e);
+                        }
                       }
-                    } catch (e) { cutterCSG = null; }
+                    } catch (e) {
+                      console.error('APEX CSG error:', e);
+                      cutterCSG = null;
+                    }
                   }
 
                   for (let wi = 0; wi < wedges.length; wi++) {
@@ -1282,26 +1420,75 @@ if (apexRoofModel) {
             }
 
             if (cutterCSG) {
+              console.log('DEBUG CSG: cutterCSG created, attempting clip for wall', wallId, 'panel', panelIndex);
+              console.log('DEBUG CSG: merged mesh exists?', !!merged, 'isDisposed?', merged?.isDisposed?.());
+              console.log('DEBUG CSG: merged mesh has geometry?', !!merged?.getTotalVertices?.(), 'vertices:', merged?.getTotalVertices?.());
+
+              // Log merged mesh bounding box BEFORE CSG
+              try {
+                merged.computeWorldMatrix(true);
+                merged.refreshBoundingInfo();
+                const bbBefore = merged.getBoundingInfo().boundingBox;
+                console.log('[CLAD_BBOX_BEFORE]', wallId, {
+                  minY: bbBefore.minimumWorld.y * 1000,
+                  maxY: bbBefore.maximumWorld.y * 1000,
+                  minX: bbBefore.minimumWorld.x * 1000,
+                  maxX: bbBefore.maximumWorld.x * 1000,
+                  minZ: bbBefore.minimumWorld.z * 1000,
+                  maxZ: bbBefore.maximumWorld.z * 1000
+                });
+              } catch (e) { console.warn('Could not get bbox before:', e); }
+
               let resMesh = null;
               try {
+                console.log('DEBUG CSG: Creating baseCSG from merged mesh...');
                 const baseCSG = BABYLON.CSG.FromMesh(merged);
+                console.log('DEBUG CSG: baseCSG created, performing subtract...');
                 const resCSG = baseCSG.subtract(cutterCSG);
-                resMesh = resCSG.toMesh(`clad-${wallId}-panel-${panelIndex}-roofclip`, mat, scene, false);
+                console.log('DEBUG CSG: subtract complete, converting to mesh...');
+                resMesh = resCSG.toMesh(`${meshPrefix}clad-${wallId}-panel-${panelIndex}-roofclip`, mat, scene, false);
+                console.log('DEBUG CSG: resMesh created successfully:', !!resMesh);
               } catch (e) {
+                console.error('DEBUG CSG: ERROR during CSG operations:', e);
                 resMesh = null;
               }
 
               if (resMesh) {
-                try { if (merged && !merged.isDisposed()) merged.dispose(false, true); } catch (e) {}
+                console.log('DEBUG CSG: Disposing old merged mesh and replacing with clipped version');
+                try { if (merged && !merged.isDisposed()) merged.dispose(false, true); } catch (e) {
+                  console.error('DEBUG CSG: Error disposing old mesh:', e);
+                }
                 merged = resMesh;
+                // Mark as already trimmed so roof.js observable doesn't re-trim
+                merged.metadata = Object.assign({}, merged.metadata || {}, { trimmedToRoofApex: true });
+                console.log('DEBUG CSG: Merged replaced with clipped mesh, marked trimmedToRoofApex=true');
+
+                // Log merged mesh bounding box AFTER CSG
+                try {
+                  merged.computeWorldMatrix(true);
+                  merged.refreshBoundingInfo();
+                  const bbAfter = merged.getBoundingInfo().boundingBox;
+                  console.log('[CLAD_BBOX_AFTER]', wallId, {
+                    minY: bbAfter.minimumWorld.y * 1000,
+                    maxY: bbAfter.maximumWorld.y * 1000,
+                    minX: bbAfter.minimumWorld.x * 1000,
+                    maxX: bbAfter.maximumWorld.x * 1000,
+                    minZ: bbAfter.minimumWorld.z * 1000,
+                    maxZ: bbAfter.maximumWorld.z * 1000
+                  });
+                } catch (e) { console.warn('Could not get bbox after:', e); }
+              } else {
+                console.warn('DEBUG CSG: resMesh is null, keeping original merged mesh');
               }
+            } else {
+              console.log('DEBUG CSG: No cutterCSG created for wall', wallId, 'panel', panelIndex);
             }
           }
         }
       } catch (e) {}
       // ---- END roof clip ----
 
-merged.name = `clad-${wallId}-panel-${panelIndex}`;
+merged.name = `${meshPrefix}clad-${wallId}-panel-${panelIndex}`;
       // Apply wall overhang shift for front/back walls only
       // Front/back cladding is built using origin coordinates, not plate bbox world positions,
       // so it needs the -25mm X shift to match the wall frame position.
@@ -1334,7 +1521,18 @@ merged.name = `clad-${wallId}-panel-${panelIndex}`;
   merged.material && merged.material.diffuseColor
 );
 
-      merged.metadata = Object.assign({ dynamic: true }, { wallId, panelIndex, type: "cladding" });
+      merged.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, merged.metadata || {}, { wallId, panelIndex, type: "cladding" });
+
+      // FINAL DEBUG: Log mesh state right before parenting
+      try {
+        merged.computeWorldMatrix(true);
+        merged.refreshBoundingInfo();
+        const bbFinal = merged.getBoundingInfo().boundingBox;
+        console.log('[CLAD_FINAL]', wallId, merged.name, {
+          maxY: bbFinal.maximumWorld.y * 1000,
+          vertices: merged.getTotalVertices()
+        });
+      } catch (e) {}
 
       if (plateParent) {
         try {
@@ -1471,7 +1669,7 @@ function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPe
       mesh.material = scene._claddingMatLight;
     }
     
-    mesh.metadata = { dynamic: true, part: "corner-board", wall: wallId, cladding: true };
+    mesh.metadata = { dynamic: true, sectionId: sectionId || null, part: "corner-board", wall: wallId, cladding: true };
     
     return mesh;
   }
@@ -1487,10 +1685,10 @@ function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPe
   const backZ = leftWallMaxZ + cornerBoardWidth / 2;
   
   // Create the four corner boards
-  createCornerBoard("corner-board-left-front", leftX, frontZ, "left");
-  createCornerBoard("corner-board-left-back", leftX, backZ, "left");
-  createCornerBoard("corner-board-right-front", rightX, frontZ, "right");
-  createCornerBoard("corner-board-right-back", rightX, backZ, "right");
+  createCornerBoard(meshPrefix + "corner-board-left-front", leftX, frontZ, "left");
+  createCornerBoard(meshPrefix + "corner-board-left-back", leftX, backZ, "left");
+  createCornerBoard(meshPrefix + "corner-board-right-front", rightX, frontZ, "right");
+  createCornerBoard(meshPrefix + "corner-board-right-back", rightX, backZ, "right");
 }
   
 function scheduleDeferredCladdingPass() {
@@ -1521,24 +1719,31 @@ function ensureCladdingMaterialOnMeshes() {
 
       let cladHits = 0;
       let cornerHits = 0;
+      let attachmentHits = 0;
       for (let i = 0; i < scene.meshes.length; i++) {
         const mesh = scene.meshes[i];
         if (!mesh || !mesh.name) continue;
-        
-        // Apply to cladding meshes
+
+        // Apply to main building cladding meshes
         if (mesh.name.startsWith("clad-")) {
           mesh.material = mat;
           cladHits++;
         }
-        
+
         // Apply to corner board meshes
         if (mesh.name.startsWith("corner-board-")) {
           mesh.material = mat;
           cornerHits++;
         }
+
+        // Apply to attachment cladding meshes (att-{id}-clad-...)
+        if (mesh.name.indexOf("-clad-") >= 0 || (mesh.metadata && mesh.metadata.type === "cladding")) {
+          mesh.material = mat;
+          attachmentHits++;
+        }
       }
 
-      console.log("CLAD_MATERIAL_FINALIZED cladding=", cladHits, "cornerBoards=", cornerHits);
+      console.log("CLAD_MATERIAL_FINALIZED cladding=", cladHits, "cornerBoards=", cornerHits, "attachments=", attachmentHits);
     } catch (e) {
       console.warn("ensureCladdingMaterialOnMeshes failed", e);
     }
@@ -1575,7 +1780,12 @@ function scheduleFollowUpFinalisers() {
             const mesh = scene.meshes[i];
             if (!mesh || !mesh.name) continue;
             
-            if ((mesh.name.startsWith("clad-") || mesh.name.startsWith("corner-board-")) && !mesh.material) {
+            // Apply to main building cladding, corner boards, and attachment cladding
+            var isCladding = mesh.name.startsWith("clad-") ||
+                             mesh.name.startsWith("corner-board-") ||
+                             mesh.name.indexOf("-clad-") >= 0 ||
+                             (mesh.metadata && mesh.metadata.type === "cladding");
+            if (isCladding && !mesh.material) {
               mesh.material = mat;
             }
           }
@@ -1751,6 +1961,27 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
 
         // ALSO: run again on the next 2 frames to catch late Apex mesh replacements
         scheduleFollowUpFinalisers();
+
+        // DEBUG: Dump all cladding meshes after everything is done
+        setTimeout(() => {
+          try {
+            const cladMeshes = scene.meshes.filter(m => m.name && m.name.includes('clad'));
+            console.log('[CLAD_DUMP] Total cladding meshes:', cladMeshes.length);
+            for (const m of cladMeshes) {
+              try {
+                m.computeWorldMatrix(true);
+                m.refreshBoundingInfo();
+                const bb = m.getBoundingInfo().boundingBox;
+                console.log('[CLAD_DUMP]', m.name, {
+                  maxY: bb.maximumWorld.y * 1000,
+                  minY: bb.minimumWorld.y * 1000,
+                  vertices: m.getTotalVertices(),
+                  trimmed: m.metadata?.trimmedToRoofApex
+                });
+              } catch (e) {}
+            }
+          } catch (e) {}
+        }, 500);
       });
     }
   } catch (e) {}
@@ -2121,6 +2352,29 @@ mkBox(
       mat,
       { windowId: id }
     );
+
+    // Add cripple studs below the sill (from bottom plate to sill underside)
+    const crippleHeight = Math.max(0, y0 - prof.studH - plateY);
+    if (crippleHeight > prof.studW) {
+      // Calculate number of cripples needed based on window width and stud spacing
+      const windowInnerWidth = Math.max(0, x1 - x0);
+      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const crippleSpacing = windowInnerWidth / (numCripples + 1);
+      
+      for (let ci = 1; ci <= numCripples; ci++) {
+        const crippleX = origin.x + x0 + (ci * crippleSpacing) - (prof.studW / 2);
+        mkBox(
+          `wall-${wallId}-win-${id}-cripple-below-${ci}`,
+          prof.studW,
+          crippleHeight,
+          thickness,
+          { x: crippleX, y: plateY, z: origin.z },
+          mat,
+          { windowId: id, part: "cripple-below" }
+        );
+      }
+      console.log(`[WINDOW_CRIPPLE_X] Wall=${wallId}, WindowID=${id}, Added ${numCripples} cripple studs below sill, height=${crippleHeight}mm`);
+    }
   }
 
   function addWindowFramingAlongZ(wallId, origin, win) {
@@ -2192,6 +2446,30 @@ mkBox(
       mat,
       { windowId: id }
     );
+
+    // Add cripple studs below the sill (from bottom plate to sill underside)
+    const crippleHeight = Math.max(0, y0 - prof.studH - plateY);
+    if (crippleHeight > prof.studW) {
+      // Calculate number of cripples needed based on window width and stud spacing
+      const windowInnerWidth = Math.max(0, z1 - z0);
+      const numCripples = Math.max(1, Math.floor(windowInnerWidth / prof.spacing));
+      const crippleSpacing = windowInnerWidth / (numCripples + 1);
+      
+      for (let ci = 1; ci <= numCripples; ci++) {
+        // For Z-axis walls, cripple position is along Z between the king studs
+        const crippleZ = origin.z + z0 - prof.studW + (ci * crippleSpacing) - (prof.studW / 2);
+        mkBox(
+          `wall-${wallId}-win-${id}-cripple-below-${ci}`,
+          thickness,
+          crippleHeight,
+          prof.studW,
+          { x: origin.x, y: plateY, z: crippleZ },
+          mat,
+          { windowId: id, part: "cripple-below" }
+        );
+      }
+      console.log(`[WINDOW_CRIPPLE_Z] Wall=${wallId}, WindowID=${id}, Added ${numCripples} cripple studs below sill, height=${crippleHeight}mm`);
+    }
   }
 
   function buildBasicPanel(wallPrefix, axis, panelLen, origin, offsetAlong, openings, studLenForPosStart) {
@@ -2297,7 +2575,8 @@ mkBox(
 
   function buildWall(wallId, axis, length, origin) {
     const isAlongX = axis === "x";
-    const wallPrefix = `wall-${wallId}-`;
+    // Use section-aware prefix from outer scope (defined at top of build3D)
+    const wallMeshPrefix = meshPrefix + `wall-${wallId}-`;
 
     const doors = doorIntervalsForWall(wallId);
     const wins = windowIntervalsForWall(wallId);
@@ -2312,7 +2591,7 @@ mkBox(
     const studLenFlat = Math.max(1, wallHeightFlat - 2 * plateY);
 
 if (isAlongX) {
-      mkBox(wallPrefix + "plate-bottom", length, plateY, wallThk, { x: origin.x, y: 0, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-bottom", length, plateY, wallThk, { x: origin.x, y: 0, z: origin.z }, materials.plate);
       if (!isSlopeWall) {
         // Check if this is an apex gable wall with a door extending into the gable
         const isApexGableWall = !isPent && (state && state.roof && String(state.roof.style || "") === "apex") && (wallId === "front" || wallId === "back");
@@ -2341,7 +2620,7 @@ if (isAlongX) {
           const leftPlateLen = Math.max(0, doorLeftEdge);
           if (leftPlateLen > prof.studW) {
             mkBox(
-              wallPrefix + "plate-top-left",
+              wallMeshPrefix + "plate-top-left",
               leftPlateLen,
               plateY,
               wallThk,
@@ -2355,7 +2634,7 @@ if (isAlongX) {
           const rightPlateLen = Math.max(0, length - rightPlateStart);
           if (rightPlateLen > prof.studW) {
             mkBox(
-              wallPrefix + "plate-top-right",
+              wallMeshPrefix + "plate-top-right",
               rightPlateLen,
               plateY,
               wallThk,
@@ -2365,14 +2644,14 @@ if (isAlongX) {
           }
         } else {
           // Normal full top plate
-          mkBox(wallPrefix + "plate-top", length, plateY, wallThk, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
+          mkBox(wallMeshPrefix + "plate-top", length, plateY, wallThk, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
         }
       } else {
 
         const yTop0 = heightAtX(origin.x);
         const yTop1 = heightAtX(origin.x + length);
         mkSlopedPlateAlongX(
-          wallPrefix + "plate-top",
+          wallMeshPrefix + "plate-top",
           length,
           wallThk,
           { x: origin.x, z: origin.z },
@@ -2383,8 +2662,8 @@ if (isAlongX) {
         );
       }
     } else {
-      mkBox(wallPrefix + "plate-bottom", wallThk, plateY, length, { x: origin.x, y: 0, z: origin.z }, materials.plate);
-      mkBox(wallPrefix + "plate-top", wallThk, plateY, length, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-bottom", wallThk, plateY, length, { x: origin.x, y: 0, z: origin.z }, materials.plate);
+      mkBox(wallMeshPrefix + "plate-top", wallThk, plateY, length, { x: origin.x, y: wallHeightFlat - plateY, z: origin.z }, materials.plate);
     }
 
     const studLenForXStart = (xStartRel) => {
@@ -2399,7 +2678,7 @@ if (isAlongX) {
 
       for (let p = 0; p < panels.length; p++) {
         const pan = panels[p];
-        const pref = wallPrefix + `panel-${p + 1}-`;
+        const pref = wallMeshPrefix + `panel-${p + 1}-`;
         buildBasicPanel(
           pref,
           axis,
@@ -2480,9 +2759,9 @@ if (apexH && Number.isFinite(apexH.crest_mm)) {
     const placeStud = (x, z, posStartRel) => {
       const h = isAlongX ? studLenForXStart(posStartRel) : studLenFlat;
       if (isAlongX) {
-        studs.push(mkBox(wallPrefix + "stud-" + studs.length, prof.studW, h, wallThk, { x, y: plateY, z }, materials.timber));
+        studs.push(mkBox(wallMeshPrefix + "stud-" + studs.length, prof.studW, h, wallThk, { x, y: plateY, z }, materials.timber));
       } else {
-        studs.push(mkBox(wallPrefix + "stud-" + studs.length, wallThk, h, prof.studW, { x, y: plateY, z }, materials.timber));
+        studs.push(mkBox(wallMeshPrefix + "stud-" + studs.length, wallThk, h, prof.studW, { x, y: plateY, z }, materials.timber));
       }
     };
 
@@ -2578,8 +2857,344 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
   if (flags.left) buildWall("left", "z", sideLenZ, { x: 0, z: wallThk });
   if (flags.right) buildWall("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 
+  // Build wall insulation and internal lining for insulated variant
+  // Uses vis.ins toggle (same as floor insulation visibility)
+  const showWallInsulation = variant === "insulated" && (state.vis && state.vis.ins !== false);
+  console.log('[WALLS] Wall insulation check - variant:', variant, 'vis.ins:', state.vis?.ins, 'showWallInsulation:', showWallInsulation);
+  if (showWallInsulation) {
+    buildWallInsulationAndLining(
+      state, scene, materials, dims, height, prof, wallThk, plateY,
+      flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll
+    );
+  }
+
   // Schedule one-shot deferred cladding build (one frame later)
   scheduleDeferredCladdingPass();
+}
+
+/**
+ * Build wall insulation (PIR 50mm between studs) and internal plywood lining (12mm)
+ * for insulated wall variant. Similar to floor insulation between joists.
+ */
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll) {
+  const PIR_THICKNESS = 50; // 50mm PIR insulation
+  const PLY_THICKNESS = 12; // 12mm plywood internal lining
+  const STUD_SPACING = prof.spacing || 400;
+  const studW = prof.studW;
+  
+  console.log('[WALL_INS] Building wall insulation - dims:', dims, 'height:', height, 'studW:', studW, 'spacing:', STUD_SPACING);
+  
+  // Insulation material (yellow/cream PIR color)
+  const insMat = new BABYLON.StandardMaterial('wallInsMat-' + Date.now(), scene);
+  insMat.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4); // Brighter yellow
+  
+  // Plywood material (light wood color)
+  const plyMat = new BABYLON.StandardMaterial('wallPlyMat-' + Date.now(), scene);
+  plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+
+  // Get root node for wall meshes - try multiple methods
+  let shedRoot = scene.getTransformNodeByName("shedRoot");
+  if (!shedRoot) {
+    shedRoot = scene.getMeshByName("shedRoot");
+  }
+  if (!shedRoot) {
+    // Create a transform node if not found
+    shedRoot = new BABYLON.TransformNode("wallInsRoot", scene);
+  }
+  
+  // Insulation height (between plates)
+  const insHeight = Math.max(1, height - 2 * plateY);
+  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY);
+  
+  // Helper: get openings (doors + windows) for a specific wall
+  function getOpeningsForWall(wallId) {
+    const openings = [];
+    // Add doors
+    for (let i = 0; i < (doorsAll || []).length; i++) {
+      const d = doorsAll[i];
+      if (String(d.wall || "front") !== wallId) continue;
+      const w = Math.max(100, Math.floor(d.width_mm || 800));
+      const x0 = Math.floor(d.x_mm ?? 0);
+      const h = Math.max(100, Math.floor(d.height_mm || 2000));
+      openings.push({ x0, x1: x0 + w, y0: 0, y1: h, type: 'door' });
+    }
+    // Add windows
+    for (let i = 0; i < (winsAll || []).length; i++) {
+      const win = winsAll[i];
+      if (String(win.wall || "front") !== wallId) continue;
+      const w = Math.max(100, Math.floor(win.width_mm || 600));
+      const h = Math.max(100, Math.floor(win.height_mm || 400));
+      const x0 = Math.floor(win.x_mm ?? 0);
+      const y0 = Math.floor(win.y_mm ?? 1000);
+      openings.push({ x0, x1: x0 + w, y0, y1: y0 + h, type: 'window' });
+    }
+    return openings;
+  }
+  
+  // Helper: check if a horizontal range overlaps with any opening
+  function overlapsOpening(start, end, openings) {
+    for (let i = 0; i < openings.length; i++) {
+      const o = openings[i];
+      // Check horizontal overlap
+      if (start < o.x1 && end > o.x0) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  // Build insulation and lining for each wall
+  function buildWallInsulation(wallId, axis, wallLen, origin) {
+    const isAlongX = axis === "x";
+    const prefix = meshPrefix + `wall-${wallId}-ins-`;
+    const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
+    
+    // Get openings for this wall
+    const wallOpenings = getOpeningsForWall(wallId);
+    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length);
+    
+    // Calculate stud positions (same logic as main wall builder)
+    const studPositions = [0]; // Start with corner stud
+    let pos = STUD_SPACING;
+    while (pos < wallLen - studW) {
+      studPositions.push(pos);
+      pos += STUD_SPACING;
+    }
+    if (studPositions[studPositions.length - 1] !== wallLen - studW) {
+      studPositions.push(wallLen - studW); // End corner stud
+    }
+    
+    console.log('[WALL_INS] Stud positions for', wallId, ':', studPositions);
+    
+    // Build insulation panels between studs (with partial fill around openings)
+    let insCount = 0;
+    
+    // Helper to find which opening overlaps this bay and get its vertical extents
+    function getOverlappingOpening(start, end) {
+      for (let oi = 0; oi < wallOpenings.length; oi++) {
+        const o = wallOpenings[oi];
+        if (start < o.x1 && end > o.x0) {
+          return o;
+        }
+      }
+      return null;
+    }
+    
+    // Helper to create an insulation panel
+    function createInsPanel(name, bayStart, bayEnd, yBottom, yTop) {
+      const bayW = bayEnd - bayStart;
+      const insH = yTop - yBottom;
+      if (bayW < 10 || insH < 10) return null;
+      
+      const insDepth = wallThk - 10;
+      const insW = isAlongX ? bayW : insDepth;
+      const insD = isAlongX ? insDepth : bayW;
+      
+      const insX = isAlongX 
+        ? origin.x + bayStart + bayW / 2 
+        : origin.x + wallThk / 2;
+      const insZ = isAlongX 
+        ? origin.z + wallThk / 2 
+        : origin.z + bayStart + bayW / 2;
+      
+      const ins = BABYLON.MeshBuilder.CreateBox(name, {
+        width: insW * 0.001,
+        height: insH * 0.001,
+        depth: insD * 0.001
+      }, scene);
+      
+      ins.position = new BABYLON.Vector3(
+        insX * 0.001,
+        (yBottom + insH / 2) * 0.001,
+        insZ * 0.001
+      );
+      ins.material = insMat;
+      ins.parent = shedRoot;
+      ins.metadata = { dynamic: true, sectionId: sectionId || null, isWallInsulation: true };
+      ins.enableEdgesRendering();
+      ins.edgesWidth = 1;
+      ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+      return ins;
+    }
+    
+    for (let i = 0; i < studPositions.length - 1; i++) {
+      const studStart = studPositions[i] + studW; // After this stud
+      const studEnd = studPositions[i + 1]; // Before next stud
+      const bayWidth = studEnd - studStart;
+      
+      if (bayWidth < 10) continue;
+      
+      const overlapping = getOverlappingOpening(studStart, studEnd);
+      
+      if (!overlapping) {
+        // No opening - fill entire bay with insulation
+        if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
+          insCount++;
+        }
+      } else {
+        // Bay overlaps with an opening - add partial insulation below and above
+        const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
+        const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
+        
+        // Insulation BELOW the opening (from plate to sill area)
+        // Account for sill thickness (prof.studH)
+        const sillThickness = prof.studH || 100;
+        const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
+        if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
+          if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
+          }
+        }
+        
+        // Insulation ABOVE the opening (from header to top plate)
+        // Account for header thickness
+        const headerThickness = prof.studH || 100;
+        const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
+        const insAboveTop = plateY + insHeight;
+        if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
+          if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+          }
+        }
+      }
+    }
+    
+    console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
+    
+    // Build internal plywood lining
+    // Lining sits on inside face of wall (inside the stud cavity)
+    const plyW = isAlongX ? wallLen : PLY_THICKNESS;
+    const plyD = isAlongX ? PLY_THICKNESS : wallLen;
+    const plyH = height; // Full wall height
+    
+    // Position on inside face of wall
+    let plyX, plyZ;
+    if (isAlongX) {
+      plyX = origin.x + wallLen / 2;
+      // Front wall: inside is +Z direction; Back wall: inside is -Z direction
+      plyZ = wallId === "front" 
+        ? origin.z + wallThk - PLY_THICKNESS / 2
+        : origin.z + PLY_THICKNESS / 2;
+    } else {
+      // Left wall: inside is +X direction; Right wall: inside is -X direction
+      plyX = wallId === "left"
+        ? origin.x + wallThk - PLY_THICKNESS / 2
+        : origin.x + PLY_THICKNESS / 2;
+      plyZ = origin.z + wallLen / 2;
+    }
+    
+    const ply = BABYLON.MeshBuilder.CreateBox(plyPrefix + "panel", {
+      width: plyW * 0.001,
+      height: plyH * 0.001,
+      depth: plyD * 0.001
+    }, scene);
+    
+    ply.position = new BABYLON.Vector3(
+      plyX * 0.001,
+      (plyH / 2) * 0.001,
+      plyZ * 0.001
+    );
+    ply.material = plyMat;
+    ply.parent = shedRoot;
+    ply.metadata = { dynamic: true, sectionId: sectionId || null };
+    ply.enableEdgesRendering();
+    ply.edgesWidth = 2;
+    ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+    
+    // If wall has openings, cut them out using CSG
+    if (wallOpenings.length > 0) {
+      console.log('[WALL_INS] Cutting', wallOpenings.length, 'openings from plywood for wall', wallId);
+      
+      const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+      
+      if (hasCSG) {
+        const cutters = [];
+        
+        for (let oi = 0; oi < wallOpenings.length; oi++) {
+          const op = wallOpenings[oi];
+          const opW = op.x1 - op.x0;
+          const opH = op.y1 - op.y0;
+          const opY = plateY + op.y0 + opH / 2;
+          
+          // Create cutter box for this opening
+          let cutterW, cutterD, cutterX, cutterZ;
+          if (isAlongX) {
+            cutterW = opW;
+            cutterD = PLY_THICKNESS + 20; // Extra depth to ensure clean cut
+            cutterX = origin.x + op.x0 + opW / 2;
+            cutterZ = plyZ;
+          } else {
+            cutterW = PLY_THICKNESS + 20;
+            cutterD = opW;
+            cutterX = plyX;
+            cutterZ = origin.z + op.x0 + opW / 2;
+          }
+          
+          const cutter = BABYLON.MeshBuilder.CreateBox(plyPrefix + "cutter-" + oi, {
+            width: cutterW * 0.001,
+            height: opH * 0.001,
+            depth: cutterD * 0.001
+          }, scene);
+          
+          cutter.position = new BABYLON.Vector3(
+            cutterX * 0.001,
+            opY * 0.001,
+            cutterZ * 0.001
+          );
+          
+          cutters.push(cutter);
+        }
+        
+        if (cutters.length > 0) {
+          try {
+            // Merge all cutters into one CSG
+            let cutterCSG = BABYLON.CSG.FromMesh(cutters[0]);
+            for (let ci = 1; ci < cutters.length; ci++) {
+              const c = BABYLON.CSG.FromMesh(cutters[ci]);
+              cutterCSG = cutterCSG.union(c);
+            }
+            
+            // Subtract from plywood
+            const plyCSG = BABYLON.CSG.FromMesh(ply);
+            const resultCSG = plyCSG.subtract(cutterCSG);
+            const resultMesh = resultCSG.toMesh(plyPrefix + "panel-cut", plyMat, scene, false);
+            
+            // Copy properties from original
+            resultMesh.parent = shedRoot;
+            resultMesh.metadata = { dynamic: true, sectionId: sectionId || null };
+            resultMesh.enableEdgesRendering();
+            resultMesh.edgesWidth = 2;
+            resultMesh.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+            
+            // Dispose original and cutters
+            ply.dispose(false, true);
+            for (let ci = 0; ci < cutters.length; ci++) {
+              cutters[ci].dispose(false, true);
+            }
+            
+            console.log('[WALL_INS] Successfully cut openings from plywood for wall', wallId);
+          } catch (e) {
+            console.warn('[WALL_INS] CSG cutting failed for wall', wallId, e);
+            // Dispose cutters but keep original ply
+            for (let ci = 0; ci < cutters.length; ci++) {
+              cutters[ci].dispose(false, true);
+            }
+          }
+        }
+      } else {
+        console.log('[WALL_INS] CSG not available - plywood will cover openings for wall', wallId);
+      }
+    }
+  }
+  
+  const sideLenZ = Math.max(1, dims.d - 2 * wallThk);
+  
+  if (flags.front) buildWallInsulation("front", "x", dims.w, { x: 0, z: 0 });
+  if (flags.back) buildWallInsulation("back", "x", dims.w, { x: 0, z: dims.d - wallThk });
+  if (flags.left) buildWallInsulation("left", "z", sideLenZ, { x: 0, z: wallThk });
+  if (flags.right) buildWallInsulation("right", "z", sideLenZ, { x: dims.w - wallThk, z: wallThk });
 }
 
 function resolveProfile(state, variant) {
@@ -2763,11 +3378,202 @@ function pickPanelIndexForCenter(panels, x0, x1) {
   return panels.length - 1;
 }
 
+/**
+ * Update Wall Insulation and Plywood BOM sections
+ * Called from updateBOM for both apex and pent roofs
+ */
+function updateWallInsulationBOM(state, variant, isPent) {
+  console.log('[WALL_INS_BOM] Updating wall insulation BOM - variant:', variant);
+  
+  // Get elements for both pages
+  const wallPirBodyEl = document.getElementById('wallPirBody');
+  const wallPirSummaryEl = document.getElementById('wallPirSummary');
+  const wallPirSectionEl = document.getElementById('wallPirSection');
+  const wallPlyBodyEl = document.getElementById('wallPlyBody');
+  const wallPlySummaryEl = document.getElementById('wallPlySummary');
+  const wallPlySectionEl = document.getElementById('wallPlySection');
+  const wallPirBodyEl2 = document.getElementById('wallPirBody2');
+  const wallPirSummaryEl2 = document.getElementById('wallPirSummary2');
+  const wallPirSectionEl2 = document.getElementById('wallPirSection2');
+  const wallPlyBodyEl2 = document.getElementById('wallPlyBody2');
+  const wallPlySummaryEl2 = document.getElementById('wallPlySummary2');
+  const wallPlySectionEl2 = document.getElementById('wallPlySection2');
+  
+  console.log('[WALL_INS_BOM] Elements found:', {
+    wallPirBodyEl: !!wallPirBodyEl,
+    wallPirBodyEl2: !!wallPirBodyEl2,
+    wallPlyBodyEl: !!wallPlyBodyEl,
+    wallPlyBodyEl2: !!wallPlyBodyEl2
+  });
+  
+  if (variant !== 'insulated') {
+    console.log('[WALL_INS_BOM] Not insulated variant - hiding sections');
+    if (wallPirSectionEl) wallPirSectionEl.style.display = 'none';
+    if (wallPlySectionEl) wallPlySectionEl.style.display = 'none';
+    if (wallPirSectionEl2) wallPirSectionEl2.style.display = 'none';
+    if (wallPlySectionEl2) wallPlySectionEl2.style.display = 'none';
+    return;
+  }
+  
+  console.log('[WALL_INS_BOM] Insulated variant - calculating BOM');
+  
+  // Show sections
+  if (wallPirSectionEl) wallPirSectionEl.style.display = '';
+  if (wallPlySectionEl) wallPlySectionEl.style.display = '';
+  if (wallPirSectionEl2) wallPirSectionEl2.style.display = '';
+  if (wallPlySectionEl2) wallPlySectionEl2.style.display = '';
+  
+  const PIR_SHEET_W = 1200;
+  const PIR_SHEET_L = 2400;
+  const PLY_SHEET_W = 1220;
+  const PLY_SHEET_L = 2440;
+  
+  // Get wall dimensions
+  const frameW = Math.max(1, Math.floor(state.w));
+  const frameD = Math.max(1, Math.floor(state.d));
+  const prof = resolveProfile(state, variant);
+  const wallThk = prof.studH;
+  const studW = prof.studW;
+  const STUD_SPACING = prof.spacing || 400;
+  
+  // Calculate wall height
+  let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
+  if (!isPent && state?.roof?.style === "apex") {
+    const apexH = resolveApexHeightsMm(state);
+    if (apexH && Number.isFinite(apexH.eaves_mm)) {
+      const baseRise_mm = resolveBaseRiseMm(state);
+      height = Math.max(100, Math.floor(apexH.eaves_mm - baseRise_mm));
+    }
+  } else if (isPent && state?.roof?.pent) {
+    const minH = state.roof.pent.minHeight_mm || 2100;
+    const maxH = state.roof.pent.maxHeight_mm || 2300;
+    height = Math.max(minH, maxH);
+  }
+  
+  const plateY = studW;
+  const studLen = Math.max(1, height - 2 * plateY);
+  
+  const lengths = {
+    front: frameW,
+    back: frameW,
+    left: Math.max(1, frameD - 2 * wallThk),
+    right: Math.max(1, frameD - 2 * wallThk),
+  };
+  
+  const flags = normalizeWallFlags(state);
+  const walls = ["front", "back", "left", "right"].filter((w) => flags[w]);
+  
+  // Calculate PIR insulation
+  let wallPirHtml = '';
+  let totalPirArea = 0;
+  
+  for (const wname of walls) {
+    const wallLen = lengths[wname];
+    const doorsW = getDoorIntervalsForWallFromState(state, wname);
+    const winsW = getWindowIntervalsForWallFromState(state, wname);
+    const allOpenings = doorsW.concat(winsW);
+    
+    const studPositions = [0];
+    let pos = STUD_SPACING;
+    while (pos < wallLen - studW) {
+      studPositions.push(pos);
+      pos += STUD_SPACING;
+    }
+    studPositions.push(wallLen - studW);
+    
+    let bayCount = 0;
+    for (let i = 0; i < studPositions.length - 1; i++) {
+      const studStart = studPositions[i] + studW;
+      const studEnd = studPositions[i + 1];
+      const bayWidth = studEnd - studStart;
+      
+      let hasOpening = false;
+      for (const o of allOpenings) {
+        const ox0 = o.x0 || o.doorX0 || 0;
+        const ox1 = o.x1 || o.doorX1 || (ox0 + (o.w || 800));
+        if (studStart < ox1 && studEnd > ox0) {
+          hasOpening = true;
+          break;
+        }
+      }
+      
+      if (!hasOpening && bayWidth > 10) {
+        bayCount++;
+        totalPirArea += studLen * bayWidth;
+      }
+    }
+    
+    if (bayCount > 0) {
+      wallPirHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${bayCount}</td><td>${studLen}mm × ~${Math.round(STUD_SPACING - studW)}mm</td><td>Between studs</td></tr>`;
+    }
+  }
+  
+  const pirHtmlContent = wallPirHtml || `<tr><td colspan="4">None</td></tr>`;
+  if (wallPirBodyEl) wallPirBodyEl.innerHTML = pirHtmlContent;
+  if (wallPirBodyEl2) wallPirBodyEl2.innerHTML = pirHtmlContent;
+  
+  const pirSheetArea = PIR_SHEET_W * PIR_SHEET_L;
+  const pirMinSheets = pirSheetArea > 0 ? Math.ceil(totalPirArea / pirSheetArea) : 0;
+  const pirSummaryText = `50mm PIR (Celotex) - Minimum sheets (${PIR_SHEET_W}×${PIR_SHEET_L}mm): ${pirMinSheets}`;
+  if (wallPirSummaryEl) wallPirSummaryEl.textContent = pirSummaryText;
+  if (wallPirSummaryEl2) wallPirSummaryEl2.textContent = pirSummaryText;
+  
+  // Calculate plywood lining
+  let wallPlyHtml = '';
+  let totalPlyArea = 0;
+  
+  for (const wname of walls) {
+    const wallLen = lengths[wname];
+    const doorsW = getDoorIntervalsForWallFromState(state, wname);
+    const winsW = getWindowIntervalsForWallFromState(state, wname);
+    
+    const panelH = height;
+    const panelW = wallLen;
+    
+    const sheetsAcross = Math.ceil(panelW / PLY_SHEET_L);
+    const sheetsUp = Math.ceil(panelH / PLY_SHEET_W);
+    
+    let openingArea = 0;
+    for (const d of doorsW) {
+      openingArea += (d.w || 800) * (d.h || 2000);
+    }
+    for (const w of winsW) {
+      openingArea += (w.w || 600) * (w.h || 400);
+    }
+    
+    const grossArea = panelH * panelW;
+    const netArea = Math.max(0, grossArea - openingArea);
+    totalPlyArea += netArea;
+    
+    wallPlyHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${sheetsAcross * sheetsUp}</td><td>${panelH}mm × ${panelW}mm</td><td>${doorsW.length + winsW.length > 0 ? 'Cut for openings' : 'Full panel'}</td></tr>`;
+  }
+  
+  const plyHtmlContent = wallPlyHtml || `<tr><td colspan="4">None</td></tr>`;
+  if (wallPlyBodyEl) wallPlyBodyEl.innerHTML = plyHtmlContent;
+  if (wallPlyBodyEl2) wallPlyBodyEl2.innerHTML = plyHtmlContent;
+  
+  const plySheetArea = PLY_SHEET_W * PLY_SHEET_L;
+  const plyMinSheets = plySheetArea > 0 ? Math.ceil(totalPlyArea / plySheetArea) : 0;
+  const plySummaryText = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
+  if (wallPlySummaryEl) wallPlySummaryEl.textContent = plySummaryText;
+  if (wallPlySummaryEl2) wallPlySummaryEl2.textContent = plySummaryText;
+  
+  console.log('[WALL_INS_BOM] Done - PIR sheets:', pirMinSheets, 'Ply sheets:', plyMinSheets);
+}
+
 export function updateBOM(state) {
+  console.log('[WALLS_BOM] updateBOM called');
   const isPent = !!(state && state.roof && String(state.roof.style || "") === "pent");
+  const variant = state.walls?.variant || "insulated";
+  console.log('[WALLS_BOM] isPent:', isPent, 'variant:', variant);
+  
+  // Update wall PIR and plywood BOM (runs for both apex and pent)
+  updateWallInsulationBOM(state, variant, isPent);
+  
   if (!isPent) {
     const sections = [];
-    const variant = state.walls?.variant || "insulated";
+    let totalFrameLength_mm = 0;  // Track total frame timber length
+    const FRAME_STOCK_LENGTH = 6200;  // Frame timber stock length
 
     // Keep BOM consistent with build3D():
     // APEX ONLY: "Height to Eaves" implicitly drives the wall frame height (base-aware).
@@ -2858,11 +3664,14 @@ export function updateBOM(state) {
 
         // Panel contents (all include L/W/D)
         sections.push([`  Bottom Plate`, 1, pan.len, plateY, wallThk, ""]);
+        totalFrameLength_mm += pan.len;
         sections.push([`  Top Plate`, 1, pan.len, plateY, wallThk, ""]);
+        totalFrameLength_mm += pan.len;
 
         if (variant === "basic") {
           // Mirrors current basic wall panel stud policy (3 studs per panel in buildBasicPanel; suppression is geometric-only)
           sections.push([`  Studs`, 3, studLen, prof.studW, wallThk, "basic"]);
+          totalFrameLength_mm += 3 * studLen;
         } else {
           // Insulated stud count logic preserved (was previously per wall; now attributed under single panel)
           let count = 2;
@@ -2872,13 +3681,34 @@ export function updateBOM(state) {
             run += prof.spacing;
           }
           sections.push([`  Studs`, count, studLen, prof.studW, wallThk, "@400"]);
+          totalFrameLength_mm += count * studLen;
         }
 
         // Opening framing items attributed to this panel
-const items = openingItemsByPanel[p] || [];
-        for (let i = 0; i < items.length; i++) sections.push(items[i]);
+        const items = openingItemsByPanel[p] || [];
+        for (let i = 0; i < items.length; i++) {
+          sections.push(items[i]);
+          // Accumulate frame length from opening items: [name, qty, length, ...]
+          const qty = items[i][1];
+          const len = items[i][2];
+          if (typeof qty === 'number' && typeof len === 'number') {
+            totalFrameLength_mm += qty * len;
+          }
+        }
       }
     }
+
+    // ---- TOTAL FRAME SUMMARY (APEX) ----
+    sections.push(["", "", "", "", "", ""]);
+    const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+    sections.push([
+      `TOTAL FRAME`,
+      totalFrameStockPieces,
+      FRAME_STOCK_LENGTH,
+      "",
+      "",
+      `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+    ]);
 
     // ---- CLADDING CUTTING LIST (APEX) ----
     sections.push(["", "", "", "", "", ""]);
@@ -2986,6 +3816,8 @@ const items = openingItemsByPanel[p] || [];
   }
 
   const sections = [];
+  let totalFrameLength_mm = 0;  // Track total frame timber length
+  const FRAME_STOCK_LENGTH = 6200;  // Frame timber stock length
   const variant = state.walls?.variant || "insulated";
   const baseHeight = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
 
@@ -3091,6 +3923,7 @@ const items = openingItemsByPanel[p] || [];
       sections.push([`  PANEL ${p + 1}`, "", "", "", "", `start=${pan.start}mm, len=${pan.len}mm`]);
 
       sections.push([`  Bottom Plate`, 1, pan.len, plateY, wallThk, isSlopeWall ? `pent slope; ${wname}` : ""]);
+      totalFrameLength_mm += pan.len;
 
       if (isSlopeWall) {
         const x0 = pan.start;
@@ -3098,17 +3931,22 @@ const items = openingItemsByPanel[p] || [];
         const h0 = heightAtX(x0);
         const h1 = heightAtX(x1);
         sections.push([`  Top Plate (Sloped)`, 1, pan.len, plateY, wallThk, `pent slope; ${wname}; minH=${h0}mm maxH=${h1}mm`]);
+        totalFrameLength_mm += pan.len;
       } else {
         sections.push([`  Top Plate`, 1, pan.len, plateY, wallThk, `pent; ${wname}; H=${wallHFlat}mm`]);
+        totalFrameLength_mm += pan.len;
       }
 
       if (!isSlopeWall) {
-        if (variant === "basic") sections.push([`  Studs`, 3, studLenFlat, prof.studW, wallThk, `pent; ${wname}`]);
-        else {
+        if (variant === "basic") {
+          sections.push([`  Studs`, 3, studLenFlat, prof.studW, wallThk, `pent; ${wname}`]);
+          totalFrameLength_mm += 3 * studLenFlat;
+        } else {
           let count = 2;
           let run = 400;
           while (run <= pan.len - prof.studW) { count += 1; run += prof.spacing; }
           sections.push([`  Studs`, count, studLenFlat, prof.studW, wallThk, `pent; ${wname}; @400`]);
+          totalFrameLength_mm += count * studLenFlat;
         }
       } else {
         const studsByLen = {};
@@ -3185,13 +4023,34 @@ const items = openingItemsByPanel[p] || [];
 
         Object.keys(studsByLen).sort((a, b) => Number(a) - Number(b)).forEach((k) => {
           sections.push([`  Studs`, studsByLen[k], Number(k), prof.studW, wallThk, `pent slope; ${wname}`]);
+          totalFrameLength_mm += studsByLen[k] * Number(k);
         });
       }
 
-const items = openingItemsByPanel[p] || [];
-      for (let i = 0; i < items.length; i++) sections.push(items[i]);
+      const items = openingItemsByPanel[p] || [];
+      for (let i = 0; i < items.length; i++) {
+        sections.push(items[i]);
+        // Accumulate frame length from opening items: [name, qty, length, ...]
+        const qty = items[i][1];
+        const len = items[i][2];
+        if (typeof qty === 'number' && typeof len === 'number') {
+          totalFrameLength_mm += qty * len;
+        }
+      }
     }
   }
+
+  // ---- TOTAL FRAME SUMMARY (PENT) ----
+  sections.push(["", "", "", "", "", ""]);
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  sections.push([
+    `TOTAL FRAME`,
+    totalFrameStockPieces,
+    FRAME_STOCK_LENGTH,
+    "",
+    "",
+    `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+  ]);
 
   // ---- CLADDING CUTTING LIST ----
   sections.push(["", "", "", "", "", ""]);
@@ -3492,7 +4351,6 @@ function computeApexRoofUndersideModelMm(state) {
     const cosT = den > 1e-6 ? (halfSpan_mm / den) : 1;
 
     const OSB_CLEAR_MM = 1;
-    const eavesUnderLocalY_mm = memberD_mm + cosT * (memberD_mm + OSB_CLEAR_MM);
 
     // roof.js placement rule (APEX):
     // - If BOTH eaves+crest controls provided => solve roofRootY so OSB underside at the roof edge hits eavesTargetAbs.
@@ -3505,11 +4363,37 @@ function computeApexRoofUndersideModelMm(state) {
     const wallH_mm = Math.max(100, Math.floor(Number(state && state.walls && state.walls.height_mm != null ? state.walls.height_mm : 2400)));
 
     const WALL_RISE_MM = 168;
-    let roofRootY_mm = wallH_mm + WALL_RISE_MM;
-if (hasControls) {
-      // Use the same corrected eaves target as roof.js (crest correction handled inside rise solver).
+    let roofRootY_mm;
+    if (hasControls) {
+      // Match roof.js exactly: roofRootY = eavesTargetAbs - WALL_RISE_MM
+      // The tie beam underside is at eavesTargetAbs_mm
+      // roofRoot.position.y = (eavesTargetAbs_mm - WALL_RISE_MM) / 1000 in roof.js
+      // But index.js then adds WALL_RISE_MM shift to all roof meshes
+      // So effective world Y of roofRoot = eavesTargetAbs_mm - WALL_RISE_MM + WALL_RISE_MM = eavesTargetAbs_mm
+      // Wait no - let's trace more carefully:
+      // roof.js: roofRoot.position.y = (eavesTargetAbs_mm - WALL_RISE_MM) / 1000
+      // This is in mm: roofRootY_mm = eavesTargetAbs_mm - WALL_RISE_MM
+      // Then index.js shifts by +WALL_RISE_MM, so final world Y = eavesTargetAbs_mm
+      // The tie beam underside in local coords is at y=0
+      // So tie beam underside world = roofRootY_mm + WALL_RISE_MM = eavesTargetAbs_mm ✓
+      //
+      // For OSB underside, we need to add the local offset which is eavesUnderLocalY_mm at eaves
+      // OSB underside at eaves (world) = eavesTargetAbs_mm + eavesUnderLocalY_mm
+      //
+      // But wait - for the cladding CSG we want to cut at the OSB underside
+      // yUnderAtLocalX gives the LOCAL offset above the tie beam (which is at y=0 locally)
+      // So world Y of OSB underside = tie beam world Y + yUnderAtLocalX
+      // = eavesTargetAbs_mm + yUnderAtLocalX(x)
+      //
+      // In yUnderAtWorldX_mm we do: roofRootY_mm + yUnderAtLocalX_mm(xLocal)
+      // So we want roofRootY_mm = eavesTargetAbs_mm (the tie beam underside world Y)
       const eavesTargetAbs_mm = Math.max(0, Math.floor(eCtl));
-      roofRootY_mm = Math.floor(eavesTargetAbs_mm - eavesUnderLocalY_mm + WALL_RISE_MM);
+      roofRootY_mm = eavesTargetAbs_mm;
+    } else {
+      // Legacy: no controls, roof sits on top of wall
+      // Wall top plate is at wallH_mm + WALL_RISE_MM (with floor rise)
+      // Tie beam underside = wall top plate = wallH_mm + WALL_RISE_MM
+      roofRootY_mm = wallH_mm + WALL_RISE_MM;
     }
 
     // roofRoot X aligns local min corner to world -l (yaw=0), so: localX = worldX + l
@@ -3518,17 +4402,42 @@ if (hasControls) {
     const ridgeWorldX_mm = roofRootX_mm + ridgeLocalX_mm;
 
     const yUnderAtLocalX_mm = (xLocal_mm) => {
+      // Match roof.js formula exactly:
+      // yUnderLocal_mm = memberD_mm + tanT * distFromEaves + offsetAlongY_atFixedX_mm
+      // where offsetAlongY_atFixedX_mm = (memberD_mm + OSB_CLEAR_MM) / cosT
+      //
+      // At eaves (x=0 or x=A_mm): distFromEaves = 0, height is lowest
+      // At ridge (x=halfSpan): distFromEaves = halfSpan, height is highest
       const x = Math.max(0, Math.min(A_mm, Math.floor(Number(xLocal_mm))));
-      const dx = Math.abs(x - ridgeLocalX_mm);
-      const t = Math.max(0, Math.min(1, 1 - (dx / halfSpan_mm)));
-      const ySurf_mm = memberD_mm + Math.floor(rise_mm * t);
-      return ySurf_mm + cosT * (memberD_mm + OSB_CLEAR_MM);
+      const tanT = rise_mm / Math.max(1, halfSpan_mm);
+      const offsetAlongY_mm = (memberD_mm + OSB_CLEAR_MM) / Math.max(0.001, cosT);
+
+      // Distance from nearest eave - 0 at eaves, halfSpan at ridge
+      const distFromNearestEave = x <= halfSpan_mm ? x : (A_mm - x);
+      return memberD_mm + tanT * distFromNearestEave + offsetAlongY_mm;
     };
 
     const yUnderAtWorldX_mm = (xWorld_mm) => {
       const xLocal_mm = Math.floor(Number(xWorld_mm)) - roofRootX_mm; // == xWorld + l
       return roofRootY_mm + yUnderAtLocalX_mm(xLocal_mm);
     };
+
+    console.log('[APEX_MODEL_DEBUG]', {
+      roofRootY_mm,
+      roofRootX_mm,
+      halfSpan_mm,
+      rise_mm,
+      memberD_mm,
+      cosT,
+      wallH_mm,
+      WALL_RISE_MM,
+      hasControls,
+      eCtl,
+      cCtl,
+      l_mm,
+      yAtEaves: yUnderAtLocalX_mm(0),
+      yAtRidge: yUnderAtLocalX_mm(halfSpan_mm)
+    });
 
     return {
       yUnderAtWorldX_mm,
