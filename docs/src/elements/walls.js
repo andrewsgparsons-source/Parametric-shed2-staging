@@ -1,35 +1,53 @@
+/**
+ * @fileoverview Wall Builder - Creates timber-framed wall structures
+ * 
+ * Builds the four walls of the main building with proper framing:
+ * - Bottom and top plates
+ * - Studs at regular intervals (400mm centres)
+ * - Door and window framing with headers, sills, and cripple studs
+ * - External cladding (lapped boards)
+ * - Optional insulation (PIR) and internal plywood lining
+ * 
+ * ## Wall Orientation
+ * - **Front/Back**: Run along X axis, thickness extends in ±Z
+ * - **Left/Right**: Run along Z axis, thickness extends in ±X
+ * 
+ * ## Corner Construction
+ * - Front/Back walls are full building width
+ * - Left/Right walls fit BETWEEN front/back (no overlap)
+ * - Creates proper corner posts for structural integrity
+ * 
+ * ## Variants
+ * - **Basic**: 75mm wall thickness (50×75mm studs)
+ * - **Insulated**: 100mm wall thickness (50×100mm studs) + PIR insulation + ply lining
+ * 
+ * ## Roof Integration
+ * - **Pent roof**: Wall heights vary along X (sloped top plates)
+ * - **Apex roof**: Constant wall height to eaves, gable infill above on front/back
+ * 
+ * ## Key Measurements
+ * - Stud width: 50mm
+ * - Stud depth: 75mm (basic) or 100mm (insulated)
+ * - Stud spacing: 400mm centres
+ * - Plate height: 50mm
+ * - Cladding: 140mm boards × 20mm thick
+ * - Insulation: 50mm PIR (Celotex)
+ * - Internal lining: 12mm plywood
+ * 
+ * @module elements/walls
+ */
+
 import { CONFIG, resolveDims } from "../params.js";
 
 /**
- * Build four walls. Coordinates:
- * - Front/Back run along X, thickness extrudes +Z.
- * - Left/Right run along Z, thickness extrudes +X.
- *
- * Plate orientation:
- * - Top + bottom plates are rotated 90° about their length axis so studs land on the plate's wider face.
- *   => plate vertical height = studW (50), wall thickness = studH (75/100).
- *
- * BASIC variant panelization:
- * - If a basic wall length exceeds 2400mm, it is built as TWO separate panels split as evenly as possible.
- *
- * CORNER JOIN:
- * - Panels must NOT overlap/intersect at corners.
- * - Front/Back are full building frame width (dims.w).
- * - Left/Right run BETWEEN front/back, so their length is (dims.d - 2 * wallThickness)
- *   and they start at z = wallThickness.
- *
- * Openings:
- * - Doors: width_mm is the CLEAR OPENING (gap) between the uprights (studs).
- * - Windows: same horizontal logic, plus y_mm (from bottom plate top) and height_mm must fit within the stud cavity.
- *
- * PENT ROOF PITCH (conditioned on state.roof.style === "pent"):
- * - Pitch runs along X (width): x=0 => minHeight, x=frameW => maxHeight.
- * - Left wall uses minHeight; Right wall uses maxHeight.
- * - Front/Back walls vary height along X; studs use local heightAtX(studXCenter).
- * - Front/Back top plates are sloped prisms (not constant-height boxes).
- *
- * @param {any} state Derived state for walls (w/d already resolved to frame outer dims)
- * @param {{scene:BABYLON.Scene, materials:any}} ctx
+ * Build all four walls of the main building
+ * 
+ * Creates framing, cladding, and optionally insulation/lining for the
+ * building envelope. Handles door and window openings with proper framing.
+ * 
+ * @param {object} state - Building state with dimensions, openings, and roof config
+ * @param {object} ctx - Babylon.js context { scene, materials }
+ * @param {object} [sectionContext] - Optional section context for multi-building support
  */
 export function build3D(state, ctx, sectionContext) {
   const { scene, materials } = ctx;

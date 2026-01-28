@@ -1839,9 +1839,11 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const sinT = Math.sin(slopeAng);
   const cosT = Math.cos(slopeAng);
 
-  // Timber dimensions (matching main building)
-  const MEMBER_W_MM = 50;   // Timber width
-  const MEMBER_D_MM = 100;  // Timber depth
+  // Timber dimensions (matching main building roof.js convention)
+  // memberW = larger dimension (width in plan / horizontal)
+  // memberD = smaller dimension (depth / vertical height)
+  const MEMBER_W_MM = 100;  // Timber width (horizontal/depth) - matches main building memberW
+  const MEMBER_D_MM = 50;   // Timber depth (vertical) - matches main building memberD
   const TRUSS_SPACING_MM = 600;
   const PURLIN_STEP_MM = 609;  // Based on OSB half-width (1220/2)
 
@@ -1903,11 +1905,12 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   trussPositions.forEach((pos, idx) => {
     if (ridgeAlongX) {
       // Trusses at X positions, spanning Z (tie beam along Z, rafters slope in Z)
-      // Tie beam
+      // Tie beam: length along Z (span), cross-section memberD(Y) × memberW(X) matching main building
       mkBox(`att-${attId}-truss-${idx}-tie`, MEMBER_W_MM, MEMBER_D_MM, span_mm,
         pos, 0, 0, joistMat, { part: 'truss', member: 'tie' });
 
-      // Rafters - rotate around X axis for Z-facing slopes
+      // Rafters - length along Z, rotated around X axis
+      // Cross-section: memberD(Y) × memberW(X) before rotation
       const rafterCy = MEMBER_D_MM + rise_mm / 2;
       
       // Left rafter (slopes toward -Z from ridge at center)
@@ -1926,11 +1929,12 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       
     } else {
       // Trusses at Z positions, spanning X (tie beam along X, rafters slope in X)
-      // Tie beam
+      // Tie beam: length along X (span), cross-section memberD(Y) × memberW(Z) matching main building
       mkBox(`att-${attId}-truss-${idx}-tie`, span_mm, MEMBER_D_MM, MEMBER_W_MM,
         0, 0, pos, joistMat, { part: 'truss', member: 'tie' });
 
-      // Rafters - rotate around Z axis for X-facing slopes
+      // Rafters - length along X, rotated around Z axis
+      // Cross-section: memberD(Y) × memberW(Z) before rotation - same as main building
       const rafterCy = MEMBER_D_MM + rise_mm / 2;
 
       // Left rafter (slopes toward -X from ridge)
