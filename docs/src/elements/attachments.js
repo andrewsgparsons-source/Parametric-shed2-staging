@@ -139,18 +139,47 @@ export function build3D(mainState, attachment, ctx) {
   if (roofType === "apex") {
     // For apex roof, all walls have the same height (eaves level)
     // The gable peak is above the walls, handled by the roof
+    // 
+    // DEFAULT: Crest should be 50mm below main building eaves
+    const CREST_BELOW_MAIN_EAVES_MM = 50;
+    
+    // Get main building eaves height (from floor surface)
+    const mainEavesHeight = Number(
+      mainState.roof?.apex?.heightToEaves_mm ||
+      mainState.roof?.apex?.eavesHeight_mm ||
+      1850
+    );
+    
+    // User-specified crest height, or calculate default
+    let crestHeight_mm = attachment.roof?.apex?.crestHeight_mm;
     let eavesHeight_mm = attachment.roof?.apex?.wallHeight_mm;
-    if (eavesHeight_mm == null) {
-      // Default: use max inner height minus crest height to leave room for peak
-      const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
-      eavesHeight_mm = Math.max(500, maxInnerHeight - crestHeight_mm);
+    
+    if (crestHeight_mm == null && eavesHeight_mm == null) {
+      // Neither specified: default crest to 50mm below main eaves
+      // Total height to crest = mainEavesHeight - 50mm
+      // crest = wallHeight + rise, so we need to work out both
+      // Use a sensible default crest rise (e.g., 400mm) and calculate wall height
+      crestHeight_mm = 400;
+      const targetCrestY = mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM;
+      // Wall top + crest = targetCrestY (both from floor surface)
+      eavesHeight_mm = targetCrestY - crestHeight_mm;
+    } else if (crestHeight_mm == null) {
+      crestHeight_mm = 400;  // Default crest if only wall height specified
+    } else if (eavesHeight_mm == null) {
+      // Crest specified, calculate wall height to put crest 50mm below main eaves
+      const targetCrestY = mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM;
+      eavesHeight_mm = targetCrestY - crestHeight_mm;
     }
-    eavesHeight_mm = Math.min(eavesHeight_mm, maxInnerHeight);
+    
+    // Clamp wall height to valid range
+    eavesHeight_mm = Math.max(500, Math.min(eavesHeight_mm, maxInnerHeight));
     
     wallHeightInner = Math.max(500, eavesHeight_mm - floorStackHeight);
     wallHeightOuter = wallHeightInner;  // Same height for apex
     
-    console.log("[attachments] Apex heights - eaves:", eavesHeight_mm,
+    console.log("[attachments] Apex heights - mainEaves:", mainEavesHeight,
+                "targetCrest:", mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM,
+                "crestHeight:", crestHeight_mm, "eaves:", eavesHeight_mm,
                 "wallHeight:", wallHeightInner);
   } else {
     // For pent roof, calculate wall heights
