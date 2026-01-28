@@ -1965,7 +1965,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // ========== 2. PURLINS ==========
   // Purlins run along ridge, spaced down each slope at 609mm
-  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + 1;
+  // They sit ON TOP of rafters - offset perpendicular to slope surface
+  // Offset = half purlin depth (to get center) + small clearance
+  const PURLIN_CLEAR_MM = 2;
+  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + PURLIN_CLEAR_MM;
 
   // Calculate slope stations
   const purlinStations = [0];
@@ -2027,20 +2030,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   });
 
   // ========== 3. OSB BOARDS ==========
-  // OSB sits on top of purlins. Stack height from wall top:
-  // - Rafter/purlin top surface is at MEMBER_D_MM (100mm) above wall top
-  // - OSB bottom sits on that surface
-  // For sloped surfaces, we offset perpendicular to the slope
+  // OSB sits on top of purlins, which sit on top of rafters
+  // Stack from rafter surface: purlin (MEMBER_D_MM) + OSB (ROOF_OSB_MM)
+  // Perpendicular offset from rafter surface to OSB center = purlin depth + half OSB
+  const OSB_CLEAR_MM = 1;
+  const osbPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + (ROOF_OSB_MM / 2);
   
-  // Distance from slope surface (rafter top) to OSB center, measured perpendicular to slope
-  const osbPerpOffset_mm = ROOF_OSB_MM / 2;  // Half OSB thickness to get center
-  
-  // The slope center is at Y = MEMBER_D_MM + rise_mm/2 (midway up the rafter height + midway up the rise)
-  // But we need to position based on the actual slope geometry
-  // OSB center Y = base + rise/2 + perpendicular offset in Y direction
-  // OSB center along slope axis = halfSpan/2 + perpendicular offset in slope direction
-  
-  const osbBaseY_mm = MEMBER_D_MM;  // Top of rafters/purlins
+  // Base Y is top of tie beam (rafters sit on tie beam)
+  const osbBaseY_mm = MEMBER_D_MM;  // Top of tie beam / rafter bottoms
   
   if (ridgeAlongX) {
     // Left slope: from (any X, Y=osbBaseY, Z=0) to (any X, Y=osbBaseY+rise, Z=halfSpan)
@@ -2086,8 +2083,9 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   }
 
   // ========== 4. COVERING ==========
-  // Covering sits on top of OSB
-  const coverPerpOffset_mm = ROOF_OSB_MM + COVERING_MM / 2;  // OSB thickness + half covering
+  // Covering sits on top of OSB (which is on top of purlins)
+  // Perpendicular offset from rafter surface = purlin + OSB + half covering
+  const coverPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + ROOF_OSB_MM + (COVERING_MM / 2);
   
   if (ridgeAlongX) {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
@@ -2128,7 +2126,48 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
   }
 
-  // ========== 5. GABLE ENDS ==========
+  // ========== 5. FASCIA BOARDS ==========
+  // Fascia runs around the edges of the roof
+  // Hangs down from the OSB/covering level
+  const fasciaTopY_mm = MEMBER_D_MM + MEMBER_D_MM + ROOF_OSB_MM;  // Top of OSB
+  const fasciaBottomY_mm = fasciaTopY_mm - FASCIA_DEPTH_MM;
+  
+  if (ridgeAlongX) {
+    // Eaves fascia (at Z=0 and Z=span_mm, running along X)
+    // Left eaves (Z=0)
+    mkBox(`att-${attId}-fascia-eaves-L`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+      0, fasciaBottomY_mm, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'eaves-L' });
+    // Right eaves (Z=span)
+    mkBox(`att-${attId}-fascia-eaves-R`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+      0, fasciaBottomY_mm, span_mm, joistMat, { part: 'fascia', edge: 'eaves-R' });
+    
+    // Verge fascia (at X=0 and X=ridge_mm, running along Z)
+    // Front verge
+    mkBox(`att-${attId}-fascia-verge-F`, FASCIA_THK_MM, FASCIA_DEPTH_MM, span_mm + 2 * FASCIA_THK_MM,
+      -FASCIA_THK_MM, fasciaBottomY_mm, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'verge-F' });
+    // Back verge
+    mkBox(`att-${attId}-fascia-verge-B`, FASCIA_THK_MM, FASCIA_DEPTH_MM, span_mm + 2 * FASCIA_THK_MM,
+      ridge_mm, fasciaBottomY_mm, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'verge-B' });
+      
+  } else {
+    // Eaves fascia (at X=0 and X=span_mm, running along Z)
+    // Left eaves
+    mkBox(`att-${attId}-fascia-eaves-L`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
+      -FASCIA_THK_MM, fasciaBottomY_mm, 0, joistMat, { part: 'fascia', edge: 'eaves-L' });
+    // Right eaves
+    mkBox(`att-${attId}-fascia-eaves-R`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
+      span_mm, fasciaBottomY_mm, 0, joistMat, { part: 'fascia', edge: 'eaves-R' });
+    
+    // Verge fascia (at Z=0 and Z=ridge_mm, running along X)
+    // Front verge
+    mkBox(`att-${attId}-fascia-verge-F`, span_mm + 2 * FASCIA_THK_MM, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+      -FASCIA_THK_MM, fasciaBottomY_mm, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'verge-F' });
+    // Back verge
+    mkBox(`att-${attId}-fascia-verge-B`, span_mm + 2 * FASCIA_THK_MM, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+      -FASCIA_THK_MM, fasciaBottomY_mm, ridge_mm, joistMat, { part: 'fascia', edge: 'verge-B' });
+  }
+
+  // ========== 6. GABLE ENDS ==========
   if (claddingMat) {
     if (ridgeAlongX) {
       // Gables at X=0 and X=ridge_mm, triangular in Y-Z plane
