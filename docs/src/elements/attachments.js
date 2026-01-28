@@ -184,6 +184,14 @@ export function build3D(mainState, attachment, ctx) {
   // The highest point of the attachment roof cannot exceed the main building's lowest fascia bottom
   const mainFasciaBottom = getMainBuildingFasciaBottom(mainState);
 
+  // Get main building eaves height for apex crest capping
+  const mainEavesHeight = Number(
+    mainState.roof?.apex?.heightToEaves_mm ||
+    mainState.roof?.apex?.eavesHeight_mm ||
+    mainState.roof?.pent?.maxHeight_mm ||
+    2400
+  );
+
   // For pent roof, the highest point is at the inner edge (highHeight_mm)
   // This height includes the roof structure (rafters + OSB + covering)
   // So we need to account for the roof stack: RAFTER_D_MM (50) + ROOF_OSB_MM (18) + COVERING_MM (2) = 70mm
@@ -317,7 +325,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainEavesHeight);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -1463,7 +1471,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainEavesHeight) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -1481,13 +1489,6 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
-    // Get main building eaves height for crest capping
-    const mainEavesHeight = Number(
-      mainState.roof?.apex?.heightToEaves_mm ||
-      mainState.roof?.apex?.eavesHeight_mm ||
-      mainState.roof?.pent?.maxHeight_mm ||
-      2400
-    );
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
                   attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainEavesHeight);
   }
