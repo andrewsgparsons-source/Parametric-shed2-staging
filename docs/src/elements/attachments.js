@@ -325,7 +325,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainEavesHeight);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -1471,7 +1471,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainEavesHeight) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -1490,7 +1490,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
-                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainEavesHeight);
+                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainFasciaBottom);
   }
 }
 
@@ -1818,7 +1818,7 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Build apex roof (simplified - two sloped planes meeting at a ridge)
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
-function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainEavesHeight) {
+function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainFasciaBottom) {
   // Apex roof with full construction:
   // 1. Trusses (rafters + tie beams) at ~600mm spacing
   // 2. Purlins at 609mm centres (two at top, no ridge board)
@@ -1834,17 +1834,18 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // roofBaseY is the eaves height (wall top) from floor surface
   // rise = peak height - eaves height
   // 
-  // CONSTRAINT: Crest must be below main building eaves (accounting for fascia board)
-  const CREST_BELOW_MAIN_EAVES_MM = 200;
-  const maxCrestHeight = (mainEavesHeight || 2400) - CREST_BELOW_MAIN_EAVES_MM;
-  const defaultCrestHeight = maxCrestHeight;  // Default to max allowed (50mm below main eaves)
+  // CONSTRAINT: Crest must be below main building's fascia bottom
+  // mainFasciaBottom is already the lowest point of the fascia board
+  const CREST_CLEARANCE_MM = 50;  // Small clearance below fascia
+  const maxCrestHeight = (mainFasciaBottom || 1800) - CREST_CLEARANCE_MM;
+  const defaultCrestHeight = maxCrestHeight;  // Default to max allowed
   
   let crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || defaultCrestHeight;
   
-  // Cap crest to stay below main building eaves
+  // Cap crest to stay below main building fascia
   if (crestHeightAbs > maxCrestHeight) {
     console.log("[attachments] Apex crest capped:", crestHeightAbs, "->", maxCrestHeight, 
-                "(mainEaves:", mainEavesHeight, "- 50mm)");
+                "(mainFasciaBottom:", mainFasciaBottom, "- clearance:", CREST_CLEARANCE_MM + "mm)");
     crestHeightAbs = maxCrestHeight;
   }
   
