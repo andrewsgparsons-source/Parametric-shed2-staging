@@ -305,11 +305,19 @@ export function build3D(mainState, attachment, ctx) {
   }
 
   // Build roof structure (rafters, OSB, covering, fascia)
+  // Get timber dimensions from main building's frame settings
+  const frameThickness = Math.max(1, Math.floor(Number(mainState?.frame?.thickness_mm || 50)));
+  const frameDepth = Math.max(1, Math.floor(Number(mainState?.frame?.depth_mm || 75)));
+  // memberW = horizontal width (depth_mm), memberD = vertical height (thickness_mm)
+  // This matches main building's roof.js convention
+  const memberW_mm = frameDepth;   // 75mm default (width in plan / horizontal)
+  const memberD_mm = frameThickness; // 50mm default (vertical depth)
+  
   if (roofEnabled && roofType !== "overhang") {
-    console.log("[attachments] Building roof...");
+    console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -1455,7 +1463,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -1474,7 +1482,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
-                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat);
+                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm);
   }
 }
 
@@ -1802,7 +1810,7 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Build apex roof (simplified - two sloped planes meeting at a ridge)
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
-function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat) {
+function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm) {
   // Apex roof with full construction:
   // 1. Trusses (rafters + tie beams) at ~600mm spacing
   // 2. Purlins at 609mm centres (two at top, no ridge board)
@@ -1839,13 +1847,15 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const sinT = Math.sin(slopeAng);
   const cosT = Math.cos(slopeAng);
 
-  // Timber dimensions (matching main building roof.js convention)
-  // memberW = larger dimension (width in plan / horizontal)
-  // memberD = smaller dimension (depth / vertical height)
-  const MEMBER_W_MM = 100;  // Timber width (horizontal/depth) - matches main building memberW
-  const MEMBER_D_MM = 50;   // Timber depth (vertical) - matches main building memberD
+  // Timber dimensions passed from main building's frame settings
+  // memberW = larger dimension (width in plan / horizontal) - default 75mm
+  // memberD = smaller dimension (depth / vertical height) - default 50mm
+  const MEMBER_W_MM = memberW_mm || 75;
+  const MEMBER_D_MM = memberD_mm || 50;
   const TRUSS_SPACING_MM = 600;
   const PURLIN_STEP_MM = 609;  // Based on OSB half-width (1220/2)
+  
+  console.log("[attachments] Apex roof timber:", MEMBER_W_MM + "×" + MEMBER_D_MM + "mm");
 
   console.log("[attachments] buildApexRoof:", attId,
     "roofBaseY:", roofBaseY, "rise:", rise_mm,
