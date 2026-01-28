@@ -1611,14 +1611,11 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const eaveHeight_mm = attachment.roof?.apex?.eaveHeight_mm || 100;
   const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
 
-  // Convert to local Y coordinates (relative to parent root, not world)
-  // roofBaseY is already the wall top height; we add roof heights on top
-  // But since parent root is at floor level, we need to subtract floor level
-  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
-  const localWallTopY = roofBaseY - floorSurfaceY;
-  
-  const eaveY = localWallTopY + eaveHeight_mm;
-  const crestY = localWallTopY + crestHeight_mm;
+  // roofBaseY is already in absolute mm from ground (floorSurfaceY + wallHeightInner)
+  // Parent root is at Y=0 (ground level), so local Y = world Y
+  // Just use roofBaseY directly as the wall top height
+  const eaveY = roofBaseY + eaveHeight_mm;
+  const crestY = roofBaseY + crestHeight_mm;
 
   // Determine ridge direction based on attachment wall
   // Ridge should run PERPENDICULAR to the attached wall (along the depth direction)
@@ -1629,7 +1626,7 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   console.log("[attachments] buildApexRoof - attachWall:", attachWall,
               "ridgeAlongX:", ridgeAlongX,
               "extentX:", extentX, "extentZ:", extentZ,
-              "localWallTopY:", localWallTopY, "eaveY:", eaveY, "crestY:", crestY);
+              "roofBaseY:", roofBaseY, "eaveY:", eaveY, "crestY:", crestY);
 
   let leftPath1, leftPath2, rightPath1, rightPath2;
 
