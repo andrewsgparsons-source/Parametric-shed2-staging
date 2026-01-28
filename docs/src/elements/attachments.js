@@ -2005,26 +2005,33 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   purlinStations.forEach((s_mm, idx) => {
     const run_mm = Math.min(halfSpan_mm, s_mm * cosT);
     const drop_mm = Math.min(rise_mm, s_mm * sinT);
+    // ySurf_mm = Y at rafter top surface at this station
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
+    
+    // Purlin sits ON TOP of rafter - offset perpendicular to slope
+    // For a box rotated to match slope, we need to offset its center perpendicular to the surface
+    // Perpendicular offset in Y = offset * cos(slope)
+    // Perpendicular offset in Z = offset * sin(slope) toward ridge
+    const perpOffset = MEMBER_D_MM / 2 + purlinOutOffset_mm;  // Half purlin depth + clearance above rafter
+    const yOffset = perpOffset * cosT;
+    const zOffset = perpOffset * sinT;
 
     if (ridgeAlongX) {
       // Purlins along X, positioned at Z stations down the slope
       const zL = halfSpan_mm - run_mm;  // Left slope Z position
       const zR = halfSpan_mm + run_mm;  // Right slope Z position
-      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
-      const cyR = cyL;
 
-      // Left purlin
+      // Left purlin - offset toward ridge (+Z) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, cyL - sinT * purlinOutOffset_mm, zL,
+        ridge_mm / 2, ySurf_mm + yOffset, zL + zOffset,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
-      // Right purlin
+      // Right purlin - offset toward ridge (-Z) and up  
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, cyR + sinT * purlinOutOffset_mm, zR,
+        ridge_mm / 2, ySurf_mm + yOffset, zR - zOffset,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
 
@@ -2032,19 +2039,18 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       // Purlins along Z, positioned at X stations down the slope
       const xL = halfSpan_mm - run_mm;
       const xR = halfSpan_mm + run_mm;
-      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
 
-      // Left purlin
+      // Left purlin - offset toward ridge (+X) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xL - sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        xL + zOffset, ySurf_mm + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
-      // Right purlin
+      // Right purlin - offset toward ridge (-X) and up
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xR + sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        xR - zOffset, ySurf_mm + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
     }
