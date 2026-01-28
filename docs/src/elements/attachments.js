@@ -216,6 +216,9 @@ export function build3D(mainState, attachment, ctx) {
     let userEaves = attachment.roof?.apex?.eaveHeight_mm;
     let userCrest = attachment.roof?.apex?.crestHeight_mm;
     
+    console.log("[attachments] RAW apex input - eaveHeight_mm:", userEaves, 
+                "crestHeight_mm:", userCrest, "full apex config:", attachment.roof?.apex);
+    
     // Calculate sensible defaults based on main building
     // Default crest: 200mm below main fascia bottom (safe clearance)
     // Default eaves: crest - 400mm rise (reasonable pitch)
