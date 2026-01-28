@@ -1710,9 +1710,11 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
 function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat) {
-  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 100;
-  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
+  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 0;  // Height above wall to eaves
+  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;  // Height above wall to crest
 
+  // roofBaseY = floor surface + wall height (in mm, absolute from ground)
+  // But we need Y relative to attachment root which is at ground level
   const eaveY = roofBaseY + eaveHeight;
   const ridgeY = roofBaseY + crestHeight;
 
@@ -1722,9 +1724,11 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // Front/Back: extentX = width, extentZ = depth -> ridge along Z, slopes toward X
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
 
-  console.log("[attachments] buildApexRoof:", attId, "attachWall:", attachWall,
-              "ridgeAlongX:", ridgeAlongX, "extentX:", extentX, "extentZ:", extentZ,
-              "eaveY:", eaveY, "ridgeY:", ridgeY);
+  console.log("[attachments] buildApexRoof DEBUG:", attId, 
+              "roofBaseY:", roofBaseY, "eaveHeight:", eaveHeight, "crestHeight:", crestHeight,
+              "eaveY:", eaveY, "ridgeY:", ridgeY,
+              "attachWall:", attachWall, "ridgeAlongX:", ridgeAlongX,
+              "extentX:", extentX, "extentZ:", extentZ);
 
   let leftPath1, leftPath2, rightPath1, rightPath2;
 
