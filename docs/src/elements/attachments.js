@@ -1985,9 +1985,11 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // ========== 2. PURLINS ==========
   // Purlins run along ridge, spaced down each slope at 609mm
   // They sit ON TOP of rafters - offset perpendicular to slope surface
-  // Offset = half purlin depth (to get center) + small clearance
-  const PURLIN_CLEAR_MM = 2;
-  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + PURLIN_CLEAR_MM;
+  // Offset = purlin sits ON TOP of rafters
+  // Purlin center should be MEMBER_D_MM/2 above rafter top surface (perpendicular to slope)
+  // Plus account for the rafter depth and a small clearance
+  const PURLIN_CLEAR_MM = 5;
+  const purlinOutOffset_mm = MEMBER_D_MM + PURLIN_CLEAR_MM;
 
   // Calculate slope stations
   const purlinStations = [0];
