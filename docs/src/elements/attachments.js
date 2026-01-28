@@ -233,15 +233,18 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Apex UI values - userEaves:", userEaves, "userCrest:", userCrest,
                 "defaults - eaves:", defaultEaves, "crest:", defaultCrest);
     
-    // Clamp wall height to valid range
+    // Clamp eaves to valid range (upper bound only - can't exceed main fascia)
+    const eavesBeforeCap = eavesHeight_mm;
     eavesHeight_mm = Math.max(500, Math.min(eavesHeight_mm, maxInnerHeight));
     
     wallHeightInner = Math.max(500, eavesHeight_mm - floorStackHeight);
     wallHeightOuter = wallHeightInner;  // Same height for apex
     
-    console.log("[attachments] Apex heights - mainFasciaBottom:", mainFasciaBottom,
-                "crestHeight:", crestHeight_mm, "eaves:", eavesHeight_mm,
-                "wallHeight:", wallHeightInner);
+    console.log("[attachments] Apex FULL DEBUG:",
+                "userEaves:", userEaves, "userCrest:", userCrest,
+                "eavesBeforeCap:", eavesBeforeCap, "maxInnerHeight:", maxInnerHeight,
+                "eavesAfterCap:", eavesHeight_mm, "floorStackHeight:", floorStackHeight,
+                "FINAL wallHeightInner:", wallHeightInner);
   } else {
     // For pent roof, calculate wall heights
     // Inner wall (at main building) is higher, outer wall is lower
