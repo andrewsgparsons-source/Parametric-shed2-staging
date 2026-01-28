@@ -1985,11 +1985,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // ========== 2. PURLINS ==========
   // Purlins run along ridge, spaced down each slope at 609mm
   // They sit ON TOP of rafters - offset perpendicular to slope surface
-  // Offset = purlin sits ON TOP of rafters
-  // Purlin center should be MEMBER_D_MM/2 above rafter top surface (perpendicular to slope)
-  // Plus account for the rafter depth and a small clearance
   const PURLIN_CLEAR_MM = 5;
   const purlinOutOffset_mm = MEMBER_D_MM + PURLIN_CLEAR_MM;
+  // Perpendicular offset from rafter surface to purlin center
+  const purlinPerpOffset = MEMBER_D_MM / 2 + purlinOutOffset_mm;
 
   // Calculate slope stations
   const purlinStations = [0];
@@ -2009,12 +2008,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
     
     // Purlin sits ON TOP of rafter - offset perpendicular to slope
-    // For a box rotated to match slope, we need to offset its center perpendicular to the surface
     // Perpendicular offset in Y = offset * cos(slope)
-    // Perpendicular offset in Z = offset * sin(slope) toward ridge
-    const perpOffset = MEMBER_D_MM / 2 + purlinOutOffset_mm;  // Half purlin depth + clearance above rafter
-    const yOffset = perpOffset * cosT;
-    const zOffset = perpOffset * sinT;
+    // Perpendicular offset in Z/X = offset * sin(slope) toward ridge
+    const yOffset = purlinPerpOffset * cosT;
+    const zOffset = purlinPerpOffset * sinT;
 
     if (ridgeAlongX) {
       // Purlins along X, positioned at Z stations down the slope
@@ -2058,10 +2055,12 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // ========== 3. OSB BOARDS ==========
   // OSB sits on top of purlins, which sit on top of rafters
-  // Stack from rafter surface: purlin (MEMBER_D_MM) + OSB (ROOF_OSB_MM)
-  // Perpendicular offset from rafter surface to OSB center = purlin depth + half OSB
-  const OSB_CLEAR_MM = 1;
-  const osbPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + (ROOF_OSB_MM / 2);
+  // Purlin center is at purlinPerpOffset from rafter surface
+  // OSB bottom should be at purlin top = purlinPerpOffset + MEMBER_D_MM/2
+  // OSB center = purlin top + clearance + half OSB thickness
+  const OSB_CLEAR_MM = 2;
+  const purlinTopOffset = purlinPerpOffset + MEMBER_D_MM / 2;  // Perpendicular distance to purlin top
+  const osbPerpOffset_mm = purlinTopOffset + OSB_CLEAR_MM + (ROOF_OSB_MM / 2);
   
   // Base Y is top of tie beam (rafters sit on tie beam)
   const osbBaseY_mm = MEMBER_D_MM;  // Top of tie beam / rafter bottoms
@@ -2111,8 +2110,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // ========== 4. COVERING ==========
   // Covering sits on top of OSB (which is on top of purlins)
-  // Perpendicular offset from rafter surface = purlin + OSB + half covering
-  const coverPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + ROOF_OSB_MM + (COVERING_MM / 2);
+  // OSB top = osbPerpOffset_mm + ROOF_OSB_MM/2
+  // Covering center = OSB top + clearance + half covering
+  const osbTopOffset = osbPerpOffset_mm + ROOF_OSB_MM / 2;
+  const coverPerpOffset_mm = osbTopOffset + 1 + (COVERING_MM / 2);
   
   if (ridgeAlongX) {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
