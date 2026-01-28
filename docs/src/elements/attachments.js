@@ -1710,25 +1710,26 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
 function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat) {
-  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 0;  // Height above wall to eaves
-  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;  // Height above wall to crest
+  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 0;
+  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
 
-  // roofBaseY = floor surface + wall height (in mm, absolute from ground)
-  // But we need Y relative to attachment root which is at ground level
+  // Calculate Y positions - roofBaseY is wall top height from ground
   const eaveY = roofBaseY + eaveHeight;
   const ridgeY = roofBaseY + crestHeight;
 
-  // Determine ridge direction based on attachment wall
-  // Ridge runs PERPENDICULAR to attached wall (along depth direction)
-  // Left/Right: extentX = depth, extentZ = width -> ridge along X, slopes toward Z
-  // Front/Back: extentX = width, extentZ = depth -> ridge along Z, slopes toward X
+  // Ridge direction based on attachment wall
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
 
-  console.log("[attachments] buildApexRoof DEBUG:", attId, 
-              "roofBaseY:", roofBaseY, "eaveHeight:", eaveHeight, "crestHeight:", crestHeight,
-              "eaveY:", eaveY, "ridgeY:", ridgeY,
-              "attachWall:", attachWall, "ridgeAlongX:", ridgeAlongX,
-              "extentX:", extentX, "extentZ:", extentZ);
+  console.log("[attachments] buildApexRoof:", attId, 
+              "roofBaseY:", roofBaseY, "->", "eaveY:", eaveY, "ridgeY:", ridgeY,
+              "extentX:", extentX, "extentZ:", extentZ, "ridgeAlongX:", ridgeAlongX);
+
+  // WORKAROUND: The Y values seem too high. Let's check if roofBaseY is in wrong units.
+  // If values look wrong in console, this will help debug.
+  // Expected: roofBaseY ~1200-1800mm for typical attachment
+  if (roofBaseY > 5000) {
+    console.warn("[attachments] WARNING: roofBaseY seems too high:", roofBaseY, "- possible unit issue?");
+  }
 
   let leftPath1, leftPath2, rightPath1, rightPath2;
 
