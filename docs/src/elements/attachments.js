@@ -1944,63 +1944,103 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   });
 
   // ========== 3. OSB BOARDS ==========
-  const osbOffset_mm = MEMBER_D_MM + ROOF_OSB_MM / 2 + 2;
-  const osbCy = MEMBER_D_MM + rise_mm / 2 + cosT * osbOffset_mm;
-
+  // OSB sits on top of purlins. Stack height from wall top:
+  // - Rafter/purlin top surface is at MEMBER_D_MM (100mm) above wall top
+  // - OSB bottom sits on that surface
+  // For sloped surfaces, we offset perpendicular to the slope
+  
+  // Distance from slope surface (rafter top) to OSB center, measured perpendicular to slope
+  const osbPerpOffset_mm = ROOF_OSB_MM / 2;  // Half OSB thickness to get center
+  
+  // The slope center is at Y = MEMBER_D_MM + rise_mm/2 (midway up the rafter height + midway up the rise)
+  // But we need to position based on the actual slope geometry
+  // OSB center Y = base + rise/2 + perpendicular offset in Y direction
+  // OSB center along slope axis = halfSpan/2 + perpendicular offset in slope direction
+  
+  const osbBaseY_mm = MEMBER_D_MM;  // Top of rafters/purlins
+  
   if (ridgeAlongX) {
-    // OSB sheets along X, sloping in Z
+    // Left slope: from (any X, Y=osbBaseY, Z=0) to (any X, Y=osbBaseY+rise, Z=halfSpan)
+    // OSB center for left slope
+    const osbLCy = osbBaseY_mm + rise_mm / 2 + osbPerpOffset_mm * cosT;
+    const osbLCz = halfSpan_mm / 2 - osbPerpOffset_mm * sinT;
+    
     const osbL = mkBoxCentered(`att-${attId}-osb-L`,
       ridge_mm, ROOF_OSB_MM, rafterLen_mm,
-      ridge_mm / 2, osbCy - sinT * osbOffset_mm / 2, halfSpan_mm / 2,
+      ridge_mm / 2, osbLCy, osbLCz,
       osbMat, { part: 'osb', side: 'L' });
     osbL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
+    // Right slope: from (any X, Y=osbBaseY+rise, Z=halfSpan) to (any X, Y=osbBaseY, Z=span)
+    const osbRCy = osbBaseY_mm + rise_mm / 2 + osbPerpOffset_mm * cosT;
+    const osbRCz = halfSpan_mm + halfSpan_mm / 2 + osbPerpOffset_mm * sinT;
+    
     const osbR = mkBoxCentered(`att-${attId}-osb-R`,
       ridge_mm, ROOF_OSB_MM, rafterLen_mm,
-      ridge_mm / 2, osbCy + sinT * osbOffset_mm / 2, halfSpan_mm + halfSpan_mm / 2,
+      ridge_mm / 2, osbRCy, osbRCz,
       osbMat, { part: 'osb', side: 'R' });
     osbR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+    
   } else {
-    // OSB sheets along Z, sloping in X
+    // Left slope in X direction
+    const osbLCy = osbBaseY_mm + rise_mm / 2 + osbPerpOffset_mm * cosT;
+    const osbLCx = halfSpan_mm / 2 - osbPerpOffset_mm * sinT;
+    
     const osbL = mkBoxCentered(`att-${attId}-osb-L`,
       rafterLen_mm, ROOF_OSB_MM, ridge_mm,
-      halfSpan_mm / 2 - sinT * osbOffset_mm / 2, osbCy, ridge_mm / 2,
+      osbLCx, osbLCy, ridge_mm / 2,
       osbMat, { part: 'osb', side: 'L' });
     osbL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
+    const osbRCy = osbBaseY_mm + rise_mm / 2 + osbPerpOffset_mm * cosT;
+    const osbRCx = halfSpan_mm + halfSpan_mm / 2 + osbPerpOffset_mm * sinT;
+    
     const osbR = mkBoxCentered(`att-${attId}-osb-R`,
       rafterLen_mm, ROOF_OSB_MM, ridge_mm,
-      halfSpan_mm + halfSpan_mm / 2 + sinT * osbOffset_mm / 2, osbCy, ridge_mm / 2,
+      osbRCx, osbRCy, ridge_mm / 2,
       osbMat, { part: 'osb', side: 'R' });
     osbR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
   }
 
   // ========== 4. COVERING ==========
-  const coverOffset_mm = MEMBER_D_MM + ROOF_OSB_MM + COVERING_MM + 3;
-  const coverCy = MEMBER_D_MM + rise_mm / 2 + cosT * coverOffset_mm;
-
+  // Covering sits on top of OSB
+  const coverPerpOffset_mm = ROOF_OSB_MM + COVERING_MM / 2;  // OSB thickness + half covering
+  
   if (ridgeAlongX) {
+    const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
+    const coverLCz = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
       ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
-      ridge_mm / 2, coverCy - sinT * coverOffset_mm / 2, halfSpan_mm / 2 - OVERHANG_MM / 2,
+      ridge_mm / 2, coverLCy, coverLCz,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
+    const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
+    const coverRCz = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
       ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
-      ridge_mm / 2, coverCy + sinT * coverOffset_mm / 2, halfSpan_mm + halfSpan_mm / 2 + OVERHANG_MM / 2,
+      ridge_mm / 2, coverRCy, coverRCz,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+    
   } else {
+    const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
+    const coverLCx = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
       rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
-      halfSpan_mm / 2 - sinT * coverOffset_mm / 2 - OVERHANG_MM / 2, coverCy, ridge_mm / 2,
+      coverLCx, coverLCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
+    const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
+    const coverRCx = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
       rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
-      halfSpan_mm + halfSpan_mm / 2 + sinT * coverOffset_mm / 2 + OVERHANG_MM / 2, coverCy, ridge_mm / 2,
+      coverRCx, coverRCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
   }
@@ -2090,4 +2130,3 @@ export function disposeAllAttachments(scene) {
   );
   roots.forEach(r => r.dispose());
 }
-// cache bust 1769603556
