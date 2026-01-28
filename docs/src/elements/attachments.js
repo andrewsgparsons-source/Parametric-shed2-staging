@@ -2008,10 +2008,15 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
     
     // Purlin sits ON TOP of rafter - offset perpendicular to slope
+    // At the ridge (s_mm = 0), use minimal offset since rafters meet at peak
+    // Along slopes, use full perpendicular offset
+    const isRidge = s_mm === 0;
+    const effectiveOffset = isRidge ? (MEMBER_D_MM / 2 + 5) : purlinPerpOffset;
+    
     // Perpendicular offset in Y = offset * cos(slope)
     // Perpendicular offset in Z/X = offset * sin(slope) toward ridge
-    const yOffset = purlinPerpOffset * cosT;
-    const zOffset = purlinPerpOffset * sinT;
+    const yOffset = effectiveOffset * cosT;
+    const zOffset = isRidge ? 0 : effectiveOffset * sinT;  // No Z offset at ridge
 
     if (ridgeAlongX) {
       // Purlins along X, positioned at Z stations down the slope
