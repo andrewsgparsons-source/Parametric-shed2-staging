@@ -1836,6 +1836,9 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // 
   // CONSTRAINT: Crest must be below main building's fascia bottom
   // mainFasciaBottom is already the lowest point of the fascia board
+  console.log("[attachments] buildApexRoof received - mainFasciaBottom:", mainFasciaBottom, 
+              "roofBaseY:", roofBaseY, "userCrest:", attachment.roof?.apex?.crestHeight_mm);
+  
   const CREST_CLEARANCE_MM = 50;  // Small clearance below fascia
   const maxCrestHeight = (mainFasciaBottom || 1800) - CREST_CLEARANCE_MM;
   const defaultCrestHeight = maxCrestHeight;  // Default to max allowed
