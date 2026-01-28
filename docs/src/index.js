@@ -4435,9 +4435,9 @@ function parseOverhangInput(val) {
           apexRow.className = "att-row three-col";
           apexRow.innerHTML =
             '<label><span>Eave (mm)</span>' +
-            '<input type="number" class="att-apex-eave" value="' + (att.roof?.apex?.eaveHeight_mm || 100) + '" step="50" /></label>' +
+            '<input type="number" class="att-apex-eave" value="' + (att.roof?.apex?.eaveHeight_mm || 1200) + '" step="50" /></label>' +
             '<label><span>Crest (mm)</span>' +
-            '<input type="number" class="att-apex-crest" value="' + (att.roof?.apex?.crestHeight_mm || 400) + '" step="50" /></label>' +
+            '<input type="number" class="att-apex-crest" value="' + (att.roof?.apex?.crestHeight_mm || 1600) + '" step="50" /></label>' +
             '<label><span>Trusses</span>' +
             '<input type="number" class="att-apex-trusses" value="' + (att.roof?.apex?.trussCount || 2) + '" min="2" step="1" /></label>';
           apexOptions.appendChild(apexRow);
