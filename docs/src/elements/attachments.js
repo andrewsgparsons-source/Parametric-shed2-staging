@@ -1601,100 +1601,408 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
 }
 
 /**
- * Build apex roof for attachment
- * Ridge runs perpendicular to the attached wall (parallel to the depth direction)
- * - Left/Right attachments: ridge runs along X (outward from building)
- * - Front/Back attachments: ridge runs along Z (outward from building)
+ * Build apex roof for attachment with full structure
+ * Ridge runs perpendicular to the attached wall (along the depth direction)
+ * - Left/Right attachments: ridge runs along X (depth), gable ends at Z=0 and Z=extentZ
+ * - Front/Back attachments: ridge runs along Z (depth), gable ends at X=0 and X=extentX
+ * 
+ * Includes: rafters, ridge board, OSB sheathing, covering (felt), fascia boards
  */
 function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat) {
-  // Get apex roof parameters (heights are relative to wall top, not absolute)
-  const eaveHeight_mm = attachment.roof?.apex?.eaveHeight_mm || 100;
-  const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
+  // Get apex roof parameters
+  const apexConfig = attachment?.roof?.apex || {};
+  const eaveHeight_mm = apexConfig.eaveHeight_mm || 0;  // Height above wall top to eaves
+  const crestHeight_mm = apexConfig.crestHeight_mm || 400;  // Height above wall top to ridge
+  
+  // Get overhang values (default to matching pent roof defaults)
+  const ovhEaves = Math.max(0, Math.floor(Number(apexConfig.overhang?.eaves_mm ?? 75)));
+  const ovhVerge = Math.max(0, Math.floor(Number(apexConfig.overhang?.verge_mm ?? 75)));
 
-  // roofBaseY is already in absolute mm from ground (floorSurfaceY + wallHeightInner)
-  // Parent root is at Y=0 (ground level), so local Y = world Y
-  // Just use roofBaseY directly as the wall top height
-  const eaveY = roofBaseY + eaveHeight_mm;
-  const crestY = roofBaseY + crestHeight_mm;
+  // Calculate heights (roofBaseY is absolute from ground, at top of wall frame)
+  const eavesY_mm = roofBaseY + eaveHeight_mm;  // Underside of rafters at eaves
+  const ridgeY_mm = roofBaseY + crestHeight_mm;  // Top of ridge
+  const rise_mm = ridgeY_mm - eavesY_mm;  // Vertical rise from eaves to ridge
 
   // Determine ridge direction based on attachment wall
-  // Ridge should run PERPENDICULAR to the attached wall (along the depth direction)
-  // Left/Right attachments: extentX = depth, extentZ = width -> ridge along X
-  // Front/Back attachments: extentX = width, extentZ = depth -> ridge along Z
+  // Left/Right: ridge along X (extentX = depth), span along Z (extentZ = width)
+  // Front/Back: ridge along Z (extentZ = depth), span along X (extentX = width)
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
+
+  // Span is perpendicular to ridge - this is where the gables are
+  const ridgeLen_mm = ridgeAlongX ? extentX : extentZ;  // Length along ridge
+  const span_mm = ridgeAlongX ? extentZ : extentX;      // Width across gables
+  const halfSpan_mm = span_mm / 2;
+
+  // Calculate slope geometry
+  const run_mm = halfSpan_mm;  // Horizontal distance from eave to ridge
+  const slopeLen_mm = Math.sqrt(run_mm * run_mm + rise_mm * rise_mm);
+  const pitchAngle = Math.atan2(rise_mm, run_mm);
 
   console.log("[attachments] buildApexRoof - attachWall:", attachWall,
               "ridgeAlongX:", ridgeAlongX,
-              "extentX:", extentX, "extentZ:", extentZ,
-              "roofBaseY:", roofBaseY, "eaveY:", eaveY, "crestY:", crestY);
+              "ridgeLen:", ridgeLen_mm, "span:", span_mm,
+              "eavesY:", eavesY_mm, "ridgeY:", ridgeY_mm,
+              "rise:", rise_mm, "pitchAngle:", (pitchAngle * 180 / Math.PI).toFixed(1) + "°");
 
-  let leftPath1, leftPath2, rightPath1, rightPath2;
-
-  if (ridgeAlongX) {
-    // Ridge runs along X axis (at Z = extentZ/2)
-    // Roof spans from Z=0 to Z=extentZ, peaks at Z=extentZ/2
-    const ridgeZ = extentZ / 2;
-
-    // Left slope: from Z=0 (eave) up to Z=ridgeZ (crest)
-    leftPath1 = [
-      new BABYLON.Vector3(0, eaveY / 1000, 0),
-      new BABYLON.Vector3(0, crestY / 1000, ridgeZ / 1000)
-    ];
-    leftPath2 = [
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0),
-      new BABYLON.Vector3(extentX / 1000, crestY / 1000, ridgeZ / 1000)
-    ];
-
-    // Right slope: from Z=ridgeZ (crest) down to Z=extentZ (eave)
-    rightPath1 = [
-      new BABYLON.Vector3(0, crestY / 1000, ridgeZ / 1000),
-      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000)
-    ];
-    rightPath2 = [
-      new BABYLON.Vector3(extentX / 1000, crestY / 1000, ridgeZ / 1000),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
-    ];
-  } else {
-    // Ridge runs along Z axis (at X = extentX/2)
-    // Roof spans from X=0 to X=extentX, peaks at X=extentX/2
-    const ridgeX = extentX / 2;
-
-    // Left slope: from X=0 (eave) up to X=ridgeX (crest)
-    leftPath1 = [
-      new BABYLON.Vector3(0, eaveY / 1000, 0),
-      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, 0)
-    ];
-    leftPath2 = [
-      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000),
-      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, extentZ / 1000)
-    ];
-
-    // Right slope: from X=ridgeX (crest) down to X=extentX (eave)
-    rightPath1 = [
-      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, 0),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0)
-    ];
-    rightPath2 = [
-      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, extentZ / 1000),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
-    ];
+  // Helper to create box at position (with center positioning)
+  function mkBox(name, w, h, d, cx, cy, cz, mat, meta) {
+    const mesh = BABYLON.MeshBuilder.CreateBox(name, {
+      width: w / 1000,
+      height: h / 1000,
+      depth: d / 1000
+    }, scene);
+    mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+    mesh.material = mat;
+    mesh.parent = root;
+    mesh.metadata = Object.assign({ dynamic: true, attachmentId: attId, type: 'roof' }, meta || {});
+    return mesh;
   }
 
-  const leftRoof = BABYLON.MeshBuilder.CreateRibbon(`att-${attId}-roof-left`, {
-    pathArray: [leftPath1, leftPath2],
-    sideOrientation: BABYLON.Mesh.DOUBLESIDE
-  }, scene);
-  leftRoof.material = coveringMat;
-  leftRoof.parent = root;
-  leftRoof.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'covering' };
+  // Helper to create a sloped roof plane (OSB or covering) using ribbon mesh
+  function mkSlopePlane(name, ridgeLen, slopeLen, x0, z0, y0, pitchDir, pitchAngle, mat, meta) {
+    // Build a ribbon mesh for the sloped plane
+    // pitchDir: 'z+' means slope rises toward +Z, 'z-' toward -Z, 'x+' toward +X, 'x-' toward -X
+    
+    const cosP = Math.cos(pitchAngle);
+    const sinP = Math.sin(pitchAngle);
+    
+    let path1, path2;
+    
+    if (pitchDir === 'z+' || pitchDir === 'z-') {
+      // Ridge runs along X, slope along Z
+      const zSign = pitchDir === 'z+' ? 1 : -1;
+      const zEnd = z0 + zSign * slopeLen * cosP;
+      const yEnd = y0 + slopeLen * sinP;
+      
+      path1 = [
+        new BABYLON.Vector3(x0 / 1000, y0 / 1000, z0 / 1000),
+        new BABYLON.Vector3(x0 / 1000, yEnd / 1000, zEnd / 1000)
+      ];
+      path2 = [
+        new BABYLON.Vector3((x0 + ridgeLen) / 1000, y0 / 1000, z0 / 1000),
+        new BABYLON.Vector3((x0 + ridgeLen) / 1000, yEnd / 1000, zEnd / 1000)
+      ];
+    } else {
+      // Ridge runs along Z, slope along X
+      const xSign = pitchDir === 'x+' ? 1 : -1;
+      const xEnd = x0 + xSign * slopeLen * cosP;
+      const yEnd = y0 + slopeLen * sinP;
+      
+      path1 = [
+        new BABYLON.Vector3(x0 / 1000, y0 / 1000, z0 / 1000),
+        new BABYLON.Vector3(xEnd / 1000, yEnd / 1000, z0 / 1000)
+      ];
+      path2 = [
+        new BABYLON.Vector3(x0 / 1000, y0 / 1000, (z0 + ridgeLen) / 1000),
+        new BABYLON.Vector3(xEnd / 1000, yEnd / 1000, (z0 + ridgeLen) / 1000)
+      ];
+    }
+    
+    const mesh = BABYLON.MeshBuilder.CreateRibbon(name, {
+      pathArray: [path1, path2],
+      sideOrientation: BABYLON.Mesh.DOUBLESIDE
+    }, scene);
+    mesh.material = mat;
+    mesh.parent = root;
+    mesh.metadata = Object.assign({ dynamic: true, attachmentId: attId, type: 'roof' }, meta || {});
+    return mesh;
+  }
 
-  const rightRoof = BABYLON.MeshBuilder.CreateRibbon(`att-${attId}-roof-right`, {
-    pathArray: [rightPath1, rightPath2],
-    sideOrientation: BABYLON.Mesh.DOUBLESIDE
-  }, scene);
-  rightRoof.material = coveringMat;
-  rightRoof.parent = root;
-  rightRoof.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'covering' };
+  // Build roof structure based on ridge direction
+  if (ridgeAlongX) {
+    // Ridge runs along X axis, roof peaks at Z = halfSpan_mm
+    // Left slope faces Z=0, right slope faces Z=extentZ
+    
+    const ridgeCenterZ = halfSpan_mm;
+    
+    // Ridge board (runs along X at the peak)
+    const ridgeBoard = mkBox(`att-${attId}-ridge-board`, ridgeLen_mm, RAFTER_D_MM, RAFTER_W_MM,
+                             ridgeLen_mm / 2, ridgeY_mm - RAFTER_D_MM / 2, ridgeCenterZ, joistMat, { part: 'ridge' });
+
+    // Build rafters on both slopes
+    const rafterCount = Math.max(2, Math.ceil(ridgeLen_mm / RAFTER_SPACING_MM) + 1);
+    const rafterSpacing = ridgeLen_mm / (rafterCount - 1);
+    
+    for (let i = 0; i < rafterCount; i++) {
+      const x = i * rafterSpacing;
+      
+      // Left rafter (from Z=0 eave up to ridge)
+      const leftRafter = BABYLON.MeshBuilder.CreateBox(`att-${attId}-rafter-L${i}`, {
+        width: RAFTER_W_MM / 1000,
+        height: RAFTER_D_MM / 1000,
+        depth: slopeLen_mm / 1000
+      }, scene);
+      leftRafter.rotation.x = -pitchAngle;
+      leftRafter.position = new BABYLON.Vector3(
+        x / 1000,
+        (eavesY_mm + rise_mm / 2) / 1000,
+        (halfSpan_mm / 2) / 1000
+      );
+      leftRafter.material = joistMat;
+      leftRafter.parent = root;
+      leftRafter.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'rafter' };
+      
+      // Right rafter (from Z=extentZ eave up to ridge)
+      const rightRafter = BABYLON.MeshBuilder.CreateBox(`att-${attId}-rafter-R${i}`, {
+        width: RAFTER_W_MM / 1000,
+        height: RAFTER_D_MM / 1000,
+        depth: slopeLen_mm / 1000
+      }, scene);
+      rightRafter.rotation.x = pitchAngle;
+      rightRafter.position = new BABYLON.Vector3(
+        x / 1000,
+        (eavesY_mm + rise_mm / 2) / 1000,
+        (extentZ - halfSpan_mm / 2) / 1000
+      );
+      rightRafter.material = joistMat;
+      rightRafter.parent = root;
+      rightRafter.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'rafter' };
+    }
+
+    // OSB sheathing on both slopes
+    const osbTopY = eavesY_mm + RAFTER_D_MM;  // Top of rafters
+    
+    // Left slope OSB
+    mkSlopePlane(`att-${attId}-osb-left`, ridgeLen_mm, slopeLen_mm,
+                 0, 0, osbTopY, 'z+', pitchAngle, osbMat, { part: 'osb' });
+    
+    // Right slope OSB  
+    mkSlopePlane(`att-${attId}-osb-right`, ridgeLen_mm, slopeLen_mm,
+                 0, extentZ, osbTopY, 'z-', pitchAngle, osbMat, { part: 'osb' });
+
+    // Covering (felt) on both slopes
+    const coverY = osbTopY + ROOF_OSB_MM;
+    
+    mkSlopePlane(`att-${attId}-covering-left`, ridgeLen_mm, slopeLen_mm,
+                 0, 0, coverY, 'z+', pitchAngle, coveringMat, { part: 'covering' });
+    
+    mkSlopePlane(`att-${attId}-covering-right`, ridgeLen_mm, slopeLen_mm,
+                 0, extentZ, coverY, 'z-', pitchAngle, coveringMat, { part: 'covering' });
+
+    // Fascia boards
+    const fasciaTopY = osbTopY + ROOF_OSB_MM;
+    const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
+    const fasciaCenterY = (fasciaTopY + fasciaBottomY) / 2;
+
+    // Eaves fascia at Z=0
+    mkBox(`att-${attId}-fascia-eave-front`, ridgeLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+          ridgeLen_mm / 2, fasciaCenterY, -FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eave-front' });
+
+    // Eaves fascia at Z=extentZ
+    mkBox(`att-${attId}-fascia-eave-back`, ridgeLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+          ridgeLen_mm / 2, fasciaCenterY, extentZ + FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eave-back' });
+
+    // Gable fascia at X=0 (triangular - simplified as two angled pieces)
+    // Left side of gable
+    const gableFasciaLen = slopeLen_mm + 50;  // Extend slightly for overhang
+    const gableFasciaL0 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-x0-left`, {
+      width: FASCIA_THK_MM / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: gableFasciaLen / 1000
+    }, scene);
+    gableFasciaL0.rotation.x = -pitchAngle;
+    gableFasciaL0.position = new BABYLON.Vector3(
+      -FASCIA_THK_MM / 2 / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (halfSpan_mm / 2) / 1000
+    );
+    gableFasciaL0.material = joistMat;
+    gableFasciaL0.parent = root;
+    gableFasciaL0.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-x0-left' };
+
+    // Right side of gable at X=0
+    const gableFasciaR0 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-x0-right`, {
+      width: FASCIA_THK_MM / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: gableFasciaLen / 1000
+    }, scene);
+    gableFasciaR0.rotation.x = pitchAngle;
+    gableFasciaR0.position = new BABYLON.Vector3(
+      -FASCIA_THK_MM / 2 / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (extentZ - halfSpan_mm / 2) / 1000
+    );
+    gableFasciaR0.material = joistMat;
+    gableFasciaR0.parent = root;
+    gableFasciaR0.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-x0-right' };
+
+    // Gable fascia at X=extentX (outer end)
+    const gableFasciaL1 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-x1-left`, {
+      width: FASCIA_THK_MM / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: gableFasciaLen / 1000
+    }, scene);
+    gableFasciaL1.rotation.x = -pitchAngle;
+    gableFasciaL1.position = new BABYLON.Vector3(
+      (extentX + FASCIA_THK_MM / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (halfSpan_mm / 2) / 1000
+    );
+    gableFasciaL1.material = joistMat;
+    gableFasciaL1.parent = root;
+    gableFasciaL1.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-x1-left' };
+
+    const gableFasciaR1 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-x1-right`, {
+      width: FASCIA_THK_MM / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: gableFasciaLen / 1000
+    }, scene);
+    gableFasciaR1.rotation.x = pitchAngle;
+    gableFasciaR1.position = new BABYLON.Vector3(
+      (extentX + FASCIA_THK_MM / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (extentZ - halfSpan_mm / 2) / 1000
+    );
+    gableFasciaR1.material = joistMat;
+    gableFasciaR1.parent = root;
+    gableFasciaR1.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-x1-right' };
+
+  } else {
+    // Ridge runs along Z axis, roof peaks at X = halfSpan_mm (extentX/2)
+    // Left slope faces X=0, right slope faces X=extentX
+    
+    const ridgeCenterX = halfSpan_mm;
+    
+    // Ridge board (runs along Z at the peak)
+    const ridgeBoard = mkBox(`att-${attId}-ridge-board`, RAFTER_W_MM, RAFTER_D_MM, ridgeLen_mm,
+                             ridgeCenterX, ridgeY_mm - RAFTER_D_MM / 2, ridgeLen_mm / 2, joistMat, { part: 'ridge' });
+
+    // Build rafters on both slopes
+    const rafterCount = Math.max(2, Math.ceil(ridgeLen_mm / RAFTER_SPACING_MM) + 1);
+    const rafterSpacing = ridgeLen_mm / (rafterCount - 1);
+    
+    for (let i = 0; i < rafterCount; i++) {
+      const z = i * rafterSpacing;
+      
+      // Left rafter (from X=0 eave up to ridge)
+      const leftRafter = BABYLON.MeshBuilder.CreateBox(`att-${attId}-rafter-L${i}`, {
+        width: slopeLen_mm / 1000,
+        height: RAFTER_D_MM / 1000,
+        depth: RAFTER_W_MM / 1000
+      }, scene);
+      leftRafter.rotation.z = pitchAngle;
+      leftRafter.position = new BABYLON.Vector3(
+        (halfSpan_mm / 2) / 1000,
+        (eavesY_mm + rise_mm / 2) / 1000,
+        z / 1000
+      );
+      leftRafter.material = joistMat;
+      leftRafter.parent = root;
+      leftRafter.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'rafter' };
+      
+      // Right rafter (from X=extentX eave up to ridge)
+      const rightRafter = BABYLON.MeshBuilder.CreateBox(`att-${attId}-rafter-R${i}`, {
+        width: slopeLen_mm / 1000,
+        height: RAFTER_D_MM / 1000,
+        depth: RAFTER_W_MM / 1000
+      }, scene);
+      rightRafter.rotation.z = -pitchAngle;
+      rightRafter.position = new BABYLON.Vector3(
+        (extentX - halfSpan_mm / 2) / 1000,
+        (eavesY_mm + rise_mm / 2) / 1000,
+        z / 1000
+      );
+      rightRafter.material = joistMat;
+      rightRafter.parent = root;
+      rightRafter.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'rafter' };
+    }
+
+    // OSB sheathing on both slopes
+    const osbTopY = eavesY_mm + RAFTER_D_MM;
+    
+    mkSlopePlane(`att-${attId}-osb-left`, ridgeLen_mm, slopeLen_mm,
+                 0, 0, osbTopY, 'x+', pitchAngle, osbMat, { part: 'osb' });
+    
+    mkSlopePlane(`att-${attId}-osb-right`, ridgeLen_mm, slopeLen_mm,
+                 extentX, 0, osbTopY, 'x-', pitchAngle, osbMat, { part: 'osb' });
+
+    // Covering (felt) on both slopes
+    const coverY = osbTopY + ROOF_OSB_MM;
+    
+    mkSlopePlane(`att-${attId}-covering-left`, ridgeLen_mm, slopeLen_mm,
+                 0, 0, coverY, 'x+', pitchAngle, coveringMat, { part: 'covering' });
+    
+    mkSlopePlane(`att-${attId}-covering-right`, ridgeLen_mm, slopeLen_mm,
+                 extentX, 0, coverY, 'x-', pitchAngle, coveringMat, { part: 'covering' });
+
+    // Fascia boards
+    const fasciaTopY = osbTopY + ROOF_OSB_MM;
+    const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
+    const fasciaCenterY = (fasciaTopY + fasciaBottomY) / 2;
+
+    // Eaves fascia at X=0
+    mkBox(`att-${attId}-fascia-eave-left`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridgeLen_mm,
+          -FASCIA_THK_MM / 2, fasciaCenterY, ridgeLen_mm / 2, joistMat, { part: 'fascia', edge: 'eave-left' });
+
+    // Eaves fascia at X=extentX
+    mkBox(`att-${attId}-fascia-eave-right`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridgeLen_mm,
+          extentX + FASCIA_THK_MM / 2, fasciaCenterY, ridgeLen_mm / 2, joistMat, { part: 'fascia', edge: 'eave-right' });
+
+    // Gable fascia at Z=0
+    const gableFasciaLen = slopeLen_mm + 50;
+    const gableFasciaL0 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-z0-left`, {
+      width: gableFasciaLen / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: FASCIA_THK_MM / 1000
+    }, scene);
+    gableFasciaL0.rotation.z = pitchAngle;
+    gableFasciaL0.position = new BABYLON.Vector3(
+      (halfSpan_mm / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      -FASCIA_THK_MM / 2 / 1000
+    );
+    gableFasciaL0.material = joistMat;
+    gableFasciaL0.parent = root;
+    gableFasciaL0.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-z0-left' };
+
+    const gableFasciaR0 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-z0-right`, {
+      width: gableFasciaLen / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: FASCIA_THK_MM / 1000
+    }, scene);
+    gableFasciaR0.rotation.z = -pitchAngle;
+    gableFasciaR0.position = new BABYLON.Vector3(
+      (extentX - halfSpan_mm / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      -FASCIA_THK_MM / 2 / 1000
+    );
+    gableFasciaR0.material = joistMat;
+    gableFasciaR0.parent = root;
+    gableFasciaR0.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-z0-right' };
+
+    // Gable fascia at Z=extentZ
+    const gableFasciaL1 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-z1-left`, {
+      width: gableFasciaLen / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: FASCIA_THK_MM / 1000
+    }, scene);
+    gableFasciaL1.rotation.z = pitchAngle;
+    gableFasciaL1.position = new BABYLON.Vector3(
+      (halfSpan_mm / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (extentZ + FASCIA_THK_MM / 2) / 1000
+    );
+    gableFasciaL1.material = joistMat;
+    gableFasciaL1.parent = root;
+    gableFasciaL1.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-z1-left' };
+
+    const gableFasciaR1 = BABYLON.MeshBuilder.CreateBox(`att-${attId}-fascia-gable-z1-right`, {
+      width: gableFasciaLen / 1000,
+      height: FASCIA_DEPTH_MM / 1000,
+      depth: FASCIA_THK_MM / 1000
+    }, scene);
+    gableFasciaR1.rotation.z = -pitchAngle;
+    gableFasciaR1.position = new BABYLON.Vector3(
+      (extentX - halfSpan_mm / 2) / 1000,
+      (eavesY_mm + rise_mm / 2) / 1000,
+      (extentZ + FASCIA_THK_MM / 2) / 1000
+    );
+    gableFasciaR1.material = joistMat;
+    gableFasciaR1.parent = root;
+    gableFasciaR1.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'gable-z1-right' };
+  }
+
+  console.log("[attachments] buildApexRoof complete for:", attId);
 }
 
 /**
