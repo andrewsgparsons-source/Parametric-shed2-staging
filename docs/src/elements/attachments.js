@@ -1276,7 +1276,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
-                  attachment, joistMat, osbMat, coveringMat);
+                  attachWall, attachment, joistMat, osbMat, coveringMat);
   }
 }
 
@@ -1601,35 +1601,87 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
 }
 
 /**
- * Build apex roof (simplified - similar to main building)
+ * Build apex roof for attachment
+ * Ridge runs perpendicular to the attached wall (parallel to the depth direction)
+ * - Left/Right attachments: ridge runs along X (outward from building)
+ * - Front/Back attachments: ridge runs along Z (outward from building)
  */
-function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachment, joistMat, osbMat, coveringMat) {
-  // Simplified apex roof - just create two sloped planes meeting at a ridge
-  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 100;
-  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
+function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat) {
+  // Get apex roof parameters (heights are relative to wall top, not absolute)
+  const eaveHeight_mm = attachment.roof?.apex?.eaveHeight_mm || 100;
+  const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
 
-  const ridgeX = extentX / 2;
-  const ridgeY = roofBaseY + crestHeight;
-  const eaveY = roofBaseY + eaveHeight;
+  // Convert to local Y coordinates (relative to parent root, not world)
+  // roofBaseY is already the wall top height; we add roof heights on top
+  // But since parent root is at floor level, we need to subtract floor level
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
+  const localWallTopY = roofBaseY - floorSurfaceY;
+  
+  const eaveY = localWallTopY + eaveHeight_mm;
+  const crestY = localWallTopY + crestHeight_mm;
 
-  // Create two roof planes using ribbon mesh
-  const leftPath1 = [
-    new BABYLON.Vector3(0, eaveY * 0.001, 0),
-    new BABYLON.Vector3(ridgeX * 0.001, ridgeY * 0.001, 0)
-  ];
-  const leftPath2 = [
-    new BABYLON.Vector3(0, eaveY * 0.001, extentZ * 0.001),
-    new BABYLON.Vector3(ridgeX * 0.001, ridgeY * 0.001, extentZ * 0.001)
-  ];
+  // Determine ridge direction based on attachment wall
+  // Ridge should run PERPENDICULAR to the attached wall (along the depth direction)
+  // Left/Right attachments: extentX = depth, extentZ = width -> ridge along X
+  // Front/Back attachments: extentX = width, extentZ = depth -> ridge along Z
+  const ridgeAlongX = (attachWall === "left" || attachWall === "right");
 
-  const rightPath1 = [
-    new BABYLON.Vector3(ridgeX * 0.001, ridgeY * 0.001, 0),
-    new BABYLON.Vector3(extentX * 0.001, eaveY * 0.001, 0)
-  ];
-  const rightPath2 = [
-    new BABYLON.Vector3(ridgeX * 0.001, ridgeY * 0.001, extentZ * 0.001),
-    new BABYLON.Vector3(extentX * 0.001, eaveY * 0.001, extentZ * 0.001)
-  ];
+  console.log("[attachments] buildApexRoof - attachWall:", attachWall,
+              "ridgeAlongX:", ridgeAlongX,
+              "extentX:", extentX, "extentZ:", extentZ,
+              "localWallTopY:", localWallTopY, "eaveY:", eaveY, "crestY:", crestY);
+
+  let leftPath1, leftPath2, rightPath1, rightPath2;
+
+  if (ridgeAlongX) {
+    // Ridge runs along X axis (at Z = extentZ/2)
+    // Roof spans from Z=0 to Z=extentZ, peaks at Z=extentZ/2
+    const ridgeZ = extentZ / 2;
+
+    // Left slope: from Z=0 (eave) up to Z=ridgeZ (crest)
+    leftPath1 = [
+      new BABYLON.Vector3(0, eaveY / 1000, 0),
+      new BABYLON.Vector3(0, crestY / 1000, ridgeZ / 1000)
+    ];
+    leftPath2 = [
+      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0),
+      new BABYLON.Vector3(extentX / 1000, crestY / 1000, ridgeZ / 1000)
+    ];
+
+    // Right slope: from Z=ridgeZ (crest) down to Z=extentZ (eave)
+    rightPath1 = [
+      new BABYLON.Vector3(0, crestY / 1000, ridgeZ / 1000),
+      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000)
+    ];
+    rightPath2 = [
+      new BABYLON.Vector3(extentX / 1000, crestY / 1000, ridgeZ / 1000),
+      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
+    ];
+  } else {
+    // Ridge runs along Z axis (at X = extentX/2)
+    // Roof spans from X=0 to X=extentX, peaks at X=extentX/2
+    const ridgeX = extentX / 2;
+
+    // Left slope: from X=0 (eave) up to X=ridgeX (crest)
+    leftPath1 = [
+      new BABYLON.Vector3(0, eaveY / 1000, 0),
+      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, 0)
+    ];
+    leftPath2 = [
+      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000),
+      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, extentZ / 1000)
+    ];
+
+    // Right slope: from X=ridgeX (crest) down to X=extentX (eave)
+    rightPath1 = [
+      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, 0),
+      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0)
+    ];
+    rightPath2 = [
+      new BABYLON.Vector3(ridgeX / 1000, crestY / 1000, extentZ / 1000),
+      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
+    ];
+  }
 
   const leftRoof = BABYLON.MeshBuilder.CreateRibbon(`att-${attId}-roof-left`, {
     pathArray: [leftPath1, leftPath2],
