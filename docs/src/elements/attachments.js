@@ -1717,21 +1717,23 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // 3. OSB boards on purlins
   // 4. Covering on OSB
   // 5. Gable ends (triangular cladding)
+  //
+  // Coordinate system (building directly in world coords, no rotation):
+  // Left/Right attachments: ridge along X (extentX), span along Z (extentZ)
+  // Front/Back attachments: ridge along Z (extentZ), span along X (extentX)
 
   const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
   const rise_mm = crestHeight;
 
   // Ridge direction based on attachment wall
-  // Left/Right: ridge along X (depth), slopes toward Z (width)
-  // Front/Back: ridge along Z (depth), slopes toward X (width)
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
 
-  // In LOCAL coordinates for this roof:
-  // A = span direction (perpendicular to ridge, where slopes go)
-  // B = ridge direction (along the length of the roof)
-  const A_mm = ridgeAlongX ? extentZ : extentX;  // Span (slope direction)
-  const B_mm = ridgeAlongX ? extentX : extentZ;  // Ridge length
-  const halfSpan_mm = A_mm / 2;
+  // World coordinate dimensions
+  // span_mm = dimension where slopes face (perpendicular to ridge)
+  // ridge_mm = dimension along the ridge
+  const span_mm = ridgeAlongX ? extentZ : extentX;
+  const ridge_mm = ridgeAlongX ? extentX : extentZ;
+  const halfSpan_mm = span_mm / 2;
 
   // Slope geometry
   const rafterLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
@@ -1740,16 +1742,15 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const cosT = Math.cos(slopeAng);
 
   // Timber dimensions (matching main building)
-  const MEMBER_W_MM = 50;   // Timber width (along ridge for trusses)
-  const MEMBER_D_MM = 100;  // Timber depth (vertical dimension)
+  const MEMBER_W_MM = 50;   // Timber width
+  const MEMBER_D_MM = 100;  // Timber depth
   const TRUSS_SPACING_MM = 600;
   const PURLIN_STEP_MM = 609;  // Based on OSB half-width (1220/2)
-  const PURLIN_CLEAR_MM = 1;
 
   console.log("[attachments] buildApexRoof:", attId,
     "roofBaseY:", roofBaseY, "rise:", rise_mm,
-    "ridgeAlongX:", ridgeAlongX, "A(span):", A_mm, "B(ridge):", B_mm,
-    "rafterLen:", rafterLen_mm, "slopeAng:", (slopeAng * 180 / Math.PI).toFixed(1) + "°");
+    "ridgeAlongX:", ridgeAlongX, "span:", span_mm, "ridge:", ridge_mm,
+    "slopeAng:", (slopeAng * 180 / Math.PI).toFixed(1) + "°");
 
   // Create roof root node at wall top height
   const roofRoot = new BABYLON.TransformNode(`att-${attId}-apex-roof-root`, scene);
@@ -1757,18 +1758,15 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   roofRoot.parent = root;
   roofRoot.position = new BABYLON.Vector3(0, roofBaseY / 1000, 0);
 
-  // Helper: create box with bottom at y, aligned to local axes
-  // In local coords: X = span axis (A), Z = ridge axis (B), Y = up
-  function mkBox(name, lenX, lenY, lenZ, x, yBottom, z, mat, meta) {
+  // Helper: create box at position (bottom-aligned in Y)
+  function mkBox(name, w, h, d, x, yBottom, z, mat, meta) {
     const mesh = BABYLON.MeshBuilder.CreateBox(name, {
-      width: lenX / 1000,
-      height: lenY / 1000,
-      depth: lenZ / 1000
+      width: w / 1000, height: h / 1000, depth: d / 1000
     }, scene);
     mesh.position = new BABYLON.Vector3(
-      (x + lenX / 2) / 1000,
-      yBottom / 1000 + lenY / 2000,
-      (z + lenZ / 2) / 1000
+      (x + w / 2) / 1000,
+      yBottom / 1000 + h / 2000,
+      (z + d / 2) / 1000
     );
     mesh.material = mat;
     mesh.parent = roofRoot;
@@ -1776,12 +1774,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     return mesh;
   }
 
-  // Helper: create box centered at cx, cy (for rotated elements)
-  function mkBoxCentered(name, lenX, lenY, lenZ, cx, cy, cz, mat, meta) {
+  // Helper: create box centered at position
+  function mkBoxCentered(name, w, h, d, cx, cy, cz, mat, meta) {
     const mesh = BABYLON.MeshBuilder.CreateBox(name, {
-      width: lenX / 1000,
-      height: lenY / 1000,
-      depth: lenZ / 1000
+      width: w / 1000, height: h / 1000, depth: d / 1000
     }, scene);
     mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
     mesh.material = mat;
@@ -1791,176 +1787,248 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   }
 
   // ========== 1. TRUSSES (rafters + tie beams) ==========
-  // Trusses placed along B axis (ridge direction) at 600mm spacing
+  // Trusses placed along ridge at 600mm spacing
+  // For ridgeAlongX: trusses at different X positions, spanning along Z
+  // For !ridgeAlongX: trusses at different Z positions, spanning along X
+
   const trussPositions = [];
   let p = 0;
-  const maxP = B_mm - MEMBER_W_MM;
+  const maxP = ridge_mm - MEMBER_W_MM;
   while (p <= maxP) {
     trussPositions.push(p);
     p += TRUSS_SPACING_MM;
   }
-  // Ensure last truss at end
   if (trussPositions.length && trussPositions[trussPositions.length - 1] < maxP) {
     trussPositions.push(maxP);
   }
 
-  trussPositions.forEach((zPos, idx) => {
-    const isGableEnd = (idx === 0 || idx === trussPositions.length - 1);
+  trussPositions.forEach((pos, idx) => {
+    if (ridgeAlongX) {
+      // Trusses at X positions, spanning Z (tie beam along Z, rafters slope in Z)
+      // Tie beam
+      mkBox(`att-${attId}-truss-${idx}-tie`, MEMBER_W_MM, MEMBER_D_MM, span_mm,
+        pos, 0, 0, joistMat, { part: 'truss', member: 'tie' });
 
-    // Tie beam (bottom chord) - runs along span at Y=0
-    mkBox(`att-${attId}-truss-${idx}-tie`, A_mm, MEMBER_D_MM, MEMBER_W_MM,
-      0, 0, zPos, joistMat, { part: 'truss', member: 'tie' });
+      // Rafters - rotate around X axis for Z-facing slopes
+      const rafterCy = MEMBER_D_MM + rise_mm / 2;
+      
+      // Left rafter (slopes toward -Z from ridge at center)
+      const leftRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-L`,
+        MEMBER_W_MM, MEMBER_D_MM, rafterLen_mm,
+        pos + MEMBER_W_MM / 2, rafterCy, halfSpan_mm / 2,
+        joistMat, { part: 'truss', member: 'rafter-L' });
+      leftRafter.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
-    // Left rafter - from eaves (0, 0) to ridge (halfSpan, rise)
-    // Rotated by slopeAng around Z axis
-    const rafterCenterDist = rafterLen_mm / 2;
-    const leftRafterCx = halfSpan_mm / 2;  // Midpoint along X
-    const leftRafterCy = MEMBER_D_MM + rise_mm / 2;  // Midpoint along Y (above tie)
-    const leftRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-L`,
-      rafterLen_mm, MEMBER_D_MM, MEMBER_W_MM,
-      leftRafterCx, leftRafterCy, zPos + MEMBER_W_MM / 2,
-      joistMat, { part: 'truss', member: 'rafter-L' });
-    leftRafter.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+      // Right rafter (slopes toward +Z from ridge)
+      const rightRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-R`,
+        MEMBER_W_MM, MEMBER_D_MM, rafterLen_mm,
+        pos + MEMBER_W_MM / 2, rafterCy, halfSpan_mm + halfSpan_mm / 2,
+        joistMat, { part: 'truss', member: 'rafter-R' });
+      rightRafter.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+      
+    } else {
+      // Trusses at Z positions, spanning X (tie beam along X, rafters slope in X)
+      // Tie beam
+      mkBox(`att-${attId}-truss-${idx}-tie`, span_mm, MEMBER_D_MM, MEMBER_W_MM,
+        0, 0, pos, joistMat, { part: 'truss', member: 'tie' });
 
-    // Right rafter - from ridge (halfSpan, rise) to eaves (A, 0)
-    const rightRafterCx = halfSpan_mm + halfSpan_mm / 2;
-    const rightRafterCy = MEMBER_D_MM + rise_mm / 2;
-    const rightRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-R`,
-      rafterLen_mm, MEMBER_D_MM, MEMBER_W_MM,
-      rightRafterCx, rightRafterCy, zPos + MEMBER_W_MM / 2,
-      joistMat, { part: 'truss', member: 'rafter-R' });
-    rightRafter.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+      // Rafters - rotate around Z axis for X-facing slopes
+      const rafterCy = MEMBER_D_MM + rise_mm / 2;
+
+      // Left rafter (slopes toward -X from ridge)
+      const leftRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-L`,
+        rafterLen_mm, MEMBER_D_MM, MEMBER_W_MM,
+        halfSpan_mm / 2, rafterCy, pos + MEMBER_W_MM / 2,
+        joistMat, { part: 'truss', member: 'rafter-L' });
+      leftRafter.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+      // Right rafter (slopes toward +X from ridge)
+      const rightRafter = mkBoxCentered(`att-${attId}-truss-${idx}-rafter-R`,
+        rafterLen_mm, MEMBER_D_MM, MEMBER_W_MM,
+        halfSpan_mm + halfSpan_mm / 2, rafterCy, pos + MEMBER_W_MM / 2,
+        joistMat, { part: 'truss', member: 'rafter-R' });
+      rightRafter.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+    }
   });
 
-  // ========== 2. PURLINS (no ridge board - two purlins at top) ==========
-  // Purlins run along B (ridge direction), spaced at 609mm down each slope
-  // Offset outward from rafter surface so purlins sit ON TOP of rafters
-  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + PURLIN_CLEAR_MM;
+  // ========== 2. PURLINS ==========
+  // Purlins run along ridge, spaced down each slope at 609mm
+  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + 1;
 
-  // Calculate slope stations: start near ridge, step 609mm down to eaves
-  const sBottom_mm = rafterLen_mm;  // Full slope length
-  const purlinStations = [0];  // Start at ridge
+  // Calculate slope stations
+  const purlinStations = [0];
   let sNext = PURLIN_STEP_MM;
-  while (sNext < sBottom_mm) {
+  while (sNext < rafterLen_mm) {
     purlinStations.push(Math.round(sNext));
     sNext += PURLIN_STEP_MM;
   }
-  // Ensure purlin at eaves
-  const sBottomRounded = Math.round(sBottom_mm);
-  if (purlinStations[purlinStations.length - 1] !== sBottomRounded) {
-    purlinStations.push(sBottomRounded);
+  if (purlinStations[purlinStations.length - 1] !== Math.round(rafterLen_mm)) {
+    purlinStations.push(Math.round(rafterLen_mm));
   }
 
   purlinStations.forEach((s_mm, idx) => {
-    // Convert slope distance to X,Y coordinates
-    const run_mm = Math.min(halfSpan_mm, Math.max(0, Math.round(s_mm * cosT)));
-    const drop_mm = Math.min(rise_mm, Math.max(0, Math.round(s_mm * sinT)));
-
-    // Surface Y at this slope position (top of tie beam + remaining rise)
+    const run_mm = Math.min(halfSpan_mm, s_mm * cosT);
+    const drop_mm = Math.min(rise_mm, s_mm * sinT);
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
 
-    // LEFT slope purlin
-    const xSurfL_mm = halfSpan_mm - run_mm;
-    const cxL_mm = xSurfL_mm + (-sinT) * purlinOutOffset_mm;
-    const cyL_mm = ySurf_mm + (cosT) * purlinOutOffset_mm;
-    const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
-      MEMBER_W_MM, MEMBER_D_MM, B_mm,
-      cxL_mm, cyL_mm, B_mm / 2,
-      joistMat, { part: 'purlin', side: 'L' });
-    purlinL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+    if (ridgeAlongX) {
+      // Purlins along X, positioned at Z stations down the slope
+      const zL = halfSpan_mm - run_mm;  // Left slope Z position
+      const zR = halfSpan_mm + run_mm;  // Right slope Z position
+      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
+      const cyR = cyL;
 
-    // RIGHT slope purlin
-    const xSurfR_mm = halfSpan_mm + run_mm;
-    const cxR_mm = xSurfR_mm + (sinT) * purlinOutOffset_mm;
-    const cyR_mm = ySurf_mm + (cosT) * purlinOutOffset_mm;
-    const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
-      MEMBER_W_MM, MEMBER_D_MM, B_mm,
-      cxR_mm, cyR_mm, B_mm / 2,
-      joistMat, { part: 'purlin', side: 'R' });
-    purlinR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+      // Left purlin
+      const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
+        ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
+        ridge_mm / 2, cyL - sinT * purlinOutOffset_mm, zL,
+        joistMat, { part: 'purlin', side: 'L' });
+      purlinL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
+
+      // Right purlin
+      const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
+        ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
+        ridge_mm / 2, cyR + sinT * purlinOutOffset_mm, zR,
+        joistMat, { part: 'purlin', side: 'R' });
+      purlinR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+
+    } else {
+      // Purlins along Z, positioned at X stations down the slope
+      const xL = halfSpan_mm - run_mm;
+      const xR = halfSpan_mm + run_mm;
+      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
+
+      // Left purlin
+      const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
+        MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
+        xL - sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        joistMat, { part: 'purlin', side: 'L' });
+      purlinL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+      // Right purlin
+      const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
+        MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
+        xR + sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        joistMat, { part: 'purlin', side: 'R' });
+      purlinR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+    }
   });
 
   // ========== 3. OSB BOARDS ==========
-  // OSB sits on top of purlins, following the slope
-  const osbOutOffset_mm = MEMBER_D_MM + ROOF_OSB_MM / 2 + 1;
-
-  // Left slope OSB
-  const osbLCx = halfSpan_mm / 2;
-  const osbLCy = MEMBER_D_MM + rise_mm / 2 + (cosT) * osbOutOffset_mm;
-  const osbL = mkBoxCentered(`att-${attId}-osb-L`,
-    rafterLen_mm, ROOF_OSB_MM, B_mm,
-    osbLCx + (-sinT) * osbOutOffset_mm / 2, osbLCy, B_mm / 2,
-    osbMat, { part: 'osb', side: 'L' });
-  osbL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
-
-  // Right slope OSB
-  const osbRCx = halfSpan_mm + halfSpan_mm / 2;
-  const osbRCy = MEMBER_D_MM + rise_mm / 2 + (cosT) * osbOutOffset_mm;
-  const osbR = mkBoxCentered(`att-${attId}-osb-R`,
-    rafterLen_mm, ROOF_OSB_MM, B_mm,
-    osbRCx + (sinT) * osbOutOffset_mm / 2, osbRCy, B_mm / 2,
-    osbMat, { part: 'osb', side: 'R' });
-  osbR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
-
-  // ========== 4. COVERING ==========
-  // Covering (felt) on top of OSB
-  const coverOutOffset_mm = MEMBER_D_MM + ROOF_OSB_MM + COVERING_MM / 2 + 2;
-
-  // Left slope covering
-  const coverL = mkBoxCentered(`att-${attId}-covering-L`,
-    rafterLen_mm + OVERHANG_MM, COVERING_MM, B_mm,
-    osbLCx + (-sinT) * coverOutOffset_mm / 2, osbLCy + ROOF_OSB_MM / 1000 + COVERING_MM / 2000, B_mm / 2,
-    coveringMat, { part: 'covering', side: 'L' });
-  coverL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
-
-  // Right slope covering
-  const coverR = mkBoxCentered(`att-${attId}-covering-R`,
-    rafterLen_mm + OVERHANG_MM, COVERING_MM, B_mm,
-    osbRCx + (sinT) * coverOutOffset_mm / 2, osbRCy + ROOF_OSB_MM / 1000 + COVERING_MM / 2000, B_mm / 2,
-    coveringMat, { part: 'covering', side: 'R' });
-  coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
-
-  // ========== 5. GABLE ENDS (triangular cladding) ==========
-  // Create triangular mesh for each gable end (front at Z=0, back at Z=B_mm)
-  if (claddingMat) {
-    // Front gable (Z = 0)
-    const gableFrontVerts = [
-      new BABYLON.Vector3(0, 0, 0),                          // Bottom left
-      new BABYLON.Vector3(A_mm / 1000, 0, 0),                // Bottom right
-      new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, 0)  // Peak
-    ];
-    const gableFront = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-front`, {
-      shape: gableFrontVerts,
-      sideOrientation: BABYLON.Mesh.DOUBLESIDE
-    }, scene);
-    gableFront.position = new BABYLON.Vector3(0, MEMBER_D_MM / 1000, -CLAD_T_MM / 1000);
-    gableFront.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
-    gableFront.material = claddingMat;
-    gableFront.parent = roofRoot;
-    gableFront.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'front' };
-
-    // Back gable (Z = B_mm)
-    const gableBack = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-back`, {
-      shape: gableFrontVerts,
-      sideOrientation: BABYLON.Mesh.DOUBLESIDE
-    }, scene);
-    gableBack.position = new BABYLON.Vector3(0, MEMBER_D_MM / 1000, (B_mm + CLAD_T_MM) / 1000);
-    gableBack.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
-    gableBack.material = claddingMat;
-    gableBack.parent = roofRoot;
-    gableBack.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'back' };
-  }
-
-  // ========== COORDINATE TRANSFORM ==========
-  // The roof is built in local coords where X=span, Z=ridge
-  // Need to rotate based on attachWall so ridge aligns correctly
+  const osbOffset_mm = MEMBER_D_MM + ROOF_OSB_MM / 2 + 2;
+  const osbCy = MEMBER_D_MM + rise_mm / 2 + cosT * osbOffset_mm;
 
   if (ridgeAlongX) {
-    // Ridge should run along world X - need to swap local X/Z
-    // Rotate 90° around Y
-    roofRoot.rotation = new BABYLON.Vector3(0, Math.PI / 2, 0);
+    // OSB sheets along X, sloping in Z
+    const osbL = mkBoxCentered(`att-${attId}-osb-L`,
+      ridge_mm, ROOF_OSB_MM, rafterLen_mm,
+      ridge_mm / 2, osbCy - sinT * osbOffset_mm / 2, halfSpan_mm / 2,
+      osbMat, { part: 'osb', side: 'L' });
+    osbL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
+
+    const osbR = mkBoxCentered(`att-${attId}-osb-R`,
+      ridge_mm, ROOF_OSB_MM, rafterLen_mm,
+      ridge_mm / 2, osbCy + sinT * osbOffset_mm / 2, halfSpan_mm + halfSpan_mm / 2,
+      osbMat, { part: 'osb', side: 'R' });
+    osbR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+  } else {
+    // OSB sheets along Z, sloping in X
+    const osbL = mkBoxCentered(`att-${attId}-osb-L`,
+      rafterLen_mm, ROOF_OSB_MM, ridge_mm,
+      halfSpan_mm / 2 - sinT * osbOffset_mm / 2, osbCy, ridge_mm / 2,
+      osbMat, { part: 'osb', side: 'L' });
+    osbL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+    const osbR = mkBoxCentered(`att-${attId}-osb-R`,
+      rafterLen_mm, ROOF_OSB_MM, ridge_mm,
+      halfSpan_mm + halfSpan_mm / 2 + sinT * osbOffset_mm / 2, osbCy, ridge_mm / 2,
+      osbMat, { part: 'osb', side: 'R' });
+    osbR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
   }
-  // For !ridgeAlongX (front/back attachments), local coords already match (ridge along Z)
+
+  // ========== 4. COVERING ==========
+  const coverOffset_mm = MEMBER_D_MM + ROOF_OSB_MM + COVERING_MM + 3;
+  const coverCy = MEMBER_D_MM + rise_mm / 2 + cosT * coverOffset_mm;
+
+  if (ridgeAlongX) {
+    const coverL = mkBoxCentered(`att-${attId}-covering-L`,
+      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm / 2, coverCy - sinT * coverOffset_mm / 2, halfSpan_mm / 2 - OVERHANG_MM / 2,
+      coveringMat, { part: 'covering', side: 'L' });
+    coverL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
+
+    const coverR = mkBoxCentered(`att-${attId}-covering-R`,
+      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm / 2, coverCy + sinT * coverOffset_mm / 2, halfSpan_mm + halfSpan_mm / 2 + OVERHANG_MM / 2,
+      coveringMat, { part: 'covering', side: 'R' });
+    coverR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
+  } else {
+    const coverL = mkBoxCentered(`att-${attId}-covering-L`,
+      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      halfSpan_mm / 2 - sinT * coverOffset_mm / 2 - OVERHANG_MM / 2, coverCy, ridge_mm / 2,
+      coveringMat, { part: 'covering', side: 'L' });
+    coverL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+    const coverR = mkBoxCentered(`att-${attId}-covering-R`,
+      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      halfSpan_mm + halfSpan_mm / 2 + sinT * coverOffset_mm / 2 + OVERHANG_MM / 2, coverCy, ridge_mm / 2,
+      coveringMat, { part: 'covering', side: 'R' });
+    coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+  }
+
+  // ========== 5. GABLE ENDS ==========
+  if (claddingMat) {
+    if (ridgeAlongX) {
+      // Gables at X=0 and X=ridge_mm, triangular in Y-Z plane
+      const gableVerts = [
+        new BABYLON.Vector3(0, 0, 0),
+        new BABYLON.Vector3(0, 0, span_mm / 1000),
+        new BABYLON.Vector3(0, rise_mm / 1000, halfSpan_mm / 1000)
+      ];
+      
+      const gableFront = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-front`, {
+        shape: gableVerts, sideOrientation: BABYLON.Mesh.DOUBLESIDE
+      }, scene);
+      gableFront.position = new BABYLON.Vector3(-CLAD_T_MM / 1000, MEMBER_D_MM / 1000, 0);
+      gableFront.material = claddingMat;
+      gableFront.parent = roofRoot;
+      gableFront.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'front' };
+
+      const gableBack = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-back`, {
+        shape: gableVerts, sideOrientation: BABYLON.Mesh.DOUBLESIDE
+      }, scene);
+      gableBack.position = new BABYLON.Vector3((ridge_mm + CLAD_T_MM) / 1000, MEMBER_D_MM / 1000, 0);
+      gableBack.material = claddingMat;
+      gableBack.parent = roofRoot;
+      gableBack.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'back' };
+
+    } else {
+      // Gables at Z=0 and Z=ridge_mm, triangular in X-Y plane
+      const gableVerts = [
+        new BABYLON.Vector3(0, 0, 0),
+        new BABYLON.Vector3(span_mm / 1000, 0, 0),
+        new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, 0)
+      ];
+      
+      const gableFront = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-front`, {
+        shape: gableVerts, sideOrientation: BABYLON.Mesh.DOUBLESIDE
+      }, scene);
+      gableFront.position = new BABYLON.Vector3(0, MEMBER_D_MM / 1000, -CLAD_T_MM / 1000);
+      gableFront.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+      gableFront.material = claddingMat;
+      gableFront.parent = roofRoot;
+      gableFront.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'front' };
+
+      const gableBack = BABYLON.MeshBuilder.CreatePolygon(`att-${attId}-gable-back`, {
+        shape: gableVerts, sideOrientation: BABYLON.Mesh.DOUBLESIDE
+      }, scene);
+      gableBack.position = new BABYLON.Vector3(0, MEMBER_D_MM / 1000, (ridge_mm + CLAD_T_MM) / 1000);
+      gableBack.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+      gableBack.material = claddingMat;
+      gableBack.parent = roofRoot;
+      gableBack.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'gable', side: 'back' };
+    }
+  }
 }
 
 /**
