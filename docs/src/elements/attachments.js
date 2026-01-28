@@ -1710,74 +1710,73 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
 function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat) {
-  const eaveHeight = attachment.roof?.apex?.eaveHeight_mm || 0;
+  // Apex roof heights (relative to wall top)
   const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
-
-  // Calculate Y positions - roofBaseY is wall top height from ground
-  const eaveY = roofBaseY + eaveHeight;
-  const ridgeY = roofBaseY + crestHeight;
+  const rise_mm = crestHeight;  // Rise from eaves to ridge
 
   // Ridge direction based on attachment wall
+  // Left/Right: ridge along X (depth), slopes toward Z (width)
+  // Front/Back: ridge along Z (depth), slopes toward X (width)
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
+  
+  // Span is the direction the roof slopes (perpendicular to ridge)
+  const span_mm = ridgeAlongX ? extentZ : extentX;
+  const ridgeLen_mm = ridgeAlongX ? extentX : extentZ;
+  const halfSpan_mm = span_mm / 2;
 
-  console.log("[attachments] buildApexRoof:", attId, 
-              "roofBaseY:", roofBaseY, "->", "eaveY:", eaveY, "ridgeY:", ridgeY,
-              "extentX:", extentX, "extentZ:", extentZ, "ridgeAlongX:", ridgeAlongX);
+  console.log("[attachments] buildApexRoof:", attId,
+              "roofBaseY:", roofBaseY, "crestHeight:", crestHeight,
+              "ridgeAlongX:", ridgeAlongX, "span:", span_mm, "ridgeLen:", ridgeLen_mm);
 
-  // WORKAROUND: The Y values seem too high. Let's check if roofBaseY is in wrong units.
-  // If values look wrong in console, this will help debug.
-  // Expected: roofBaseY ~1200-1800mm for typical attachment
-  if (roofBaseY > 5000) {
-    console.warn("[attachments] WARNING: roofBaseY seems too high:", roofBaseY, "- possible unit issue?");
-  }
+  // Create roof root node - position it at wall top height
+  const roofRoot = new BABYLON.TransformNode(`att-${attId}-apex-roof-root`, scene);
+  roofRoot.metadata = { dynamic: true, attachmentId: attId };
+  roofRoot.parent = root;
+  roofRoot.position = new BABYLON.Vector3(0, roofBaseY / 1000, 0);
 
+  // Build roof in local coordinates (Y=0 at eaves, Y=rise at ridge)
+  // Two slopes meeting at the ridge in the middle
   let leftPath1, leftPath2, rightPath1, rightPath2;
 
   if (ridgeAlongX) {
-    // Ridge runs along X axis at Z = extentZ/2
-    const ridgeZ = extentZ / 2;
-
-    // Left slope: Z=0 (eave) to Z=ridgeZ (peak)
+    // Ridge runs along local X, slopes along local Z
+    // Left slope: Z=0 up to Z=halfSpan (ridge)
+    // Right slope: Z=halfSpan down to Z=span
     leftPath1 = [
-      new BABYLON.Vector3(0, eaveY / 1000, 0),
-      new BABYLON.Vector3(0, ridgeY / 1000, ridgeZ / 1000)
+      new BABYLON.Vector3(0, 0, 0),
+      new BABYLON.Vector3(0, rise_mm / 1000, halfSpan_mm / 1000)
     ];
     leftPath2 = [
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0),
-      new BABYLON.Vector3(extentX / 1000, ridgeY / 1000, ridgeZ / 1000)
+      new BABYLON.Vector3(ridgeLen_mm / 1000, 0, 0),
+      new BABYLON.Vector3(ridgeLen_mm / 1000, rise_mm / 1000, halfSpan_mm / 1000)
     ];
-
-    // Right slope: Z=ridgeZ (peak) to Z=extentZ (eave)
     rightPath1 = [
-      new BABYLON.Vector3(0, ridgeY / 1000, ridgeZ / 1000),
-      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000)
+      new BABYLON.Vector3(0, rise_mm / 1000, halfSpan_mm / 1000),
+      new BABYLON.Vector3(0, 0, span_mm / 1000)
     ];
     rightPath2 = [
-      new BABYLON.Vector3(extentX / 1000, ridgeY / 1000, ridgeZ / 1000),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
+      new BABYLON.Vector3(ridgeLen_mm / 1000, rise_mm / 1000, halfSpan_mm / 1000),
+      new BABYLON.Vector3(ridgeLen_mm / 1000, 0, span_mm / 1000)
     ];
   } else {
-    // Ridge runs along Z axis at X = extentX/2
-    const ridgeX = extentX / 2;
-
-    // Left slope: X=0 (eave) to X=ridgeX (peak)
+    // Ridge runs along local Z, slopes along local X
+    // Left slope: X=0 up to X=halfSpan (ridge)
+    // Right slope: X=halfSpan down to X=span
     leftPath1 = [
-      new BABYLON.Vector3(0, eaveY / 1000, 0),
-      new BABYLON.Vector3(ridgeX / 1000, ridgeY / 1000, 0)
+      new BABYLON.Vector3(0, 0, 0),
+      new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, 0)
     ];
     leftPath2 = [
-      new BABYLON.Vector3(0, eaveY / 1000, extentZ / 1000),
-      new BABYLON.Vector3(ridgeX / 1000, ridgeY / 1000, extentZ / 1000)
+      new BABYLON.Vector3(0, 0, ridgeLen_mm / 1000),
+      new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, ridgeLen_mm / 1000)
     ];
-
-    // Right slope: X=ridgeX (peak) to X=extentX (eave)
     rightPath1 = [
-      new BABYLON.Vector3(ridgeX / 1000, ridgeY / 1000, 0),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, 0)
+      new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, 0),
+      new BABYLON.Vector3(span_mm / 1000, 0, 0)
     ];
     rightPath2 = [
-      new BABYLON.Vector3(ridgeX / 1000, ridgeY / 1000, extentZ / 1000),
-      new BABYLON.Vector3(extentX / 1000, eaveY / 1000, extentZ / 1000)
+      new BABYLON.Vector3(halfSpan_mm / 1000, rise_mm / 1000, ridgeLen_mm / 1000),
+      new BABYLON.Vector3(span_mm / 1000, 0, ridgeLen_mm / 1000)
     ];
   }
 
@@ -1786,7 +1785,7 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     sideOrientation: BABYLON.Mesh.DOUBLESIDE
   }, scene);
   leftRoof.material = coveringMat;
-  leftRoof.parent = root;
+  leftRoof.parent = roofRoot;
   leftRoof.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'covering' };
 
   const rightRoof = BABYLON.MeshBuilder.CreateRibbon(`att-${attId}-roof-right`, {
@@ -1794,7 +1793,7 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     sideOrientation: BABYLON.Mesh.DOUBLESIDE
   }, scene);
   rightRoof.material = coveringMat;
-  rightRoof.parent = root;
+  rightRoof.parent = roofRoot;
   rightRoof.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'covering' };
 }
 
