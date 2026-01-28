@@ -205,7 +205,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building walls...");
     try {
       buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                           attachWall, roofType, materials, claddingEnabled);
+                           attachWall, roofType, attachment, materials, claddingEnabled);
       console.log("[attachments] Walls built successfully");
     } catch (wallErr) {
       console.error("[attachments] ERROR building walls:", wallErr);
@@ -430,7 +430,7 @@ function buildAttachmentFloor(scene, root, attId, extentX, extentZ, materials) {
  * For pent roof, the walls along the slope direction have sloped top plates (prisms)
  */
 function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                               attachWall, roofType, materials, claddingEnabled = true) {
+                               attachWall, roofType, attachment, materials, claddingEnabled = true) {
   console.log("[attachments] buildAttachmentWalls called for:", attId,
               "extentX:", extentX, "extentZ:", extentZ,
               "wallHeightInner:", wallHeightInner, "wallHeightOuter:", wallHeightOuter,
@@ -462,6 +462,7 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
   console.log("[attachments] Materials - plate:", plateMat?.name, "stud:", studMat?.name, "clad:", cladMat?.name);
 
   const isPent = roofType === "pent";
+  const isApex = roofType === "apex";
 
   // Helper to create a box mesh at position (bottom-left-front corner)
   function mkBox(name, lenX, lenY, lenZ, pos, mat) {
@@ -591,6 +592,74 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
     return mesh;
   }
 
+  // Helper to build triangular gable infill for apex roofs
+  function buildGableInfill(wallId, axis, length, startPos, wallTopY, peakY, cladMat) {
+    const rise_mm = peakY - wallTopY;
+    if (rise_mm <= 0) return;
+    
+    const halfLen = length / 2;
+    const peakPos = startPos + halfLen;
+    
+    console.log("[attachments] buildGableInfill:", wallId, "axis:", axis, 
+                "length:", length, "wallTopY:", wallTopY, "peakY:", peakY);
+    
+    let positions, indices;
+    
+    if (axis === 'z') {
+      // Gable along Z axis (peak at Z center)
+      const x0 = -CLAD_T_MM, x1 = 0;
+      const z0 = startPos, z1 = startPos + length, zMid = peakPos;
+      
+      positions = [
+        x0, wallTopY, z0,  x0, wallTopY, z1,  x0, peakY, zMid,  // front triangle
+        x1, wallTopY, z0,  x1, wallTopY, z1,  x1, peakY, zMid,  // back triangle
+      ].map(v => v / 1000);
+      
+      indices = [
+        0, 2, 1,  3, 4, 5,  // front/back faces
+        0, 1, 4, 0, 4, 3,   // bottom edge
+        0, 3, 5, 0, 5, 2,   // left slope
+        1, 2, 5, 1, 5, 4,   // right slope
+      ];
+    } else {
+      // Gable along X axis (peak at X center)
+      const z0 = -CLAD_T_MM, z1 = 0;
+      const x0 = startPos, x1 = startPos + length, xMid = peakPos;
+      
+      positions = [
+        x0, wallTopY, z0,  x1, wallTopY, z0,  xMid, peakY, z0,  // front triangle
+        x0, wallTopY, z1,  x1, wallTopY, z1,  xMid, peakY, z1,  // back triangle
+      ].map(v => v / 1000);
+      
+      indices = [
+        0, 1, 2,  3, 5, 4,  // front/back faces
+        0, 3, 4, 0, 4, 1,   // bottom edge
+        0, 2, 5, 0, 5, 3,   // left slope
+        1, 4, 5, 1, 5, 2,   // right slope
+      ];
+    }
+    
+    const normals = [];
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+    
+    const vd = new BABYLON.VertexData();
+    vd.positions = positions;
+    vd.indices = indices;
+    vd.normals = normals;
+    
+    const mesh = new BABYLON.Mesh(`att-${attId}-gable-${wallId}`, scene);
+    vd.applyToMesh(mesh, true);
+    
+    let useMat = cladMat;
+    if (cladMat && cladMat.clone) {
+      useMat = cladMat.clone(`att-${attId}-gable-${wallId}-mat`);
+      useMat.backFaceCulling = false;
+    }
+    mesh.material = useMat;
+    mesh.parent = root;
+    mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-cladding', part: 'gable' };
+  }
+
   // Build walls based on attachment orientation
   // Following main building corner join rules
 
@@ -628,6 +697,11 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null);
+      if (isApex) {
+        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
+        const wallTopY = wallBaseY + wallHeightOuter;
+        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
+      }
     }
 
   } else if (attachWall === "right") {
@@ -663,6 +737,11 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null);
+      if (isApex) {
+        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
+        const wallTopY = wallBaseY + wallHeightOuter;
+        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
+      }
     }
 
   } else if (attachWall === "front") {
@@ -698,6 +777,11 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk);
+      if (isApex) {
+        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
+        const wallTopY = wallBaseY + wallHeightOuter;
+        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
+      }
     }
 
   } else if (attachWall === "back") {
@@ -733,6 +817,11 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk);
+      if (isApex) {
+        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
+        const wallTopY = wallBaseY + wallHeightOuter;
+        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
+      }
     }
   }
 }
