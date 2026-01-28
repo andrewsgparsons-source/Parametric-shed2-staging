@@ -1481,8 +1481,15 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
+    // Get main building eaves height for crest capping
+    const mainEavesHeight = Number(
+      mainState.roof?.apex?.heightToEaves_mm ||
+      mainState.roof?.apex?.eavesHeight_mm ||
+      mainState.roof?.pent?.maxHeight_mm ||
+      2400
+    );
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
-                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm);
+                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainEavesHeight);
   }
 }
 
@@ -1810,7 +1817,7 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Build apex roof (simplified - two sloped planes meeting at a ridge)
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
-function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm) {
+function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainEavesHeight) {
   // Apex roof with full construction:
   // 1. Trusses (rafters + tie beams) at ~600mm spacing
   // 2. Purlins at 609mm centres (two at top, no ridge board)
@@ -1825,11 +1832,25 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // crestHeight_mm is the ABSOLUTE height of the peak from floor surface
   // roofBaseY is the eaves height (wall top) from floor surface
   // rise = peak height - eaves height
-  const crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || (roofBaseY + 400);
+  // 
+  // CONSTRAINT: Crest must be at least 50mm below main building eaves
+  const CREST_BELOW_MAIN_EAVES_MM = 50;
+  const maxCrestHeight = (mainEavesHeight || 2400) - CREST_BELOW_MAIN_EAVES_MM;
+  const defaultCrestHeight = maxCrestHeight;  // Default to max allowed (50mm below main eaves)
+  
+  let crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || defaultCrestHeight;
+  
+  // Cap crest to stay below main building eaves
+  if (crestHeightAbs > maxCrestHeight) {
+    console.log("[attachments] Apex crest capped:", crestHeightAbs, "->", maxCrestHeight, 
+                "(mainEaves:", mainEavesHeight, "- 50mm)");
+    crestHeightAbs = maxCrestHeight;
+  }
+  
   const rise_mm = Math.max(100, crestHeightAbs - roofBaseY);  // Minimum 100mm rise
   
   console.log("[attachments] Apex crest calculation:",
-    "crestHeightAbs:", crestHeightAbs, "roofBaseY:", roofBaseY, "rise:", rise_mm);
+    "crestHeightAbs:", crestHeightAbs, "maxCrest:", maxCrestHeight, "roofBaseY:", roofBaseY, "rise:", rise_mm);
 
   // Ridge direction based on attachment wall
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
