@@ -133,35 +133,51 @@ export function build3D(mainState, attachment, ctx) {
   console.log("[attachments] Height constraint - mainFasciaBottom:", mainFasciaBottom,
               "roofStackHeight:", roofStackHeight, "maxInnerHeight:", maxInnerHeight);
 
-  // For pent roof, calculate wall heights
-  // Inner wall (at main building) is higher, outer wall is lower
-  // The UI values are total heights from ground to roof underside
-  // If null, use dynamic defaults based on main building fascia
-  let highHeight_mm = attachment.roof?.pent?.highHeight_mm;
-  if (highHeight_mm == null) {
-    highHeight_mm = maxInnerHeight; // Default to max allowed height
+  // Calculate wall heights based on roof type
+  let wallHeightInner, wallHeightOuter;
+
+  if (roofType === "apex") {
+    // For apex roof, all walls have the same height (eaves level)
+    // The gable peak is above the walls, handled by the roof
+    let eavesHeight_mm = attachment.roof?.apex?.wallHeight_mm;
+    if (eavesHeight_mm == null) {
+      // Default: use max inner height minus crest height to leave room for peak
+      const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
+      eavesHeight_mm = Math.max(500, maxInnerHeight - crestHeight_mm);
+    }
+    eavesHeight_mm = Math.min(eavesHeight_mm, maxInnerHeight);
+    
+    wallHeightInner = Math.max(500, eavesHeight_mm - floorStackHeight);
+    wallHeightOuter = wallHeightInner;  // Same height for apex
+    
+    console.log("[attachments] Apex heights - eaves:", eavesHeight_mm,
+                "wallHeight:", wallHeightInner);
+  } else {
+    // For pent roof, calculate wall heights
+    // Inner wall (at main building) is higher, outer wall is lower
+    let highHeight_mm = attachment.roof?.pent?.highHeight_mm;
+    if (highHeight_mm == null) {
+      highHeight_mm = maxInnerHeight;
+    }
+
+    let lowHeight_mm = attachment.roof?.pent?.lowHeight_mm;
+    if (lowHeight_mm == null) {
+      lowHeight_mm = Math.max(500, highHeight_mm - 300);
+    }
+
+    if (highHeight_mm > maxInnerHeight) {
+      console.log("[attachments] Capping highHeight_mm from", highHeight_mm, "to", maxInnerHeight);
+      highHeight_mm = maxInnerHeight;
+    }
+
+    const effectiveLowHeight = Math.min(lowHeight_mm, highHeight_mm - 100);
+
+    wallHeightInner = Math.max(500, highHeight_mm - floorStackHeight);
+    wallHeightOuter = Math.max(500, effectiveLowHeight - floorStackHeight);
+
+    console.log("[attachments] Pent heights - high:", highHeight_mm, "low:", effectiveLowHeight,
+                "wallInner:", wallHeightInner, "wallOuter:", wallHeightOuter);
   }
-
-  let lowHeight_mm = attachment.roof?.pent?.lowHeight_mm;
-  if (lowHeight_mm == null) {
-    lowHeight_mm = Math.max(500, highHeight_mm - 300); // Default 300mm slope
-  }
-
-  // Cap the high height so the roof peak doesn't exceed the main building's fascia bottom
-  if (highHeight_mm > maxInnerHeight) {
-    console.log("[attachments] Capping highHeight_mm from", highHeight_mm, "to", maxInnerHeight);
-    highHeight_mm = maxInnerHeight;
-  }
-
-  // Ensure low height doesn't exceed high height (keep at least 100mm slope)
-  const effectiveLowHeight = Math.min(lowHeight_mm, highHeight_mm - 100);
-
-  // Wall heights are from floor surface to roof underside
-  const wallHeightInner = Math.max(500, highHeight_mm - floorStackHeight);
-  const wallHeightOuter = Math.max(500, effectiveLowHeight - floorStackHeight);
-
-  console.log("[attachments] Heights - high:", highHeight_mm, "low:", effectiveLowHeight,
-              "wallInner:", wallHeightInner, "wallOuter:", wallHeightOuter);
 
   // Determine extents based on orientation
   // For left/right attachments: extentX = depth (outward), extentZ = width (along wall)
