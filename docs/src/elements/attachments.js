@@ -133,54 +133,32 @@ export function build3D(mainState, attachment, ctx) {
   console.log("[attachments] Height constraint - mainFasciaBottom:", mainFasciaBottom,
               "roofStackHeight:", roofStackHeight, "maxInnerHeight:", maxInnerHeight);
 
-  // Calculate wall heights based on roof type
-  let wallHeightInner, wallHeightOuter;
-
-  if (roofType === "apex") {
-    // For apex roof, all walls have the same height (eaves level)
-    // The gable peak is above the walls, formed by the roof and gable infill
-    let eavesHeight_mm = attachment.roof?.apex?.wallHeight_mm;
-    if (eavesHeight_mm == null) {
-      // Default: use max inner height minus some margin for the roof peak
-      const crestHeight_mm = attachment.roof?.apex?.crestHeight_mm || 400;
-      eavesHeight_mm = Math.max(500, maxInnerHeight - crestHeight_mm);
-    }
-    
-    // Cap at max allowed
-    eavesHeight_mm = Math.min(eavesHeight_mm, maxInnerHeight);
-    
-    wallHeightInner = Math.max(500, eavesHeight_mm - floorStackHeight);
-    wallHeightOuter = wallHeightInner;  // Same height for apex
-    
-    console.log("[attachments] Apex wall height:", eavesHeight_mm, "wallHeight:", wallHeightInner);
-  } else {
-    // For pent roof, calculate wall heights
-    // Inner wall (at main building) is higher, outer wall is lower
-    // The UI values are total heights from ground to roof underside
-    // If null, use dynamic defaults based on main building fascia
-    let highHeight_mm = attachment.roof?.pent?.highHeight_mm;
-    if (highHeight_mm == null) {
-      highHeight_mm = maxInnerHeight; // Default to max allowed height
-    }
-
-    let lowHeight_mm = attachment.roof?.pent?.lowHeight_mm;
-    if (lowHeight_mm == null) {
-      lowHeight_mm = Math.max(500, highHeight_mm - 300); // Default 300mm slope
-    }
-
-    // Cap the high height so the roof peak doesn't exceed the main building's fascia bottom
-    if (highHeight_mm > maxInnerHeight) {
-      console.log("[attachments] Capping highHeight_mm from", highHeight_mm, "to", maxInnerHeight);
-      highHeight_mm = maxInnerHeight;
-    }
-
-    // Ensure low height doesn't exceed high height (keep at least 100mm slope)
-    const effectiveLowHeight = Math.min(lowHeight_mm, highHeight_mm - 100);
-
-    // Wall heights are from floor surface to roof underside
-    wallHeightInner = Math.max(500, highHeight_mm - floorStackHeight);
-    wallHeightOuter = Math.max(500, effectiveLowHeight - floorStackHeight);
+  // For pent roof, calculate wall heights
+  // Inner wall (at main building) is higher, outer wall is lower
+  // The UI values are total heights from ground to roof underside
+  // If null, use dynamic defaults based on main building fascia
+  let highHeight_mm = attachment.roof?.pent?.highHeight_mm;
+  if (highHeight_mm == null) {
+    highHeight_mm = maxInnerHeight; // Default to max allowed height
   }
+
+  let lowHeight_mm = attachment.roof?.pent?.lowHeight_mm;
+  if (lowHeight_mm == null) {
+    lowHeight_mm = Math.max(500, highHeight_mm - 300); // Default 300mm slope
+  }
+
+  // Cap the high height so the roof peak doesn't exceed the main building's fascia bottom
+  if (highHeight_mm > maxInnerHeight) {
+    console.log("[attachments] Capping highHeight_mm from", highHeight_mm, "to", maxInnerHeight);
+    highHeight_mm = maxInnerHeight;
+  }
+
+  // Ensure low height doesn't exceed high height (keep at least 100mm slope)
+  const effectiveLowHeight = Math.min(lowHeight_mm, highHeight_mm - 100);
+
+  // Wall heights are from floor surface to roof underside
+  const wallHeightInner = Math.max(500, highHeight_mm - floorStackHeight);
+  const wallHeightOuter = Math.max(500, effectiveLowHeight - floorStackHeight);
 
   console.log("[attachments] Heights - high:", highHeight_mm, "low:", effectiveLowHeight,
               "wallInner:", wallHeightInner, "wallOuter:", wallHeightOuter);
@@ -211,7 +189,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building walls...");
     try {
       buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                           attachWall, roofType, attachment, materials, claddingEnabled);
+                           attachWall, roofType, materials, claddingEnabled);
       console.log("[attachments] Walls built successfully");
     } catch (wallErr) {
       console.error("[attachments] ERROR building walls:", wallErr);
@@ -436,7 +414,7 @@ function buildAttachmentFloor(scene, root, attId, extentX, extentZ, materials) {
  * For pent roof, the walls along the slope direction have sloped top plates (prisms)
  */
 function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                               attachWall, roofType, attachment, materials, claddingEnabled = true) {
+                               attachWall, roofType, materials, claddingEnabled = true) {
   console.log("[attachments] buildAttachmentWalls called for:", attId,
               "extentX:", extentX, "extentZ:", extentZ,
               "wallHeightInner:", wallHeightInner, "wallHeightOuter:", wallHeightOuter,
@@ -468,7 +446,6 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
   console.log("[attachments] Materials - plate:", plateMat?.name, "stud:", studMat?.name, "clad:", cladMat?.name);
 
   const isPent = roofType === "pent";
-  const isApex = roofType === "apex";
 
   // Helper to create a box mesh at position (bottom-left-front corner)
   function mkBox(name, lenX, lenY, lenZ, pos, mat) {
@@ -598,107 +575,6 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
     return mesh;
   }
 
-  // Helper to build triangular gable infill for apex roofs
-  // Creates the triangular cladding section above the outer wall that fills to the roof peak
-  function buildGableInfill(wallId, axis, length, startPos, wallTopY, peakY, cladMat) {
-    // axis: 'x' = gable peak along X axis, 'z' = gable peak along Z axis
-    // length: length of the wall (along the axis)
-    // startPos: starting position offset along the axis
-    // wallTopY: Y at the top of the flat wall
-    // peakY: Y at the apex/peak of the gable
-    
-    const rise_mm = peakY - wallTopY;
-    if (rise_mm <= 0) return;  // No gable needed
-    
-    const halfLen = length / 2;
-    const peakPos = startPos + halfLen;
-    
-    console.log("[attachments] buildGableInfill:", wallId, "axis:", axis, "length:", length,
-                "wallTopY:", wallTopY, "peakY:", peakY, "rise:", rise_mm);
-    
-    // Build triangular prism using custom vertex data
-    // Triangle: base at wallTopY, apex at peakY at center
-    let positions, indices;
-    
-    if (axis === 'z') {
-      // Gable along Z axis (wall at X position, peak runs along Z center)
-      // Front face of cladding is toward -X
-      const x0 = -CLAD_T_MM;  // Outer face of cladding
-      const x1 = 0;           // Inner face of cladding
-      const z0 = startPos;
-      const z1 = startPos + length;
-      const zMid = peakPos;
-      
-      // 6 vertices: triangle on each X face
-      // Front face (x0): v0, v1, v2 = left-bottom, right-bottom, top-center
-      // Back face (x1): v3, v4, v5 = left-bottom, right-bottom, top-center
-      positions = [
-        x0, wallTopY, z0,       // 0: front left
-        x0, wallTopY, z1,       // 1: front right
-        x0, peakY, zMid,        // 2: front peak
-        x1, wallTopY, z0,       // 3: back left
-        x1, wallTopY, z1,       // 4: back right
-        x1, peakY, zMid,        // 5: back peak
-      ].map(v => v / 1000);
-      
-      // Faces: front triangle, back triangle, bottom edge, left slope, right slope
-      indices = [
-        0, 2, 1,  // front face (CCW from outside)
-        3, 4, 5,  // back face (CCW from inside)
-        0, 1, 4, 0, 4, 3,  // bottom edge
-        0, 3, 5, 0, 5, 2,  // left slope
-        1, 2, 5, 1, 5, 4,  // right slope
-      ];
-    } else {
-      // Gable along X axis (wall at Z position, peak runs along X center)
-      // Front face of cladding is toward -Z
-      const z0 = -CLAD_T_MM;  // Outer face of cladding
-      const z1 = 0;           // Inner face of cladding
-      const x0 = startPos;
-      const x1 = startPos + length;
-      const xMid = peakPos;
-      
-      positions = [
-        x0, wallTopY, z0,       // 0: front left
-        x1, wallTopY, z0,       // 1: front right
-        xMid, peakY, z0,        // 2: front peak
-        x0, wallTopY, z1,       // 3: back left
-        x1, wallTopY, z1,       // 4: back right
-        xMid, peakY, z1,        // 5: back peak
-      ].map(v => v / 1000);
-      
-      indices = [
-        0, 1, 2,  // front face
-        3, 5, 4,  // back face
-        0, 3, 4, 0, 4, 1,  // bottom edge
-        0, 2, 5, 0, 5, 3,  // left slope
-        1, 4, 5, 1, 5, 2,  // right slope
-      ];
-    }
-    
-    const normals = [];
-    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
-    
-    const vd = new BABYLON.VertexData();
-    vd.positions = positions;
-    vd.indices = indices;
-    vd.normals = normals;
-    
-    const mesh = new BABYLON.Mesh(`att-${attId}-gable-${wallId}`, scene);
-    vd.applyToMesh(mesh, true);
-    
-    let useMat = cladMat;
-    if (cladMat && cladMat.clone) {
-      useMat = cladMat.clone(`att-${attId}-gable-${wallId}-mat`);
-      useMat.backFaceCulling = false;
-    }
-    mesh.material = useMat;
-    mesh.parent = root;
-    mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-cladding', part: 'gable' };
-    
-    return mesh;
-  }
-
   // Build walls based on attachment orientation
   // Following main building corner join rules
 
@@ -730,20 +606,12 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
       buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat);
     }
 
-    // OUTER WALL (at X=0, runs along Z, between front/back) - flat height (gable above for apex)
+    // OUTER WALL (at X=0, runs along Z, between front/back) - flat height
     buildWallPanel(scene, root, attId, 'outer', 'z', outerLen,
                    { x: 0, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null);
-      // Add gable infill for apex roof
-      if (isApex) {
-        const apexConfig = attachment?.roof?.apex || {};
-        const crestHeight_mm = apexConfig.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        const peakY = wallTopY + crestHeight_mm;
-        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, peakY, cladMat);
-      }
     }
 
   } else if (attachWall === "right") {
@@ -773,21 +641,12 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
       buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat);
     }
 
-    // OUTER WALL (at X=extentX-wallThk, runs along Z, between front/back) - flat height (gable above for apex)
+    // OUTER WALL (at X=extentX-wallThk, runs along Z, between front/back) - flat height
     buildWallPanel(scene, root, attId, 'outer', 'z', outerLen,
                    { x: extentX - wallThk, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null);
-      // Add gable infill for apex roof
-      if (isApex) {
-        const apexConfig = attachment?.roof?.apex || {};
-        const crestHeight_mm = apexConfig.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        const peakY = wallTopY + crestHeight_mm;
-        // Note: gable position needs adjustment for right-side wall (X offset)
-        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, peakY, cladMat);
-      }
     }
 
   } else if (attachWall === "front") {
@@ -817,20 +676,12 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
       buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightOuter, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ);
     }
 
-    // OUTER WALL (at Z=0, runs along X, between left/right) - flat height (gable above for apex)
+    // OUTER WALL (at Z=0, runs along X, between left/right) - flat height
     buildWallPanel(scene, root, attId, 'outer', 'x', outerLen,
                    { x: wallThk, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk);
-      // Add gable infill for apex roof
-      if (isApex) {
-        const apexConfig = attachment?.roof?.apex || {};
-        const crestHeight_mm = apexConfig.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        const peakY = wallTopY + crestHeight_mm;
-        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, peakY, cladMat);
-      }
     }
 
   } else if (attachWall === "back") {
@@ -860,20 +711,12 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
       buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightInner, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ);
     }
 
-    // OUTER WALL (at Z=extentZ-wallThk, runs along X, between left/right) - flat height (gable above for apex)
+    // OUTER WALL (at Z=extentZ-wallThk, runs along X, between left/right) - flat height
     buildWallPanel(scene, root, attId, 'outer', 'x', outerLen,
                    { x: wallThk, z: extentZ - wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk);
-      // Add gable infill for apex roof
-      if (isApex) {
-        const apexConfig = attachment?.roof?.apex || {};
-        const crestHeight_mm = apexConfig.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        const peakY = wallTopY + crestHeight_mm;
-        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, peakY, cladMat);
-      }
     }
   }
 }
