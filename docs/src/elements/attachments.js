@@ -1,9 +1,42 @@
-// FILE: docs/src/elements/attachments.js
-//
-// Attachment Builder - Builds complete sub-buildings attached to the main structure
-// Each attachment has its own base, floor, walls (3 of 4 with sloped tops for pent), and roof
-// The pent roof is constructed properly with rafters, OSB, covering, and fascia
-// Following the same construction approach as the main building's roof.js
+/**
+ * @fileoverview Attachment Builder - Creates sub-buildings attached to the main structure
+ * 
+ * Attachments are secondary buildings that share one wall with the main building.
+ * Each attachment has its own:
+ * - Base (ground supports)
+ * - Floor (joists and OSB)
+ * - Walls (3 of 4, with the 4th being the main building's wall)
+ * - Roof (pent or apex style)
+ * 
+ * ## Coordinate System
+ * Attachments use the same coordinate system as the main building:
+ * - X = width (left to right)
+ * - Y = height (up)
+ * - Z = depth (front to back)
+ * 
+ * ## Attachment Walls
+ * The `attachTo.wall` parameter determines which wall of the main building
+ * the attachment connects to:
+ * - "left"  → attachment extends in +X direction
+ * - "right" → attachment extends in -X direction  
+ * - "front" → attachment extends in -Z direction
+ * - "back"  → attachment extends in +Z direction
+ * 
+ * ## Dimension Mapping
+ * For left/right attachments:
+ * - `width_mm` = dimension along the attached wall (Z direction)
+ * - `depth_mm` = dimension outward from main building (X direction)
+ * 
+ * For front/back attachments:
+ * - `width_mm` = dimension along the attached wall (X direction)
+ * - `depth_mm` = dimension outward from main building (Z direction)
+ * 
+ * ## Roof Types
+ * - **Pent**: Single slope, high edge at main building, low edge outward
+ * - **Apex**: Gabled roof with ridge running perpendicular to attached wall
+ * 
+ * @module elements/attachments
+ */
 
 import { CONFIG } from '../params.js';
 
@@ -68,10 +101,40 @@ function getMainBuildingFasciaBottom(mainState) {
 }
 
 /**
- * Build 3D geometry for an attachment
- * @param {object} mainState - The main building state
+ * Build complete 3D geometry for an attachment building
+ * 
+ * Creates all components: base, floor, walls, and roof. The attachment
+ * shares one wall with the main building and extends outward from it.
+ * 
+ * @param {object} mainState - The main building state object
+ * @param {object} mainState.dimensions - Main building dimensions
+ * @param {object} mainState.roof - Main building roof configuration
+ * @param {object} mainState.vis - Visibility flags for component toggling
+ * 
  * @param {object} attachment - The attachment configuration
- * @param {object} ctx - The Babylon.js context { scene, materials }
+ * @param {string} attachment.id - Unique identifier for this attachment
+ * @param {boolean} attachment.enabled - Whether to build this attachment
+ * @param {object} attachment.attachTo - Connection configuration
+ * @param {string} attachment.attachTo.wall - Which main wall to attach to ("left"|"right"|"front"|"back")
+ * @param {object} attachment.dimensions - Attachment dimensions
+ * @param {number} attachment.dimensions.width_mm - Width along the attached wall
+ * @param {number} attachment.dimensions.depth_mm - Depth outward from main building
+ * @param {object} attachment.roof - Roof configuration
+ * @param {string} attachment.roof.type - Roof style ("pent"|"apex")
+ * 
+ * @param {object} ctx - Babylon.js rendering context
+ * @param {BABYLON.Scene} ctx.scene - The Babylon.js scene
+ * @param {object} ctx.materials - Shared material instances
+ * 
+ * @example
+ * // Build a pent-roofed attachment on the left wall
+ * build3D(mainState, {
+ *   id: "att-1",
+ *   enabled: true,
+ *   attachTo: { wall: "left" },
+ *   dimensions: { width_mm: 1800, depth_mm: 1200 },
+ *   roof: { type: "pent" }
+ * }, { scene, materials });
  */
 export function build3D(mainState, attachment, ctx) {
   const { scene, materials } = ctx;
@@ -1751,8 +1814,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // Left/Right attachments: ridge along X (extentX), span along Z (extentZ)
   // Front/Back attachments: ridge along Z (extentZ), span along X (extentX)
 
-  const crestHeight = attachment.roof?.apex?.crestHeight_mm || 400;
-  const rise_mm = crestHeight;
+  // crestHeight_mm is the ABSOLUTE height of the peak from floor surface
+  // roofBaseY is the eaves height (wall top) from floor surface
+  // rise = peak height - eaves height
+  const crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || (roofBaseY + 400);
+  const rise_mm = Math.max(100, crestHeightAbs - roofBaseY);  // Minimum 100mm rise
+  
+  console.log("[attachments] Apex crest calculation:",
+    "crestHeightAbs:", crestHeightAbs, "roofBaseY:", roofBaseY, "rise:", rise_mm);
 
   // Ridge direction based on attachment wall
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
@@ -2101,7 +2170,13 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 }
 
 /**
- * Dispose all meshes for a specific attachment
+ * Dispose all meshes belonging to a specific attachment
+ * 
+ * Removes all geometry created by build3D for the given attachment ID.
+ * Uses mesh metadata to identify which meshes belong to the attachment.
+ * 
+ * @param {BABYLON.Scene} scene - The Babylon.js scene
+ * @param {string} attachmentId - The attachment ID to dispose
  */
 export function disposeAttachment(scene, attachmentId) {
   const meshes = scene.meshes.filter(m =>
