@@ -1834,8 +1834,8 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // roofBaseY is the eaves height (wall top) from floor surface
   // rise = peak height - eaves height
   // 
-  // CONSTRAINT: Crest must be at least 50mm below main building eaves
-  const CREST_BELOW_MAIN_EAVES_MM = 50;
+  // CONSTRAINT: Crest must be below main building eaves (accounting for fascia board)
+  const CREST_BELOW_MAIN_EAVES_MM = 200;
   const maxCrestHeight = (mainEavesHeight || 2400) - CREST_BELOW_MAIN_EAVES_MM;
   const defaultCrestHeight = maxCrestHeight;  // Default to max allowed (50mm below main eaves)
   
