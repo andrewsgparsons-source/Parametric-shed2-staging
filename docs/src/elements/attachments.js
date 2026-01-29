@@ -2225,11 +2225,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const fasciaCy = fasciaTopY - FASCIA_DEPTH_MM / 2;
   
   // Calculate eaves fascia position so it sits ON the bottom purlin end (not through it)
-  // Bottom purlin center offset from eaves edge = -sinT * purlinOutOffset_mm
-  // Purlin outer edge = that - MEMBER_W/2
-  // Fascia should sit just outside that
-  const purlinOutOffset_mm = (MEMBER_D / 2) + 1; // Same as in purlin section
-  const purlinOuterEdge_mm = sinT * purlinOutOffset_mm + MEMBER_W / 2;
+  // Bottom purlin sits at perpendicular offset from rafter, angled with slope
+  // Its outer edge extends: sinT * purlinOffset + half purlin width
+  const purlinPerpOffset = (MEMBER_D / 2) + 1; // Same as purlin section
+  const purlinOuterEdge_mm = sinT * purlinPerpOffset + MEMBER_W / 2;
   const eaveFasciaOffset_mm = purlinOuterEdge_mm + FASCIA_THK_MM / 2;
   
   // Eaves fascia (horizontal, at outer edges of each slope)
