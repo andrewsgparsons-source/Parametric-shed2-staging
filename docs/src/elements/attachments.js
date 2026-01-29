@@ -2224,19 +2224,27 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const fasciaTopY = MEMBER_D + osbPerpOffset + ROOF_OSB_MM / 2;
   const fasciaCy = fasciaTopY - FASCIA_DEPTH_MM / 2;
   
+  // Calculate eaves fascia position so it sits ON the bottom purlin end (not through it)
+  // Bottom purlin center offset from eaves edge = -sinT * purlinOutOffset_mm
+  // Purlin outer edge = that - MEMBER_W/2
+  // Fascia should sit just outside that
+  const purlinOutOffset_mm = (MEMBER_D / 2) + 1; // Same as in purlin section
+  const purlinOuterEdge_mm = sinT * purlinOutOffset_mm + MEMBER_W / 2;
+  const eaveFasciaOffset_mm = purlinOuterEdge_mm + FASCIA_THK_MM / 2;
+  
   // Eaves fascia (horizontal, at outer edges of each slope)
   if (ridgeAlongX) {
     // Eaves at Z=0 and Z=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      ridge_mm / 2, fasciaCy, -FASCIA_THK_MM / 2, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
+      ridge_mm / 2, fasciaCy, -eaveFasciaOffset_mm, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      ridge_mm / 2, fasciaCy, span_mm + FASCIA_THK_MM / 2, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
+      ridge_mm / 2, fasciaCy, span_mm + eaveFasciaOffset_mm, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
   } else {
     // Eaves at X=0 and X=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
-      -FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
+      -eaveFasciaOffset_mm, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
-      span_mm + FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
+      span_mm + eaveFasciaOffset_mm, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
   }
 
   // Barge boards (sloped fascia running up to the ridge at gable ends)
