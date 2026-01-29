@@ -2247,50 +2247,32 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     }
   });
   
-  // Verge fold-downs (at gable ends, running along slope)
-  // These need to follow the slope angle
+  // Verge fold-downs (at gable ends) - vertical panels behind the barge boards
+  // These hang straight down from the covering edge, hidden behind fascia
+  // One fold per gable end (front and back), spanning from eaves to eaves
   ['front', 'back'].forEach(end => {
-    ['L', 'R'].forEach(side => {
-      const sMid = coverLen / 2;
-      const runMid = (sMid - ovhEaves_mm / 2) * cosT;
-      const dropMid = (sMid - ovhEaves_mm / 2) * sinT;
-      const ySurfMid = MEMBER_D + (rise_mm - dropMid);
-      
-      const normalSpan = (side === 'L') ? -sinT : sinT;
-      const normalY = cosT;
-      const coverExtShift = ovhEaves_mm / 2 * cosT;
-      
-      // Verge fold hangs down from the outer edge of covering
-      const vergeFoldPerpOffset = osbPerpOffset + ROOF_OSB_MM / 2 + COVERING_MM + FOLD_DOWN_MM / 2;
-      
-      if (ridgeAlongX) {
-        const spanPos = (side === 'L')
-          ? (halfSpan_mm - runMid - coverExtShift)
-          : (halfSpan_mm + runMid + coverExtShift);
-        const foldX = (end === 'front') ? -COVERING_MM / 2 : ridge_mm + COVERING_MM / 2;
-        const foldCy = ySurfMid + normalY * vergeFoldPerpOffset - (FOLD_DOWN_MM / 2) * cosT;
-        const foldCz = spanPos + normalSpan * vergeFoldPerpOffset;
-        
-        const vergeFold = mkBox(`att-${attId}-covering-fold-verge-${end}-${side}`,
-          COVERING_MM, FOLD_DOWN_MM, coverLen,
-          foldX, foldCy, foldCz,
-          coveringMat, { part: 'covering-fold', edge: 'verge', end, side });
-        vergeFold.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
-      } else {
-        const spanPos = (side === 'L')
-          ? (halfSpan_mm - runMid - coverExtShift)
-          : (halfSpan_mm + runMid + coverExtShift);
-        const foldZ = (end === 'front') ? -COVERING_MM / 2 : ridge_mm + COVERING_MM / 2;
-        const foldCy = ySurfMid + normalY * vergeFoldPerpOffset - (FOLD_DOWN_MM / 2) * cosT;
-        const foldCx = spanPos + normalSpan * vergeFoldPerpOffset;
-        
-        const vergeFold = mkBox(`att-${attId}-covering-fold-verge-${end}-${side}`,
-          coverLen, FOLD_DOWN_MM, COVERING_MM,
-          foldCx, foldCy, foldZ,
-          coveringMat, { part: 'covering-fold', edge: 'verge', end, side });
-        vergeFold.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
-      }
-    });
+    // Fold hangs down from just below covering level, spans full width (both slopes)
+    // Position INSIDE the barge board so it's hidden
+    const foldTopY = MEMBER_D + rise_mm;  // At ridge height
+    const foldCenterY = foldTopY - FOLD_DOWN_MM / 2;
+    
+    if (ridgeAlongX) {
+      // Gable ends at X=0 (front) and X=ridge_mm (back)
+      // Fold runs along Z (spanning both slopes)
+      const foldX = (end === 'front') ? COVERING_MM / 2 : ridge_mm - COVERING_MM / 2;  // Inside the fascia
+      mkBox(`att-${attId}-covering-fold-verge-${end}`,
+        COVERING_MM, FOLD_DOWN_MM, span_mm,
+        foldX, foldCenterY, span_mm / 2,
+        coveringMat, { part: 'covering-fold', edge: 'verge', end });
+    } else {
+      // Gable ends at Z=0 (front) and Z=ridge_mm (back)
+      // Fold runs along X (spanning both slopes)
+      const foldZ = (end === 'front') ? COVERING_MM / 2 : ridge_mm - COVERING_MM / 2;  // Inside the fascia
+      mkBox(`att-${attId}-covering-fold-verge-${end}`,
+        span_mm, FOLD_DOWN_MM, COVERING_MM,
+        span_mm / 2, foldCenterY, foldZ,
+        coveringMat, { part: 'covering-fold', edge: 'verge', end });
+    }
   });
 
   // ========== 4. FASCIA ==========
