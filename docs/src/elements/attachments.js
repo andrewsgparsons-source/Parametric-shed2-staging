@@ -2162,8 +2162,11 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   });
 
   // ========== 2. OSB ==========
-  // OSB sits on rafters, offset perpendicular by half rafter depth
-  const osbPerpOffset = MEMBER_D / 2 + ROOF_OSB_MM / 2 + 2;  // +2 for clearance
+  // OSB sits ON TOP of purlins (not just rafters)
+  // Purlins sit on rafters at offset (MEMBER_D/2 + 1), with depth MEMBER_D
+  // So purlin outer surface is at: MEMBER_D/2 + 1 + MEMBER_D/2 = MEMBER_D + 1
+  // OSB inner surface should be at that level, so OSB center is at: MEMBER_D + 1 + ROOF_OSB_MM/2 + clearance
+  const osbPerpOffset = MEMBER_D + ROOF_OSB_MM / 2 + 2;  // Sits on top of purlins
   
   createSlopedPanel(`att-${attId}-osb-L`, 'L', rafterLen_mm, ridge_mm, ROOF_OSB_MM, osbPerpOffset, osbMat, { part: 'osb', side: 'L' });
   createSlopedPanel(`att-${attId}-osb-R`, 'R', rafterLen_mm, ridge_mm, ROOF_OSB_MM, osbPerpOffset, osbMat, { part: 'osb', side: 'R' });
