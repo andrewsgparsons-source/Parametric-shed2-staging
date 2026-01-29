@@ -46,7 +46,7 @@ export function boot(canvas) {
   // Slower, smoother zoom (reference values), plus rails
   if (camera.wheelDeltaPercentage !== undefined) {
     camera.wheelDeltaPercentage = 0.008;  // Desktop scroll - feels good
-    camera.pinchDeltaPercentage = 0.002;  // Mobile pinch - slower (was 0.004)
+    camera.pinchDeltaPercentage = 0.0008; // Mobile pinch - much slower (was 0.002)
   } else {
     camera.wheelPrecision = Math.max(200, camera.wheelPrecision || 100);
     camera.pinchPrecision = Math.max(600, camera.pinchPrecision || 100); // Higher = slower/finer pinch
