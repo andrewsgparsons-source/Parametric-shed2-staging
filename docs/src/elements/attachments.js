@@ -1192,8 +1192,12 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
 
     const x0 = xOffset;
     const x1 = xOffset + length;
-    const xMid = xOffset + length / 2;
-    const halfSpan = length / 2;
+    
+    // The ROOF spans from X=0 to X=roofSpan (larger than wall which is inset by xOffset on each side)
+    // Derive roof span from wall geometry: roofSpan = length + 2*xOffset
+    const roofSpan = length + 2 * xOffset;
+    const roofHalfSpan = roofSpan / 2;
+    const xMid = roofHalfSpan;  // Ridge is at center of ROOF span, not wall
 
     // Get wall height from heightAtX function
     const wallHeightVal = heightAtX(0);
@@ -1203,31 +1207,32 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     const crestY = apexCrestHeight;         // Crest level (absolute from Y=0)
     const rise_mm = crestY - eavesY;        // Vertical rise from eaves to crest
     
-    // Slope geometry (matching apex roof calculations)
-    const rafterLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
-    const cosT = halfSpan / rafterLen;
-    const tanT = rise_mm / halfSpan;
+    // Slope geometry using ROOF span (not wall length)
+    const rafterLen = Math.sqrt(roofHalfSpan * roofHalfSpan + rise_mm * rise_mm);
+    const cosT = roofHalfSpan / rafterLen;
+    const tanT = rise_mm / roofHalfSpan;
     
     // Roof underside offset from rafter top surface
     const RAFTER_DEPTH = 100;
     const OSB_CLEAR = 1;
     const perpOffset = (RAFTER_DEPTH + OSB_CLEAR) / cosT;
     
-    // Function to calculate roof underside Y at any X position along the gable
+    // Function to calculate roof underside Y at any X position
+    // distFromEave is measured from ROOF edge (X=0 or X=roofSpan), not wall edge
     const yUnderAtX = (xPos) => {
-      const localX = xPos - xOffset;
-      const distFromEave = localX <= halfSpan ? localX : (length - localX);
+      // Distance from nearest roof eave (at X=0 or X=roofSpan)
+      const distFromEave = xPos <= roofHalfSpan ? xPos : (roofSpan - xPos);
       const yLocalOffset = RAFTER_DEPTH + tanT * distFromEave + perpOffset;
       return eavesY + yLocalOffset;
     };
     
-    // Calculate Y at key points
-    const yAtStart = yUnderAtX(x0);     // Y at x=0 (eaves)
-    const yAtMid = yUnderAtX(xMid);     // Y at x=mid (ridge)
-    const yAtEnd = yUnderAtX(x1);       // Y at x=length (eaves)
+    // Calculate Y at key points (wall start, ridge, wall end)
+    const yAtStart = yUnderAtX(x0);     // Y at wall start
+    const yAtMid = yUnderAtX(xMid);     // Y at ridge (roof center)
+    const yAtEnd = yUnderAtX(x1);       // Y at wall end
     const yTop = yAtMid + 20000;
 
-    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, halfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
+    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, roofSpan, roofHalfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
 
     // Create two wedges - left side (x0 to xMid) slopes up, right side (xMid to x1) slopes down
     const wedges = [];
@@ -1526,42 +1531,44 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
 
     const z0 = zOffset;
     const z1 = zOffset + length;
-    const zMid = zOffset + length / 2;
-    const halfSpan = length / 2;
+    
+    // The ROOF spans from Z=0 to Z=roofSpan (larger than wall which is inset by zOffset on each side)
+    // Derive roof span from wall geometry: roofSpan = length + 2*zOffset
+    const roofSpan = length + 2 * zOffset;
+    const roofHalfSpan = roofSpan / 2;
+    const zMid = roofHalfSpan;  // Ridge is at center of ROOF span, not wall
 
     // Calculate roof geometry to match attachment apex roof
     const eavesY = wallHeight + baseY;  // Eaves level (wall top)
     const crestY = apexCrestHeight;     // Crest level (absolute from Y=0)
     const rise_mm = crestY - eavesY;    // Vertical rise from eaves to crest
     
-    // Slope geometry (matching apex roof calculations)
-    const rafterLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
-    const cosT = halfSpan / rafterLen;
-    const tanT = rise_mm / halfSpan;
+    // Slope geometry using ROOF span (not wall length)
+    const rafterLen = Math.sqrt(roofHalfSpan * roofHalfSpan + rise_mm * rise_mm);
+    const cosT = roofHalfSpan / rafterLen;
+    const tanT = rise_mm / roofHalfSpan;
     
     // Roof underside offset from rafter top surface
-    // This accounts for rafter depth (100mm) and OSB clearance (1mm)
     const RAFTER_DEPTH = 100;
     const OSB_CLEAR = 1;
     const perpOffset = (RAFTER_DEPTH + OSB_CLEAR) / cosT;
     
-    // Function to calculate roof underside Y at any Z position along the gable
-    // Matches the main building's apexRoofModel.yUnderAtWorldX_mm logic
+    // Function to calculate roof underside Y at any Z position
+    // distFromEave is measured from ROOF edge (Z=0 or Z=roofSpan), not wall edge
     const yUnderAtZ = (zPos) => {
-      const localZ = zPos - zOffset;
-      const distFromEave = localZ <= halfSpan ? localZ : (length - localZ);
-      // Local offset from eaves level
+      // Distance from nearest roof eave (at Z=0 or Z=roofSpan)
+      const distFromEave = zPos <= roofHalfSpan ? zPos : (roofSpan - zPos);
       const yLocalOffset = RAFTER_DEPTH + tanT * distFromEave + perpOffset;
       return eavesY + yLocalOffset;
     };
     
-    // Calculate Y at key points
-    const yAtStart = yUnderAtZ(z0);     // Y at z=0 (eaves)
-    const yAtMid = yUnderAtZ(zMid);     // Y at z=mid (ridge)
-    const yAtEnd = yUnderAtZ(z1);       // Y at z=length (eaves)
+    // Calculate Y at key points (wall start, ridge, wall end)
+    const yAtStart = yUnderAtZ(z0);     // Y at wall start
+    const yAtMid = yUnderAtZ(zMid);     // Y at ridge (roof center)
+    const yAtEnd = yUnderAtZ(z1);       // Y at wall end
     const yTop = yAtMid + 20000;
 
-    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, halfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
+    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, roofSpan, roofHalfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
 
     // Create two wedges - left side (z0 to zMid) slopes up, right side (zMid to z1) slopes down
     const wedges = [];
