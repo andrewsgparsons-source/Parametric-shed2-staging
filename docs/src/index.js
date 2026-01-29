@@ -4381,9 +4381,30 @@ function parseOverhangInput(val) {
     /**
      * Get max apex crest height for attachment buildings.
      * Must be 5mm below main building eaves.
+     * EXCEPTION: For front/back attachments on apex primary (parallel ridges),
+     * crest can go up to 50mm below the primary's apex.
+     * @param {object} mainState - The main building state
+     * @param {string} [attachWall] - Optional attachment wall ("front"|"back"|"left"|"right")
      */
-    function getMaxApexCrestHeight(mainState) {
+    function getMaxApexCrestHeight(mainState, attachWall) {
       var roofStyle = (mainState.roof && mainState.roof.style) || "apex";
+      
+      // Check if ridges run parallel (apex primary + front/back attachment)
+      var roofRidgesParallel = roofStyle === "apex" && 
+        (attachWall === "front" || attachWall === "back");
+      
+      if (roofRidgesParallel) {
+        // For parallel ridges, can go up to 50mm below primary apex
+        var apex = mainState.roof && mainState.roof.apex;
+        var mainCrest = Number(
+          (apex && apex.heightToCrest_mm) ||
+          (apex && apex.crestHeight_mm) ||
+          2200
+        );
+        return mainCrest - 50;
+      }
+      
+      // Otherwise, use existing eaves-based limit
       var mainEaves;
       if (roofStyle === "apex") {
         var apex = mainState.roof && mainState.roof.apex;
@@ -4405,9 +4426,11 @@ function parseOverhangInput(val) {
     /**
      * Get default apex values for attachment buildings.
      * Returns { crest, eaves } with correct defaults.
+     * @param {object} mainState - The main building state
+     * @param {string} [attachWall] - Optional attachment wall ("front"|"back"|"left"|"right")
      */
-    function getDefaultApexValues(mainState) {
-      var maxCrest = getMaxApexCrestHeight(mainState);
+    function getDefaultApexValues(mainState, attachWall) {
+      var maxCrest = getMaxApexCrestHeight(mainState, attachWall);
       return {
         crest: maxCrest,
         eaves: 1300  // Andrew's preferred default
@@ -4581,8 +4604,9 @@ function parseOverhangInput(val) {
 
           // Apex roof options
           // Calculate correct defaults based on main building
-          var apexDefaults = getDefaultApexValues(mainState);
-          var maxApexCrest = getMaxApexCrestHeight(mainState);
+          var attachWall = att.attachTo?.wall || "left";
+          var apexDefaults = getDefaultApexValues(mainState, attachWall);
+          var maxApexCrest = getMaxApexCrestHeight(mainState, attachWall);
           var apexEaveVal = att.roof?.apex?.eaveHeight_mm || apexDefaults.eaves;
           var apexCrestVal = att.roof?.apex?.crestHeight_mm || apexDefaults.crest;
           // Ensure crest doesn't exceed max
@@ -4705,8 +4729,11 @@ function parseOverhangInput(val) {
           // When switching to apex, set correct default values
           if (type === "apex") {
             var currentState = store.getState();
-            var apexDefaults = getDefaultApexValues(currentState);
-            var maxCrest = getMaxApexCrestHeight(currentState);
+            var currentAttachments = getAttachmentsFromState(currentState);
+            var thisAtt = currentAttachments.find(function(a) { return a.id === attId; });
+            var thisAttachWall = thisAtt?.attachTo?.wall || "left";
+            var apexDefaults = getDefaultApexValues(currentState, thisAttachWall);
+            var maxCrest = getMaxApexCrestHeight(currentState, thisAttachWall);
 
             // Update UI inputs
             var eaveInput = editor.querySelector(".att-apex-eave");
@@ -4789,7 +4816,10 @@ function parseOverhangInput(val) {
       if (apexCrestInput) {
         apexCrestInput.addEventListener("change", function() {
           var currentState = store.getState();
-          var maxCrest = getMaxApexCrestHeight(currentState);
+          var currentAttachments = getAttachmentsFromState(currentState);
+          var thisAtt = currentAttachments.find(function(a) { return a.id === attId; });
+          var thisAttachWall = thisAtt?.attachTo?.wall || "left";
+          var maxCrest = getMaxApexCrestHeight(currentState, thisAttachWall);
           var crestVal = parseInt(this.value, 10) || 400;
           // Cap crest at max allowed
           if (crestVal > maxCrest) {
