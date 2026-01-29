@@ -221,8 +221,26 @@ export function build3D(mainState, attachment, ctx) {
     
     // Calculate sensible defaults based on main building
     // Default crest: 200mm below main fascia bottom (safe clearance)
+    // EXCEPTION: For front/back attachments on apex primary, ridges run parallel,
+    // so crest can go up to 50mm below the primary's apex (diamond)
+    const mainRoofStyle = mainState.roof?.style || "apex";
+    const roofRidgesParallel = mainRoofStyle === "apex" && 
+      (attachWall === "front" || attachWall === "back");
+    
+    let defaultCrest;
+    if (roofRidgesParallel) {
+      // Ridges run parallel - can go higher (5cm below primary apex)
+      const mainCrestHeight = Number(
+        mainState.roof?.apex?.heightToCrest_mm || 
+        mainState.roof?.apex?.crestHeight_mm || 
+        2200
+      );
+      defaultCrest = mainCrestHeight - 50;  // 5cm below primary apex
+    } else {
+      defaultCrest = mainFasciaBottom - 200;
+    }
+    
     // Default eaves: crest - 400mm rise (reasonable pitch)
-    const defaultCrest = mainFasciaBottom - 200;
     const defaultRise = 400;
     const defaultEaves = defaultCrest - defaultRise;
     
@@ -230,8 +248,20 @@ export function build3D(mainState, attachment, ctx) {
     let crestHeight_mm = userCrest ?? defaultCrest;
     let eavesHeight_mm = userEaves ?? defaultEaves;
     
+    // Calculate max crest height based on roof configuration
+    // For parallel ridges (front/back on apex primary): 5cm below primary apex
+    // Otherwise: same as default (200mm below fascia bottom)
+    const maxCrestHeight = roofRidgesParallel
+      ? Number(mainState.roof?.apex?.heightToCrest_mm || mainState.roof?.apex?.crestHeight_mm || 2200) - 50
+      : mainFasciaBottom - 200;
+    
     console.log("[attachments] Apex UI values - userEaves:", userEaves, "userCrest:", userCrest,
-                "defaults - eaves:", defaultEaves, "crest:", defaultCrest);
+                "defaults - eaves:", defaultEaves, "crest:", defaultCrest,
+                "maxCrestHeight:", maxCrestHeight, "roofRidgesParallel:", roofRidgesParallel);
+    
+    // Clamp crest to max allowed height
+    const crestBeforeCap = crestHeight_mm;
+    crestHeight_mm = Math.max(500, Math.min(crestHeight_mm, maxCrestHeight));
     
     // Clamp eaves to valid range (upper bound only - can't exceed main fascia)
     const eavesBeforeCap = eavesHeight_mm;
@@ -242,9 +272,11 @@ export function build3D(mainState, attachment, ctx) {
     
     console.log("[attachments] Apex FULL DEBUG:",
                 "userEaves:", userEaves, "userCrest:", userCrest,
-                "eavesBeforeCap:", eavesBeforeCap, "maxInnerHeight:", maxInnerHeight,
-                "eavesAfterCap:", eavesHeight_mm, "floorStackHeight:", floorStackHeight,
-                "FINAL wallHeightInner:", wallHeightInner);
+                "crestBeforeCap:", crestBeforeCap, "crestAfterCap:", crestHeight_mm,
+                "eavesBeforeCap:", eavesBeforeCap, "eavesAfterCap:", eavesHeight_mm,
+                "maxCrestHeight:", maxCrestHeight, "maxInnerHeight:", maxInnerHeight,
+                "roofRidgesParallel:", roofRidgesParallel,
+                "floorStackHeight:", floorStackHeight, "FINAL wallHeightInner:", wallHeightInner);
   } else {
     // For pent roof, calculate wall heights
     // Inner wall (at main building) is higher, outer wall is lower
