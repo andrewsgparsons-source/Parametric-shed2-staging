@@ -2219,6 +2219,57 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     }
   });
 
+  // ========== 3b. COVERING FOLD-DOWN + QUARTER BOARDS ==========
+  // Quarter boards sit on the last purlin at eaves, covering folds down over them
+  const FOLD_DOWN_MM = 100;
+  const QUARTER_BOARD_THK = 20;  // thickness of quarter board
+  
+  // Position at eaves (outermost purlin position)
+  // The last purlin is at the bottom of the slope
+  const eavesRun_mm = halfSpan_mm;  // horizontal distance to eaves
+  const eavesY_mm = MEMBER_D;  // Y at eaves level (tie beam top)
+  
+  ['L', 'R'].forEach(side => {
+    // Eaves edge position for this slope
+    const eavesSpanPos = (side === 'L') ? 0 : span_mm;
+    
+    // Quarter board sits horizontally at eaves
+    // It's a horizontal board running along the ridge direction
+    if (ridgeAlongX) {
+      // Quarter board at Z = 0 (left slope) or Z = span_mm (right slope)
+      const qbZ = (side === 'L') ? -QUARTER_BOARD_THK / 2 : span_mm + QUARTER_BOARD_THK / 2;
+      mkBox(`att-${attId}-quarter-board-${side}`,
+        ridge_mm, MEMBER_D, QUARTER_BOARD_THK,
+        ridge_mm / 2, eavesY_mm + MEMBER_D / 2, qbZ,
+        joistMat, { part: 'quarter-board', side });
+      
+      // Covering fold-down at eaves
+      const foldZ = (side === 'L') 
+        ? -COVERING_MM / 2 - QUARTER_BOARD_THK 
+        : span_mm + COVERING_MM / 2 + QUARTER_BOARD_THK;
+      mkBox(`att-${attId}-covering-eaves-fold-${side}`,
+        ridge_mm, FOLD_DOWN_MM, COVERING_MM,
+        ridge_mm / 2, eavesY_mm + MEMBER_D - FOLD_DOWN_MM / 2, foldZ,
+        coveringMat, { part: 'covering-eaves-fold', side });
+    } else {
+      // Quarter board at X = 0 (left slope) or X = span_mm (right slope)
+      const qbX = (side === 'L') ? -QUARTER_BOARD_THK / 2 : span_mm + QUARTER_BOARD_THK / 2;
+      mkBox(`att-${attId}-quarter-board-${side}`,
+        QUARTER_BOARD_THK, MEMBER_D, ridge_mm,
+        qbX, eavesY_mm + MEMBER_D / 2, ridge_mm / 2,
+        joistMat, { part: 'quarter-board', side });
+      
+      // Covering fold-down at eaves
+      const foldX = (side === 'L')
+        ? -COVERING_MM / 2 - QUARTER_BOARD_THK
+        : span_mm + COVERING_MM / 2 + QUARTER_BOARD_THK;
+      mkBox(`att-${attId}-covering-eaves-fold-${side}`,
+        COVERING_MM, FOLD_DOWN_MM, ridge_mm,
+        foldX, eavesY_mm + MEMBER_D - FOLD_DOWN_MM / 2, ridge_mm / 2,
+        coveringMat, { part: 'covering-eaves-fold', side });
+    }
+  });
+
   // ========== 4. FASCIA ==========
   // Eaves fascia (horizontal boards at eaves edges) and barge boards (sloped boards at gable ends)
   const fasciaTopY = MEMBER_D + osbPerpOffset + ROOF_OSB_MM / 2;
