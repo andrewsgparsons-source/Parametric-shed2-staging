@@ -2220,11 +2220,34 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   });
 
   // ========== 4. FASCIA ==========
-  // Eaves fascia (horizontal boards at eaves edges) and barge boards (sloped boards at gable ends)
+  // Eaves cap boards (horizontal boards ON TOP of roof at eaves edge)
+  // These cap the eaves edge and sit on the last purlin
+  const EAVES_CAP_WIDTH = 75;  // width of the cap board (perpendicular to ridge)
+  const EAVES_CAP_THK = 20;    // thickness
+  
+  // Position: on top of the covering at the outer eaves edge
+  const coverTopY = MEMBER_D + coverPerpOffset + COVERING_MM / 2;
+  const eavesCapY = coverTopY + EAVES_CAP_THK / 2;
+  
+  if (ridgeAlongX) {
+    // Eaves caps at Z=0 (L slope) and Z=span_mm (R slope)
+    // These sit on top of the roof edge, running along X (ridge direction)
+    mkBox(`att-${attId}-eaves-cap-L`, ridge_mm, EAVES_CAP_THK, EAVES_CAP_WIDTH,
+      ridge_mm / 2, eavesCapY, -EAVES_CAP_WIDTH / 2, fasciaMat, { part: 'eaves-cap', side: 'L' });
+    mkBox(`att-${attId}-eaves-cap-R`, ridge_mm, EAVES_CAP_THK, EAVES_CAP_WIDTH,
+      ridge_mm / 2, eavesCapY, span_mm + EAVES_CAP_WIDTH / 2, fasciaMat, { part: 'eaves-cap', side: 'R' });
+  } else {
+    // Eaves caps at X=0 (L slope) and X=span_mm (R slope)
+    mkBox(`att-${attId}-eaves-cap-L`, EAVES_CAP_WIDTH, EAVES_CAP_THK, ridge_mm,
+      -EAVES_CAP_WIDTH / 2, eavesCapY, ridge_mm / 2, fasciaMat, { part: 'eaves-cap', side: 'L' });
+    mkBox(`att-${attId}-eaves-cap-R`, EAVES_CAP_WIDTH, EAVES_CAP_THK, ridge_mm,
+      span_mm + EAVES_CAP_WIDTH / 2, eavesCapY, ridge_mm / 2, fasciaMat, { part: 'eaves-cap', side: 'R' });
+  }
+
+  // Eaves fascia (vertical boards hanging down at eaves edges)
   const fasciaTopY = MEMBER_D + osbPerpOffset + ROOF_OSB_MM / 2;
   const fasciaCy = fasciaTopY - FASCIA_DEPTH_MM / 2;
   
-  // Eaves fascia (horizontal, at outer edges of each slope)
   if (ridgeAlongX) {
     // Eaves at Z=0 and Z=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
