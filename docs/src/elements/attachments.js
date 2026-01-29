@@ -1787,11 +1787,13 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
   const osbMat = createMaterial(scene, `att-${attId}-osb-mat`, 0.75, 0.62, 0.45);
   const coveringMat = createMaterial(scene, `att-${attId}-covering-mat`, 0.1, 0.1, 0.1);
   // Use the same cladding material as the walls (light tan color)
-  let claddingMat = materials?.cladding || scene._claddingMatLight;
-  if (!claddingMat) {
+  // Always create a fresh material to ensure correct color for fascia
+  let claddingMat = scene._claddingMatLight;
+  if (!claddingMat || !claddingMat.diffuseColor) {
     claddingMat = createCladdingMaterial(scene, `claddingMatLight`);
     scene._claddingMatLight = claddingMat;
   }
+  console.log("[attachments] buildAttachmentRoof - claddingMat:", claddingMat?.name, "diffuse:", claddingMat?.diffuseColor?.toString());
 
   if (roofType === "pent") {
     console.log("[attachments] PENT ROOF - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
@@ -1957,17 +1959,28 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   const fasciaTopY = RAFTER_D_MM + ROOF_OSB_MM;
   const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
 
-  console.log("[buildPentRoof] FASCIA - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
+  // Create fascia material with same color as wall cladding (tan/wood color)
+  // Using scene._claddingMatLight if available, otherwise create matching color
+  let fasciaMat = claddingMat;
+  if (!fasciaMat || !fasciaMat.diffuseColor) {
+    fasciaMat = new BABYLON.StandardMaterial(`att-${attId}-fascia-mat`, scene);
+    fasciaMat.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+    fasciaMat.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+    fasciaMat.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+    fasciaMat.specularPower = 16;
+    fasciaMat.backFaceCulling = false;
+  }
+  console.log("[buildPentRoof] FASCIA - using material:", fasciaMat?.name, "color:", fasciaMat?.diffuseColor?.toString());
 
   // Eaves fascia (at A=0) - uses cladding color to match walls
-  mkBox(`att-${attId}-fascia-eaves`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, -FASCIA_THK_MM, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'eaves' });
+  mkBox(`att-${attId}-fascia-eaves`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, -FASCIA_THK_MM, fasciaBottomY, -FASCIA_THK_MM, fasciaMat, { part: 'fascia', edge: 'eaves' });
 
   // Ridge fascia (at A=A_mm) - Note: This connects to main building, may not be needed
-  // mkBox(`att-${attId}-fascia-ridge`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, A_mm, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'ridge' });
+  // mkBox(`att-${attId}-fascia-ridge`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, A_mm, fasciaBottomY, -FASCIA_THK_MM, fasciaMat, { part: 'fascia', edge: 'ridge' });
 
   // Verge fascia (at B=0 and B=B_mm, runs along slope) - uses cladding color to match walls
-  mkBox(`att-${attId}-fascia-verge-left`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'verge-left' });
-  mkBox(`att-${attId}-fascia-verge-right`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, B_mm, claddingMat, { part: 'fascia', edge: 'verge-right' });
+  mkBox(`att-${attId}-fascia-verge-left`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, -FASCIA_THK_MM, fasciaMat, { part: 'fascia', edge: 'verge-left' });
+  mkBox(`att-${attId}-fascia-verge-right`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, B_mm, fasciaMat, { part: 'fascia', edge: 'verge-right' });
 
   // Now rotate and position the roof root node
   // The roof is built with A along local X, B along local Z
