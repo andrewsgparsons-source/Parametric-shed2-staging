@@ -184,6 +184,14 @@ export function build3D(mainState, attachment, ctx) {
   // The highest point of the attachment roof cannot exceed the main building's lowest fascia bottom
   const mainFasciaBottom = getMainBuildingFasciaBottom(mainState);
 
+  // Get main building eaves height for apex crest capping
+  const mainEavesHeight = Number(
+    mainState.roof?.apex?.heightToEaves_mm ||
+    mainState.roof?.apex?.eavesHeight_mm ||
+    mainState.roof?.pent?.maxHeight_mm ||
+    2400
+  );
+
   // For pent roof, the highest point is at the inner edge (highHeight_mm)
   // This height includes the roof structure (rafters + OSB + covering)
   // So we need to account for the roof stack: RAFTER_D_MM (50) + ROOF_OSB_MM (18) + COVERING_MM (2) = 70mm
@@ -202,48 +210,41 @@ export function build3D(mainState, attachment, ctx) {
   if (roofType === "apex") {
     // For apex roof, all walls have the same height (eaves level)
     // The gable peak is above the walls, handled by the roof
-    // 
-    // DEFAULT: Crest should be 50mm below main building eaves
-    const CREST_BELOW_MAIN_EAVES_MM = 50;
     
-    // Get main building eaves height (from floor surface)
-    const mainEavesHeight = Number(
-      mainState.roof?.apex?.heightToEaves_mm ||
-      mainState.roof?.apex?.eavesHeight_mm ||
-      1850
-    );
+    // User-specified values from UI
+    // UI writes to: attachment.roof.apex.eaveHeight_mm and crestHeight_mm
+    let userEaves = attachment.roof?.apex?.eaveHeight_mm;
+    let userCrest = attachment.roof?.apex?.crestHeight_mm;
     
-    // User-specified crest height, or calculate default
-    let crestHeight_mm = attachment.roof?.apex?.crestHeight_mm;
-    let eavesHeight_mm = attachment.roof?.apex?.wallHeight_mm;
+    console.log("[attachments] RAW apex input - eaveHeight_mm:", userEaves, 
+                "crestHeight_mm:", userCrest, "full apex config:", attachment.roof?.apex);
     
-    if (crestHeight_mm == null && eavesHeight_mm == null) {
-      // Neither specified: default crest to 50mm below main eaves
-      // Total height to crest = mainEavesHeight - 50mm
-      // crest = wallHeight + rise, so we need to work out both
-      // Use a sensible default crest rise (e.g., 400mm) and calculate wall height
-      crestHeight_mm = 400;
-      const targetCrestY = mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM;
-      // Wall top + crest = targetCrestY (both from floor surface)
-      eavesHeight_mm = targetCrestY - crestHeight_mm;
-    } else if (crestHeight_mm == null) {
-      crestHeight_mm = 400;  // Default crest if only wall height specified
-    } else if (eavesHeight_mm == null) {
-      // Crest specified, calculate wall height to put crest 50mm below main eaves
-      const targetCrestY = mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM;
-      eavesHeight_mm = targetCrestY - crestHeight_mm;
-    }
+    // Calculate sensible defaults based on main building
+    // Default crest: 200mm below main fascia bottom (safe clearance)
+    // Default eaves: crest - 400mm rise (reasonable pitch)
+    const defaultCrest = mainFasciaBottom - 200;
+    const defaultRise = 400;
+    const defaultEaves = defaultCrest - defaultRise;
     
-    // Clamp wall height to valid range
+    // Use user values if provided, otherwise defaults
+    let crestHeight_mm = userCrest ?? defaultCrest;
+    let eavesHeight_mm = userEaves ?? defaultEaves;
+    
+    console.log("[attachments] Apex UI values - userEaves:", userEaves, "userCrest:", userCrest,
+                "defaults - eaves:", defaultEaves, "crest:", defaultCrest);
+    
+    // Clamp eaves to valid range (upper bound only - can't exceed main fascia)
+    const eavesBeforeCap = eavesHeight_mm;
     eavesHeight_mm = Math.max(500, Math.min(eavesHeight_mm, maxInnerHeight));
     
     wallHeightInner = Math.max(500, eavesHeight_mm - floorStackHeight);
     wallHeightOuter = wallHeightInner;  // Same height for apex
     
-    console.log("[attachments] Apex heights - mainEaves:", mainEavesHeight,
-                "targetCrest:", mainEavesHeight - CREST_BELOW_MAIN_EAVES_MM,
-                "crestHeight:", crestHeight_mm, "eaves:", eavesHeight_mm,
-                "wallHeight:", wallHeightInner);
+    console.log("[attachments] Apex FULL DEBUG:",
+                "userEaves:", userEaves, "userCrest:", userCrest,
+                "eavesBeforeCap:", eavesBeforeCap, "maxInnerHeight:", maxInnerHeight,
+                "eavesAfterCap:", eavesHeight_mm, "floorStackHeight:", floorStackHeight,
+                "FINAL wallHeightInner:", wallHeightInner);
   } else {
     // For pent roof, calculate wall heights
     // Inner wall (at main building) is higher, outer wall is lower
@@ -317,7 +318,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -330,9 +331,16 @@ export function build3D(mainState, attachment, ctx) {
 }
 
 /**
- * Calculate the world position for an attachment
- * Attachment snaps to center of the specified wall with optional offset
- * Note: Main building meshes are shifted by -WALL_OVERHANG_MM (-25mm) in X and Z
+ * Calculates the world position for an attachment relative to the main building.
+ * Attachment snaps to center of the specified wall with optional offset.
+ * 
+ * Note: Main building meshes are shifted by -WALL_OVERHANG_MM (-25mm) in X and Z,
+ * so attachment positions must account for this.
+ * 
+ * @param {Object} mainState - Main building state with dimensions
+ * @param {Object} attachment - Attachment definition with attachTo and dimensions
+ * @returns {Object} Position {x, y, z} in world coordinates (mm)
+ * @private
  */
 function calculateAttachmentPosition(mainState, attachment) {
   const attachWall = attachment.attachTo?.wall || "left";
@@ -378,7 +386,16 @@ function calculateAttachmentPosition(mainState, attachment) {
 }
 
 /**
- * Build the base (foundation grid) for the attachment
+ * Builds the foundation grid (base) for an attachment.
+ * Creates dark grid support blocks at 500mm intervals.
+ * 
+ * @param {BABYLON.Scene} scene - Babylon.js scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment identifier
+ * @param {number} extentX - X extent in mm
+ * @param {number} extentZ - Z extent in mm
+ * @param {Object} materials - Material definitions
+ * @private
  */
 function buildAttachmentBase(scene, root, attId, extentX, extentZ, materials) {
   const gridSize = CONFIG.grid.size; // 500mm
@@ -1463,7 +1480,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -1482,7 +1499,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
                   attachWall, joistMat, osbMat, coveringMat, attachment);
   } else if (roofType === "apex") {
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
-                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm);
+                  attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainFasciaBottom);
   }
 }
 
@@ -1810,7 +1827,7 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
  * Build apex roof (simplified - two sloped planes meeting at a ridge)
  * Ridge runs perpendicular to the attached wall (along the depth direction)
  */
-function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm) {
+function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainFasciaBottom) {
   // Apex roof with full construction:
   // 1. Trusses (rafters + tie beams) at ~600mm spacing
   // 2. Purlins at 609mm centres (two at top, no ridge board)
@@ -1822,14 +1839,40 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // Left/Right attachments: ridge along X (extentX), span along Z (extentZ)
   // Front/Back attachments: ridge along Z (extentZ), span along X (extentX)
 
+  // Get overhang values from attachment config (with defaults)
+  const apexOvh = attachment?.roof?.apex?.overhang || {};
+  const ovhEaves_mm = apexOvh.eaves_mm ?? 75;
+  const ovhVergeL_mm = apexOvh.vergeLeft_mm ?? 75;
+  const ovhVergeR_mm = apexOvh.vergeRight_mm ?? 75;
+  
+  console.log("[attachments] Apex overhangs - eaves:", ovhEaves_mm, "vergeL:", ovhVergeL_mm, "vergeR:", ovhVergeR_mm);
+
   // crestHeight_mm is the ABSOLUTE height of the peak from floor surface
   // roofBaseY is the eaves height (wall top) from floor surface
   // rise = peak height - eaves height
-  const crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || (roofBaseY + 400);
+  // 
+  // CONSTRAINT: Crest must be below main building's fascia bottom
+  // mainFasciaBottom is already the lowest point of the fascia board
+  console.log("[attachments] buildApexRoof received - mainFasciaBottom:", mainFasciaBottom, 
+              "roofBaseY:", roofBaseY, "userCrest:", attachment.roof?.apex?.crestHeight_mm);
+  
+  const CREST_CLEARANCE_MM = 50;  // Small clearance below fascia
+  const maxCrestHeight = (mainFasciaBottom || 1800) - CREST_CLEARANCE_MM;
+  const defaultCrestHeight = maxCrestHeight;  // Default to max allowed
+  
+  let crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || defaultCrestHeight;
+  
+  // Cap crest to stay below main building fascia
+  if (crestHeightAbs > maxCrestHeight) {
+    console.log("[attachments] Apex crest capped:", crestHeightAbs, "->", maxCrestHeight, 
+                "(mainFasciaBottom:", mainFasciaBottom, "- clearance:", CREST_CLEARANCE_MM + "mm)");
+    crestHeightAbs = maxCrestHeight;
+  }
+  
   const rise_mm = Math.max(100, crestHeightAbs - roofBaseY);  // Minimum 100mm rise
   
   console.log("[attachments] Apex crest calculation:",
-    "crestHeightAbs:", crestHeightAbs, "roofBaseY:", roofBaseY, "rise:", rise_mm);
+    "crestHeightAbs:", crestHeightAbs, "maxCrest:", maxCrestHeight, "roofBaseY:", roofBaseY, "rise:", rise_mm);
 
   // Ridge direction based on attachment wall
   const ridgeAlongX = (attachWall === "left" || attachWall === "right");
@@ -1966,9 +2009,10 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // ========== 2. PURLINS ==========
   // Purlins run along ridge, spaced down each slope at 609mm
   // They sit ON TOP of rafters - offset perpendicular to slope surface
-  // Offset = half purlin depth (to get center) + small clearance
-  const PURLIN_CLEAR_MM = 2;
-  const purlinOutOffset_mm = (MEMBER_D_MM / 2) + PURLIN_CLEAR_MM;
+  const PURLIN_CLEAR_MM = 5;
+  const purlinOutOffset_mm = MEMBER_D_MM + PURLIN_CLEAR_MM;
+  // Perpendicular offset from rafter surface to purlin center
+  const purlinPerpOffset = MEMBER_D_MM / 2 + purlinOutOffset_mm;
 
   // Calculate slope stations
   const purlinStations = [0];
@@ -1984,26 +2028,49 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   purlinStations.forEach((s_mm, idx) => {
     const run_mm = Math.min(halfSpan_mm, s_mm * cosT);
     const drop_mm = Math.min(rise_mm, s_mm * sinT);
+    // ySurf_mm = Y at rafter top surface at this station
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
+    
+    // Purlin sits ON TOP of rafter - offset perpendicular to slope
+    const isRidge = s_mm === 0;
+    
+    let yOffset, zOffset, ySurfAdjusted;
+    if (isRidge) {
+      // Ridge purlins: position them slightly down the slope so they sit flat on rafters
+      // Calculate as if they're at position = half purlin width down the slope
+      const ridgeSlope_mm = MEMBER_W_MM / 2;  // Distance down slope for ridge purlin
+      const ridgeDrop = ridgeSlope_mm * sinT;  // Y drop for this distance
+      const ridgeRun = ridgeSlope_mm * cosT;   // Horizontal distance for this
+      
+      ySurfAdjusted = ySurf_mm - ridgeDrop;  // Lower Y to match slope position
+      
+      // Perpendicular offset to sit ON TOP of rafter
+      const perpOffset = (MEMBER_D_MM / 2) + 2;
+      yOffset = perpOffset * cosT;
+      zOffset = ridgeRun + perpOffset * sinT;  // Move away from ridge + perpendicular
+    } else {
+      // Normal slope purlins: offset perpendicular to surface
+      ySurfAdjusted = ySurf_mm;
+      yOffset = purlinPerpOffset * cosT;
+      zOffset = purlinPerpOffset * sinT;
+    }
 
     if (ridgeAlongX) {
       // Purlins along X, positioned at Z stations down the slope
       const zL = halfSpan_mm - run_mm;  // Left slope Z position
       const zR = halfSpan_mm + run_mm;  // Right slope Z position
-      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
-      const cyR = cyL;
 
-      // Left purlin
+      // Left purlin - offset toward ridge (+Z) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, cyL - sinT * purlinOutOffset_mm, zL,
+        ridge_mm / 2, ySurfAdjusted + yOffset, zL + zOffset,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
-      // Right purlin
+      // Right purlin - offset toward ridge (-Z) and up  
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, cyR + sinT * purlinOutOffset_mm, zR,
+        ridge_mm / 2, ySurfAdjusted + yOffset, zR - zOffset,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
 
@@ -2011,19 +2078,18 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       // Purlins along Z, positioned at X stations down the slope
       const xL = halfSpan_mm - run_mm;
       const xR = halfSpan_mm + run_mm;
-      const cyL = ySurf_mm + cosT * purlinOutOffset_mm;
 
-      // Left purlin
+      // Left purlin - offset toward ridge (+X) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xL - sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        xL + zOffset, ySurfAdjusted + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
-      // Right purlin
+      // Right purlin - offset toward ridge (-X) and up
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xR + sinT * purlinOutOffset_mm, cyL, ridge_mm / 2,
+        xR - zOffset, ySurfAdjusted + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
     }
@@ -2031,10 +2097,12 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // ========== 3. OSB BOARDS ==========
   // OSB sits on top of purlins, which sit on top of rafters
-  // Stack from rafter surface: purlin (MEMBER_D_MM) + OSB (ROOF_OSB_MM)
-  // Perpendicular offset from rafter surface to OSB center = purlin depth + half OSB
-  const OSB_CLEAR_MM = 1;
-  const osbPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + (ROOF_OSB_MM / 2);
+  // Purlin center is at purlinPerpOffset from rafter surface
+  // OSB bottom should be at purlin top = purlinPerpOffset + MEMBER_D_MM/2
+  // OSB center = purlin top + clearance + half OSB thickness
+  const OSB_CLEAR_MM = 2;
+  const purlinTopOffset = purlinPerpOffset + MEMBER_D_MM / 2;  // Perpendicular distance to purlin top
+  const osbPerpOffset_mm = purlinTopOffset + OSB_CLEAR_MM + (ROOF_OSB_MM / 2);
   
   // Base Y is top of tie beam (rafters sit on tie beam)
   const osbBaseY_mm = MEMBER_D_MM;  // Top of tie beam / rafter bottoms
@@ -2084,43 +2152,45 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // ========== 4. COVERING ==========
   // Covering sits on top of OSB (which is on top of purlins)
-  // Perpendicular offset from rafter surface = purlin + OSB + half covering
-  const coverPerpOffset_mm = MEMBER_D_MM + OSB_CLEAR_MM + ROOF_OSB_MM + (COVERING_MM / 2);
+  // OSB top = osbPerpOffset_mm + ROOF_OSB_MM/2
+  // Covering center = OSB top + clearance + half covering
+  const osbTopOffset = osbPerpOffset_mm + ROOF_OSB_MM / 2;
+  const coverPerpOffset_mm = osbTopOffset + 1 + (COVERING_MM / 2);
   
   if (ridgeAlongX) {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverLCz = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    const coverLCz = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - ovhEaves_mm * cosT / 2;
     
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
-      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm, COVERING_MM, rafterLen_mm + ovhEaves_mm,
       ridge_mm / 2, coverLCy, coverLCz,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
     const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverRCz = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    const coverRCz = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + ovhEaves_mm * cosT / 2;
     
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
-      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm, COVERING_MM, rafterLen_mm + ovhEaves_mm,
       ridge_mm / 2, coverRCy, coverRCz,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
     
   } else {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverLCx = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    const coverLCx = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - ovhEaves_mm * cosT / 2;
     
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
-      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      rafterLen_mm + ovhEaves_mm, COVERING_MM, ridge_mm,
       coverLCx, coverLCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
     const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverRCx = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    const coverRCx = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + ovhEaves_mm * cosT / 2;
     
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
-      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      rafterLen_mm + ovhEaves_mm, COVERING_MM, ridge_mm,
       coverRCx, coverRCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
@@ -2244,7 +2314,10 @@ export function disposeAttachment(scene, attachmentId) {
 }
 
 /**
- * Dispose all attachment meshes
+ * Disposes all attachment meshes and root nodes from the scene.
+ * Used when clearing all attachments (e.g., before rebuild).
+ * 
+ * @param {BABYLON.Scene} scene - The Babylon.js scene
  */
 export function disposeAllAttachments(scene) {
   const meshes = scene.meshes.filter(m =>
