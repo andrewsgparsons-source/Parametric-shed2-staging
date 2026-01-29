@@ -313,6 +313,13 @@ export function build3D(mainState, attachment, ctx) {
                 "maxCrestHeight:", maxCrestHeight, "maxInnerHeight:", maxInnerHeight,
                 "roofRidgesParallel:", roofRidgesParallel,
                 "floorStackHeight:", floorStackHeight, "FINAL wallHeightInner:", wallHeightInner);
+    
+    // Write capped values back to attachment config so buildApexRoof uses them
+    // (buildApexRoof reads from attachment.roof.apex directly)
+    if (!attachment.roof) attachment.roof = {};
+    if (!attachment.roof.apex) attachment.roof.apex = {};
+    attachment.roof.apex.crestHeight_mm = crestHeight_mm;
+    attachment.roof.apex.eaveHeight_mm = eavesHeight_mm;
   } else {
     // For pent roof, calculate wall heights
     // Inner wall (at main building) is higher, outer wall is lower
@@ -2138,11 +2145,9 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const ovhVergeL_mm = apexOvh.vergeLeft_mm ?? 75;
   const ovhVergeR_mm = apexOvh.vergeRight_mm ?? 75;
 
-  // Calculate crest height with constraints
-  const CREST_CLEARANCE_MM = 50;
-  const maxCrestHeight = (mainFasciaBottom || 1800) - CREST_CLEARANCE_MM;
-  let crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || maxCrestHeight;
-  if (crestHeightAbs > maxCrestHeight) crestHeightAbs = maxCrestHeight;
+  // Get crest height from attachment config (already capped in build3D)
+  // The capping is done in build3D based on diamond bottom clearance
+  const crestHeightAbs = attachment.roof?.apex?.crestHeight_mm || (roofBaseY + 400);
   
   const rise_mm = Math.max(100, crestHeightAbs - roofBaseY);
 
