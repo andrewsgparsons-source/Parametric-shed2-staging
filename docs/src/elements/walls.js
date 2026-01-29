@@ -2085,6 +2085,15 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
     return false;
   }
 
+/**
+ * Adds door framing to walls running along X axis (front/back walls).
+ * Creates uprights, header, and cripple studs for a door opening.
+ * 
+ * @param {string} wallId - Wall identifier ('front' or 'back')
+ * @param {Object} origin - Wall origin point {x, y, z}
+ * @param {Object} door - Door definition {id, x0, x1, h, doorX0, doorX1}
+ * @private
+ */
 function addDoorFramingAlongX(wallId, origin, door) {
     const thickness = wallThk;
     const doorH = door.h;
@@ -2212,6 +2221,15 @@ function addDoorFramingAlongX(wallId, origin, door) {
     }
   }
 
+/**
+ * Adds door framing to walls running along Z axis (left/right walls).
+ * Creates uprights, header, and cripple studs for a door opening.
+ * 
+ * @param {string} wallId - Wall identifier ('left' or 'right')
+ * @param {Object} origin - Wall origin point {x, y, z}
+ * @param {Object} door - Door definition {id, x0, x1, h, doorX0, doorX1}
+ * @private
+ */
 function addDoorFramingAlongZ(wallId, origin, door) {
     const thickness = wallThk;
     const doorH = door.h;
@@ -2897,8 +2915,27 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
 }
 
 /**
- * Build wall insulation (PIR 50mm between studs) and internal plywood lining (12mm)
- * for insulated wall variant. Similar to floor insulation between joists.
+ * Builds wall insulation (PIR 50mm) and internal plywood lining (12mm).
+ * Creates insulation panels between studs and ply panels on inside face.
+ * Uses CSG subtraction to cut around door and window openings.
+ * 
+ * @param {Object} state - Building state
+ * @param {BABYLON.Scene} scene - Babylon.js scene
+ * @param {Object} materials - Material definitions
+ * @param {Object} dims - Resolved dimensions from resolveDims()
+ * @param {number} height - Wall height in mm
+ * @param {Object} prof - Wall profile {studW, spacing, depth}
+ * @param {number} wallThk - Wall thickness in mm
+ * @param {number} plateY - Plate height in mm
+ * @param {Object} flags - Wall visibility flags {front, back, left, right}
+ * @param {string} meshPrefix - Mesh name prefix for multi-section
+ * @param {string|null} sectionId - Section identifier
+ * @param {Object} sectionPos - Section position offset
+ * @param {Array} doorsAll - All door openings
+ * @param {Array} winsAll - All window openings
+ * @param {boolean} [showInsulation=true] - Whether to show insulation
+ * @param {boolean} [showPlywood=true] - Whether to show plywood lining
+ * @private
  */
 function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
@@ -3593,6 +3630,12 @@ function updateWallInsulationBOM(state, variant, isPent) {
   console.log('[WALL_INS_BOM] Done - PIR sheets:', pirMinSheets, 'Ply sheets:', plyMinSheets);
 }
 
+/**
+ * Updates the Bill of Materials (BOM) for wall components.
+ * Populates cutting lists for framing timber, cladding, insulation, and plywood.
+ * 
+ * @param {Object} state - Building state with wall dimensions and openings
+ */
 export function updateBOM(state) {
   console.log('[WALLS_BOM] updateBOM called');
   const isPent = !!(state && state.roof && String(state.roof.style || "") === "pent");
