@@ -1790,7 +1790,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
 
   if (roofType === "pent") {
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
-                  attachWall, joistMat, osbMat, coveringMat, attachment);
+                  attachWall, joistMat, osbMat, coveringMat, claddingMat, attachment);
   } else if (roofType === "apex") {
     buildApexRoof(scene, root, attId, extentX, extentZ, roofInnerY,
                   attachWall, attachment, joistMat, osbMat, coveringMat, claddingMat, memberW_mm, memberD_mm, mainFasciaBottom);
@@ -1813,7 +1813,7 @@ function createMaterial(scene, name, r, g, b) {
  * Supports configurable overhangs (eaves, vergeLeft, vergeRight) matching main building protocol
  */
 function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
-                        attachWall, joistMat, osbMat, coveringMat, attachment) {
+                        attachWall, joistMat, osbMat, coveringMat, claddingMat, attachment) {
 
   // Get overhang values from attachment config (with defaults)
   const pentOvh = attachment?.roof?.pent?.overhang || {};
@@ -1951,15 +1951,15 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   const fasciaTopY = RAFTER_D_MM + ROOF_OSB_MM;
   const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
 
-  // Eaves fascia (at A=0)
-  mkBox(`att-${attId}-fascia-eaves`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, -FASCIA_THK_MM, fasciaBottomY, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'eaves' });
+  // Eaves fascia (at A=0) - uses cladding color to match walls
+  mkBox(`att-${attId}-fascia-eaves`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, -FASCIA_THK_MM, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'eaves' });
 
   // Ridge fascia (at A=A_mm) - Note: This connects to main building, may not be needed
-  // mkBox(`att-${attId}-fascia-ridge`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, A_mm, fasciaBottomY, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'ridge' });
+  // mkBox(`att-${attId}-fascia-ridge`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, A_mm, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'ridge' });
 
-  // Verge fascia (at B=0 and B=B_mm, runs along slope)
-  mkBox(`att-${attId}-fascia-verge-left`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, -FASCIA_THK_MM, joistMat, { part: 'fascia', edge: 'verge-left' });
-  mkBox(`att-${attId}-fascia-verge-right`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, B_mm, joistMat, { part: 'fascia', edge: 'verge-right' });
+  // Verge fascia (at B=0 and B=B_mm, runs along slope) - uses cladding color to match walls
+  mkBox(`att-${attId}-fascia-verge-left`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'verge-left' });
+  mkBox(`att-${attId}-fascia-verge-right`, A_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM, 0, fasciaBottomY, B_mm, claddingMat, { part: 'fascia', edge: 'verge-right' });
 
   // Now rotate and position the roof root node
   // The roof is built with A along local X, B along local Z
