@@ -814,7 +814,7 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null);
-      if (false && isApex) { // DISABLED
+      if (isApex) {
         const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
         const wallTopY = wallBaseY + wallHeightOuter;
         buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
@@ -854,7 +854,7 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null);
-      if (false && isApex) { // DISABLED
+      if (isApex) {
         const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
         const wallTopY = wallBaseY + wallHeightOuter;
         buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
@@ -894,7 +894,7 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk);
-      if (false && isApex) { // DISABLED
+      if (isApex) {
         const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
         const wallTopY = wallBaseY + wallHeightOuter;
         buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
@@ -934,7 +934,7 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
       buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk);
-      if (false && isApex) { // DISABLED
+      if (isApex) {
         const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
         const wallTopY = wallBaseY + wallHeightOuter;
         buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
