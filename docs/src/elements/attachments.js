@@ -1786,7 +1786,12 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
   const joistMat = materials?.timber || createMaterial(scene, `att-${attId}-joist-mat`, 0.5, 0.4, 0.3);
   const osbMat = createMaterial(scene, `att-${attId}-osb-mat`, 0.75, 0.62, 0.45);
   const coveringMat = createMaterial(scene, `att-${attId}-covering-mat`, 0.1, 0.1, 0.1);
-  const claddingMat = materials?.cladding || scene._claddingMatLight || createMaterial(scene, `att-${attId}-cladding-mat`, 0.55, 0.45, 0.35);
+  // Use the same cladding material as the walls (light tan color)
+  let claddingMat = materials?.cladding || scene._claddingMatLight;
+  if (!claddingMat) {
+    claddingMat = createCladdingMaterial(scene, `claddingMatLight`);
+    scene._claddingMatLight = claddingMat;
+  }
 
   if (roofType === "pent") {
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
