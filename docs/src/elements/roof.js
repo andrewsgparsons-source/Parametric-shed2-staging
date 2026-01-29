@@ -40,6 +40,18 @@
 
 import { CONFIG, resolveDims } from "../params.js";
 
+/**
+ * Builds the 3D roof geometry for the current building state.
+ * Dispatches to buildPent() or buildApex() based on roof style.
+ * 
+ * @param {Object} state - The building state object containing all parameters
+ * @param {Object} ctx - Babylon.js context containing scene and materials
+ * @param {BABYLON.Scene} ctx.scene - The Babylon.js scene
+ * @param {Object} ctx.materials - Material definitions (timber, osb, etc.)
+ * @param {Object} [sectionContext] - Optional section context for multi-section buildings
+ * @param {string} [sectionContext.sectionId] - Unique identifier for this section
+ * @param {Object} [sectionContext.position] - Position offset {x, y, z} in mm
+ */
 export function build3D(state, ctx, sectionContext) {
   console.log("[ROOF] build3D called", { state: !!state, ctx: !!ctx, sectionContext });
   const { scene, materials } = ctx || {};
@@ -143,6 +155,13 @@ export function build3D(state, ctx, sectionContext) {
   // Unsupported styles: do nothing.
 }
 
+/**
+ * Updates the Bill of Materials (BOM) table for roof components.
+ * Populates the #roofBomTable element with cutting list data.
+ * Dispatches to updateBOM_Pent() or updateBOM_Apex() based on roof style.
+ * 
+ * @param {Object} state - The building state object
+ */
 export function updateBOM(state) {
   const tbody = document.getElementById("roofBomTable");
   if (!tbody) return;
@@ -166,6 +185,20 @@ export function updateBOM(state) {
 
 /* ----------------------------- PENT (existing) ----------------------------- */
 
+/**
+ * Builds a pent (lean-to) roof with single slope.
+ * Creates rafters, rim joists, OSB sheathing, felt covering, and fascia boards.
+ * 
+ * The roof is built in local coordinates under a roofRoot transform node,
+ * then positioned and rotated to sit on top of the walls.
+ * 
+ * @param {Object} state - Building state with roof.pent parameters
+ * @param {Object} ctx - Babylon.js context {scene, materials}
+ * @param {string} [meshPrefix=""] - Prefix for mesh names (for multi-section)
+ * @param {Object} [sectionPos={x:0,y:0,z:0}] - Section position offset in mm
+ * @param {string|null} [sectionId=null] - Section identifier for metadata
+ * @private
+ */
 function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }, sectionId = null) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
@@ -920,6 +953,21 @@ function isPentEnabled(state) {
   return !!(state && state.roof && String(state.roof.style || "") === "pent");
 }
 
+/**
+ * Computes all dimensions and positions for pent roof components.
+ * Returns a data object used by both 3D builder and BOM calculator.
+ * 
+ * @param {Object} state - Building state object
+ * @returns {Object} Computed roof data:
+ *   - roofW_mm, roofD_mm: outer roof plan dimensions
+ *   - frameW_mm, frameD_mm: wall frame dimensions
+ *   - A_mm, B_mm: slope span and rafter run dimensions
+ *   - rafterW_mm, rafterD_mm: rafter cross-section
+ *   - rafters: array of rafter positions [{b0_mm}]
+ *   - osb: {all: [], totalArea_mm2} OSB piece data
+ *   - minH_mm, maxH_mm: wall heights at low/high edges
+ * @private
+ */
 function computeRoofData_Pent(state) {
   const dims = resolveDims(state);
 
@@ -1177,6 +1225,25 @@ function computeOsbPiecesNoStagger(A_mm, B_mm) {
 
 /* ------------------------------ APEX (new) ------------------------------ */
 
+/**
+ * Builds an apex (gabled) roof with two slopes meeting at a central ridge.
+ * Creates trusses, purlins, ridge beam, OSB sheathing, felt covering, and fascia boards.
+ * 
+ * Components built:
+ * - Trusses: tie beam + two rafters + kingpost at regular intervals
+ * - Ridge beam: runs along the peak
+ * - Purlins: horizontal battens on top of rafters at 609mm centres
+ * - OSB: individual 8×4ft sheets on each slope
+ * - Covering: felt/membrane with fold-down edges
+ * - Fascia: trim boards at eaves and verges
+ * 
+ * @param {Object} state - Building state with roof.apex parameters
+ * @param {Object} ctx - Babylon.js context {scene, materials}
+ * @param {string} [meshPrefix=""] - Prefix for mesh names (for multi-section)
+ * @param {Object} [sectionPos={x:0,y:0,z:0}] - Section position offset in mm
+ * @param {string|null} [sectionId=null] - Section identifier for metadata
+ * @private
+ */
 function buildApex(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }, sectionId = null) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
@@ -2533,6 +2600,14 @@ function updateBOM_Apex(state, tbody) {
 
 /* ------------------------------ Shared helpers ------------------------------ */
 
+/**
+ * Gets the timber cross-section dimensions for roof framing.
+ * Falls back to CONFIG defaults if not specified in state.
+ * 
+ * @param {Object} state - Building state object
+ * @returns {Object} {thickness_mm, depth_mm} - Timber section dimensions
+ * @private
+ */
 function getRoofFrameGauge(state) {
   var cfgW = Math.floor(Number(CONFIG && CONFIG.timber ? CONFIG.timber.w : 50));
   var cfgD = Math.floor(Number(CONFIG && CONFIG.timber ? CONFIG.timber.d : 100));
@@ -2554,6 +2629,14 @@ function getRoofFrameGauge(state) {
   return { thickness_mm: thickness_mm, depth_mm: depth_mm };
 }
 
+/**
+ * Gets visibility flags for roof components from state.
+ * Used to selectively show/hide structure, OSB, and covering.
+ * 
+ * @param {Object} state - Building state object
+ * @returns {Object} {structure, osb, covering} - Boolean visibility flags
+ * @private
+ */
 function getRoofParts(state) {
   var vis = state && state.vis ? state.vis : null;
   var rp = vis && vis.roofParts && typeof vis.roofParts === "object" ? vis.roofParts : null;
@@ -2564,6 +2647,12 @@ function getRoofParts(state) {
   };
 }
 
+/**
+ * Appends a row with 5 columns to a table body element.
+ * @param {HTMLTableSectionElement} tbody - Target table body
+ * @param {Array<string>} cols - Array of 5 cell values
+ * @private
+ */
 function appendRow5(tbody, cols) {
   const tr = document.createElement("tr");
   for (let i = 0; i < cols.length; i++) {
@@ -2574,6 +2663,12 @@ function appendRow5(tbody, cols) {
   tbody.appendChild(tr);
 }
 
+/**
+ * Appends a placeholder row spanning all 5 columns.
+ * @param {HTMLTableSectionElement} tbody - Target table body
+ * @param {string} msg - Message to display
+ * @private
+ */
 function appendPlaceholderRow(tbody, msg) {
   const tr = document.createElement("tr");
   const td = document.createElement("td");
@@ -2583,6 +2678,12 @@ function appendPlaceholderRow(tbody, msg) {
   tbody.appendChild(tr);
 }
 
+/**
+ * Groups BOM pieces by Length×Width and notes, counting quantities.
+ * @param {Array<Object>} pieces - Array of {L, W, notes} objects
+ * @returns {Object} Keyed by "LxW|notes" with {qty, L, W, notes}
+ * @private
+ */
 function groupByLWN(pieces) {
   const out = {};
   for (let i = 0; i < pieces.length; i++) {
@@ -2597,12 +2698,37 @@ function groupByLWN(pieces) {
   return out;
 }
 
+/**
+ * Clamps a number between min and max values.
+ * @param {number} n - Value to clamp
+ * @param {number} a - Minimum value
+ * @param {number} b - Maximum value
+ * @returns {number} Clamped value
+ * @private
+ */
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
 /* ------------------------------ APEX: cladding trim (CSG) ------------------------------ */
 
+/**
+ * Installs CSG-based cladding trim for apex roofs.
+ * Creates an invisible cutter mesh and sets up an observer to trim
+ * wall cladding meshes that intersect with the roof underside.
+ * 
+ * This ensures wall cladding stops at the roof line rather than
+ * poking through the roof surface.
+ * 
+ * @param {BABYLON.Scene} scene - The Babylon.js scene
+ * @param {BABYLON.TransformNode} roofRoot - The roof root transform node
+ * @param {Object} params - Roof geometry parameters
+ * @param {number} params.A_mm - Roof span (width) in mm
+ * @param {number} params.B_mm - Roof run (depth) in mm
+ * @param {number} params.rise_mm - Roof rise (height) in mm
+ * @param {number} params.memberD_mm - Rafter depth in mm
+ * @private
+ */
 function installApexCladdingTrim(scene, roofRoot, params) {
   if (!scene || !roofRoot || !params) return;
   if (typeof BABYLON === "undefined" || !BABYLON.CSG) return;
