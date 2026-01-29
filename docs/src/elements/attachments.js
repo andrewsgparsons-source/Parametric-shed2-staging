@@ -1842,6 +1842,9 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   const FASCIA_DEPTH_MM = 135;
   const CLAD_T_MM = 20;
   
+  // Fascia material (white/painted) - same as primary building
+  const fasciaMat = scene._fasciaMat || joistMat;
+  
   // Get overhang values
   const apexOvh = attachment?.roof?.apex?.overhang || {};
   const ovhEaves_mm = apexOvh.eaves_mm ?? 75;
@@ -2225,15 +2228,15 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   if (ridgeAlongX) {
     // Eaves at Z=0 and Z=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      ridge_mm / 2, fasciaCy, -FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eaves-L' });
+      ridge_mm / 2, fasciaCy, -FASCIA_THK_MM / 2, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      ridge_mm / 2, fasciaCy, span_mm + FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eaves-R' });
+      ridge_mm / 2, fasciaCy, span_mm + FASCIA_THK_MM / 2, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
   } else {
     // Eaves at X=0 and X=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
-      -FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, joistMat, { part: 'fascia', edge: 'eaves-L' });
+      -FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
-      span_mm + FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, joistMat, { part: 'fascia', edge: 'eaves-R' });
+      span_mm + FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, fasciaMat, { part: 'fascia', edge: 'eaves-R' });
   }
 
   // Barge boards (sloped fascia running up to the ridge at gable ends)
@@ -2274,14 +2277,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
         FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
         -FASCIA_THK_MM / 2, bargeCy, bargeCz,
-        joistMat, { part: 'fascia', side: side, edge: 'barge-front' });
+        fasciaMat, { part: 'fascia', side: side, edge: 'barge-front' });
       bargeFront.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
       
       // Back barge
       const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
         FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
         ridge_mm + FASCIA_THK_MM / 2, bargeCy, bargeCz,
-        joistMat, { part: 'fascia', side: side, edge: 'barge-back' });
+        fasciaMat, { part: 'fascia', side: side, edge: 'barge-back' });
       bargeBack.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
     } else {
       // Gable ends at Z=0 (front) and Z=ridge_mm (back)
@@ -2292,20 +2295,105 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
         rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
         bargeCx, bargeCy, -FASCIA_THK_MM / 2,
-        joistMat, { part: 'fascia', side: side, edge: 'barge-front' });
+        fasciaMat, { part: 'fascia', side: side, edge: 'barge-front' });
       bargeFront.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
       
       // Back barge
       const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
         rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
         bargeCx, bargeCy, ridge_mm + FASCIA_THK_MM / 2,
-        joistMat, { part: 'fascia', side: side, edge: 'barge-back' });
+        fasciaMat, { part: 'fascia', side: side, edge: 'barge-back' });
       bargeBack.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
     }
   }
   
   createBargeFascia('L');
   createBargeFascia('R');
+
+  // ========== 4b. DIAMOND CAPS ==========
+  // Diamond ridge caps at apex (cover the joint where barge boards meet at crest)
+  {
+    const DIAMOND_SIZE_MM = 120;
+    const DIAMOND_THK_MM = FASCIA_THK_MM;
+    
+    // Ridge Y position (top of roof surface)
+    const ridgeY_mm = MEMBER_D + rise_mm + cosT * osbOuterOffset_mm;
+    
+    // Diamond center Y - positioned to cover the barge board joint
+    const diamondCenterY_mm = ridgeY_mm - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 4;
+    
+    if (ridgeAlongX) {
+      // Gable ends at X=0 and X=ridge_mm
+      // Diamond at the ridge (halfSpan on Z axis)
+      
+      // Front diamond
+      const diamondFront = BABYLON.MeshBuilder.CreateBox(
+        `att-${attId}-fascia-diamond-front`,
+        { width: DIAMOND_THK_MM / 1000, height: DIAMOND_SIZE_MM / 1000, depth: DIAMOND_SIZE_MM / 1000 },
+        scene
+      );
+      diamondFront.position = new BABYLON.Vector3(
+        -DIAMOND_THK_MM / 2 / 1000,
+        diamondCenterY_mm / 1000,
+        halfSpan_mm / 1000
+      );
+      diamondFront.rotation = new BABYLON.Vector3(Math.PI / 4, 0, 0);
+      diamondFront.material = fasciaMat;
+      diamondFront.parent = roofRoot;
+      diamondFront.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'diamond-front' };
+      
+      // Back diamond
+      const diamondBack = BABYLON.MeshBuilder.CreateBox(
+        `att-${attId}-fascia-diamond-back`,
+        { width: DIAMOND_THK_MM / 1000, height: DIAMOND_SIZE_MM / 1000, depth: DIAMOND_SIZE_MM / 1000 },
+        scene
+      );
+      diamondBack.position = new BABYLON.Vector3(
+        (ridge_mm + DIAMOND_THK_MM / 2) / 1000,
+        diamondCenterY_mm / 1000,
+        halfSpan_mm / 1000
+      );
+      diamondBack.rotation = new BABYLON.Vector3(Math.PI / 4, 0, 0);
+      diamondBack.material = fasciaMat;
+      diamondBack.parent = roofRoot;
+      diamondBack.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'diamond-back' };
+    } else {
+      // Gable ends at Z=0 and Z=ridge_mm
+      // Diamond at the ridge (halfSpan on X axis)
+      
+      // Front diamond
+      const diamondFront = BABYLON.MeshBuilder.CreateBox(
+        `att-${attId}-fascia-diamond-front`,
+        { width: DIAMOND_SIZE_MM / 1000, height: DIAMOND_SIZE_MM / 1000, depth: DIAMOND_THK_MM / 1000 },
+        scene
+      );
+      diamondFront.position = new BABYLON.Vector3(
+        halfSpan_mm / 1000,
+        diamondCenterY_mm / 1000,
+        -DIAMOND_THK_MM / 2 / 1000
+      );
+      diamondFront.rotation = new BABYLON.Vector3(0, 0, Math.PI / 4);
+      diamondFront.material = fasciaMat;
+      diamondFront.parent = roofRoot;
+      diamondFront.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'diamond-front' };
+      
+      // Back diamond
+      const diamondBack = BABYLON.MeshBuilder.CreateBox(
+        `att-${attId}-fascia-diamond-back`,
+        { width: DIAMOND_SIZE_MM / 1000, height: DIAMOND_SIZE_MM / 1000, depth: DIAMOND_THK_MM / 1000 },
+        scene
+      );
+      diamondBack.position = new BABYLON.Vector3(
+        halfSpan_mm / 1000,
+        diamondCenterY_mm / 1000,
+        (ridge_mm + DIAMOND_THK_MM / 2) / 1000
+      );
+      diamondBack.rotation = new BABYLON.Vector3(0, 0, Math.PI / 4);
+      diamondBack.material = fasciaMat;
+      diamondBack.parent = roofRoot;
+      diamondBack.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'fascia', edge: 'diamond-back' };
+    }
+  }
 
   // ========== 5. GABLE ENDS ==========
   // Skip for now - need to use CSG or ExtrudePolygon approach
