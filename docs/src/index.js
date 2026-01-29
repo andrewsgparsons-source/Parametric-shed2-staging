@@ -460,6 +460,9 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vAttWallLeftEl = $("vAttWallLeft");
     var vAttWallRightEl = $("vAttWallRight");
     var vAttWallOuterEl = $("vAttWallOuter");
+    var vAttRoofStructureEl = $("vAttRoofStructure");
+    var vAttRoofOsbEl = $("vAttRoofOsb");
+    var vAttRoofCoveringEl = $("vAttRoofCovering");
 
     // Developer panel attachment visibility controls (mirrors the main visibility section)
     var devVAttBaseEl = $("devVAttBase");
@@ -1198,6 +1201,87 @@ function applyOpeningsVisibility(scene, on) {
     }
 
     /**
+     * Apply visibility to attachment roof structure (trusses, rafters, purlins)
+     */
+    function applyAttachmentRoofStructureVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofStructureVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        // Match trusses, rafters, purlins, king posts, etc.
+        var isStructure = (meta.part === "truss" || meta.part === "purlin" || meta.part === "ridge");
+        if (nm.indexOf("-truss-") >= 0 || nm.indexOf("-rafter") >= 0 || 
+            nm.indexOf("-purlin") >= 0 || nm.indexOf("-kingpost") >= 0 ||
+            nm.indexOf("-ridge") >= 0) {
+          isStructure = true;
+        }
+        if (isStructure) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof structure meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment roof OSB/sheathing
+     */
+    function applyAttachmentRoofOsbVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofOsbVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        var isOsb = (meta.part === "osb");
+        if (nm.indexOf("-osb") >= 0) {
+          isOsb = true;
+        }
+        if (isOsb) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof OSB meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment roof covering
+     */
+    function applyAttachmentRoofCoveringVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofCoveringVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        var isCovering = (meta.part === "covering");
+        if (nm.indexOf("-covering") >= 0) {
+          isCovering = true;
+        }
+        if (isCovering) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof covering meshes affected:", count);
+    }
+
+    /**
      * Get attachment visibility settings from state (with defaults to true)
      */
     function getAttachmentVisibility(state) {
@@ -1214,7 +1298,10 @@ function applyOpeningsVisibility(scene, on) {
         wallBack: attVis.wallBack !== false,
         wallLeft: attVis.wallLeft !== false,
         wallRight: attVis.wallRight !== false,
-        wallOuter: attVis.wallOuter !== false
+        wallOuter: attVis.wallOuter !== false,
+        roofStructure: attVis.roofStructure !== false,
+        roofOsb: attVis.roofOsb !== false,
+        roofCovering: attVis.roofCovering !== false
       };
     }
 
@@ -1243,6 +1330,13 @@ function applyOpeningsVisibility(scene, on) {
         applyAttachmentWallVisibility(scene, "left", av.wallLeft);
         applyAttachmentWallVisibility(scene, "right", av.wallRight);
         applyAttachmentWallVisibility(scene, "outer", av.wallOuter);
+      }
+
+      // Apply roof granular toggles (only if master roof is on)
+      if (av.roof) {
+        applyAttachmentRoofStructureVisibility(scene, av.roofStructure);
+        applyAttachmentRoofOsbVisibility(scene, av.roofOsb);
+        applyAttachmentRoofCoveringVisibility(scene, av.roofCovering);
       }
     }
 
@@ -3824,6 +3918,28 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       try { applyAttachmentWallVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, "outer", on); } catch (e0) {}
       store.setState({ vis: { attachments: { wallOuter: on } } });
       console.log("[vis] attachment wall outer=", on ? "ON" : "OFF");
+    });
+
+    // Attachment roof granular visibility controls
+    if (vAttRoofStructureEl) vAttRoofStructureEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofStructureVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofStructure: on } } });
+      console.log("[vis] attachment roof structure=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofOsbEl) vAttRoofOsbEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofOsbVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofOsb: on } } });
+      console.log("[vis] attachment roof OSB=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofCoveringEl) vAttRoofCoveringEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofCoveringVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofCovering: on } } });
+      console.log("[vis] attachment roof covering=", on ? "ON" : "OFF");
     });
 
     // Developer panel attachment visibility controls (sync with main controls)
