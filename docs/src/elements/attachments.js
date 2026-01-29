@@ -1184,8 +1184,8 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     try { cutterCSG = BABYLON.CSG.FromMesh(wedge); } catch (e) { cutterCSG = null; }
     try { if (wedge && !wedge.isDisposed()) wedge.dispose(false, true); } catch (e) {}
   } else if (isApexGable && apexCrestHeight > 0) {
-    // APEX GABLE: triangular cutter with peak at center of wall (along X axis)
-    // Creates two wedges meeting at the center, sloping down to both ends
+    // APEX GABLE: triangular cutter following roof underside profile (along X axis)
+    // Must match the actual roof geometry for correct clipping angle
     const CUT_EXTRA = 120;
     const z0r = zPos - CUT_EXTRA;
     const z1r = zPos + CLAD_T_MM + CUT_EXTRA;
@@ -1193,29 +1193,51 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     const x0 = xOffset;
     const x1 = xOffset + length;
     const xMid = xOffset + length / 2;
+    const halfSpan = length / 2;
 
     // Get wall height from heightAtX function
-    const wallHeight = heightAtX(0);
+    const wallHeightVal = heightAtX(0);
 
-    // Wall top Y = baseY + wallHeight (eaves level)
-    // Apex crest height from UI is ABSOLUTE from Y=0, not from floor surface
-    // So peakY = apexCrestHeight (absolute), not baseY + apexCrestHeight
-    const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
-    const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
-    const peakY = apexCrestHeight - PENT_CLIP_DROP_MM;  // Already absolute from Y=0
-    const yTop = peakY + 20000;
+    // Calculate roof geometry to match attachment apex roof
+    const eavesY = wallHeightVal + baseY;  // Eaves level (wall top)
+    const crestY = apexCrestHeight;         // Crest level (absolute from Y=0)
+    const rise_mm = crestY - eavesY;        // Vertical rise from eaves to crest
+    
+    // Slope geometry (matching apex roof calculations)
+    const rafterLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
+    const cosT = halfSpan / rafterLen;
+    const tanT = rise_mm / halfSpan;
+    
+    // Roof underside offset from rafter top surface
+    const RAFTER_DEPTH = 100;
+    const OSB_CLEAR = 1;
+    const perpOffset = (RAFTER_DEPTH + OSB_CLEAR) / cosT;
+    
+    // Function to calculate roof underside Y at any X position along the gable
+    const yUnderAtX = (xPos) => {
+      const localX = xPos - xOffset;
+      const distFromEave = localX <= halfSpan ? localX : (length - localX);
+      const yLocalOffset = RAFTER_DEPTH + tanT * distFromEave + perpOffset;
+      return eavesY + yLocalOffset;
+    };
+    
+    // Calculate Y at key points
+    const yAtStart = yUnderAtX(x0);     // Y at x=0 (eaves)
+    const yAtMid = yUnderAtX(xMid);     // Y at x=mid (ridge)
+    const yAtEnd = yUnderAtX(x1);       // Y at x=length (eaves)
+    const yTop = yAtMid + 20000;
 
-    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, wallTopY, peakY, yTop, z0r, z1r, wallHeight, apexCrestHeight, baseY });
+    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, halfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
 
     // Create two wedges - left side (x0 to xMid) slopes up, right side (xMid to x1) slopes down
     const wedges = [];
 
-    // Left wedge: from x0 (wallTopY) to xMid (peakY)
+    // Left wedge: from x0 (eaves) to xMid (ridge)
     const posL = [
-      x0, wallTopY, z0r,
-      xMid, peakY, z0r,
-      xMid, peakY, z1r,
-      x0, wallTopY, z1r,
+      x0, yAtStart, z0r,
+      xMid, yAtMid, z0r,
+      xMid, yAtMid, z1r,
+      x0, yAtStart, z1r,
       x0, yTop, z0r,
       xMid, yTop, z0r,
       xMid, yTop, z1r,
@@ -1241,12 +1263,12 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     vdL.applyToMesh(wedgeL, true);
     wedges.push(wedgeL);
 
-    // Right wedge: from xMid (peakY) to x1 (wallTopY)
+    // Right wedge: from xMid (ridge) to x1 (eaves)
     const posR = [
-      xMid, peakY, z0r,
-      x1, wallTopY, z0r,
-      x1, wallTopY, z1r,
-      xMid, peakY, z1r,
+      xMid, yAtMid, z0r,
+      x1, yAtEnd, z0r,
+      x1, yAtEnd, z1r,
+      xMid, yAtMid, z1r,
       xMid, yTop, z0r,
       x1, yTop, z0r,
       x1, yTop, z1r,
@@ -1496,8 +1518,8 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
     try { cutterCSG = BABYLON.CSG.FromMesh(wedge); } catch (e) { cutterCSG = null; }
     try { if (wedge && !wedge.isDisposed()) wedge.dispose(false, true); } catch (e) {}
   } else if (isApexGable && apexCrestHeight > 0) {
-    // APEX GABLE: triangular cutter with peak at center of wall
-    // Creates two wedges meeting at the center, sloping down to both ends
+    // APEX GABLE: triangular cutter following roof underside profile
+    // Must match the actual roof geometry for correct clipping angle
     const CUT_EXTRA = 120;
     const x0r = xPos - CUT_EXTRA;
     const x1r = xPos + CLAD_T_MM + CUT_EXTRA;
@@ -1505,26 +1527,51 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
     const z0 = zOffset;
     const z1 = zOffset + length;
     const zMid = zOffset + length / 2;
+    const halfSpan = length / 2;
 
-    // Wall top Y = baseY + wallHeight (eaves level)
-    // Apex crest height from UI is ABSOLUTE from Y=0, not from floor surface
-    // So peakY = apexCrestHeight (absolute), not baseY + apexCrestHeight
-    const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
-    const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
-    const peakY = apexCrestHeight - PENT_CLIP_DROP_MM;  // Already absolute from Y=0
-    const yTop = peakY + 20000;
+    // Calculate roof geometry to match attachment apex roof
+    const eavesY = wallHeight + baseY;  // Eaves level (wall top)
+    const crestY = apexCrestHeight;     // Crest level (absolute from Y=0)
+    const rise_mm = crestY - eavesY;    // Vertical rise from eaves to crest
+    
+    // Slope geometry (matching apex roof calculations)
+    const rafterLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
+    const cosT = halfSpan / rafterLen;
+    const tanT = rise_mm / halfSpan;
+    
+    // Roof underside offset from rafter top surface
+    // This accounts for rafter depth (100mm) and OSB clearance (1mm)
+    const RAFTER_DEPTH = 100;
+    const OSB_CLEAR = 1;
+    const perpOffset = (RAFTER_DEPTH + OSB_CLEAR) / cosT;
+    
+    // Function to calculate roof underside Y at any Z position along the gable
+    // Matches the main building's apexRoofModel.yUnderAtWorldX_mm logic
+    const yUnderAtZ = (zPos) => {
+      const localZ = zPos - zOffset;
+      const distFromEave = localZ <= halfSpan ? localZ : (length - localZ);
+      // Local offset from eaves level
+      const yLocalOffset = RAFTER_DEPTH + tanT * distFromEave + perpOffset;
+      return eavesY + yLocalOffset;
+    };
+    
+    // Calculate Y at key points
+    const yAtStart = yUnderAtZ(z0);     // Y at z=0 (eaves)
+    const yAtMid = yUnderAtZ(zMid);     // Y at z=mid (ridge)
+    const yAtEnd = yUnderAtZ(z1);       // Y at z=length (eaves)
+    const yTop = yAtMid + 20000;
 
-    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, wallTopY, peakY, yTop, x0r, x1r, wallHeight, apexCrestHeight, baseY });
+    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, halfSpan, rise_mm, eavesY, crestY, yAtStart, yAtMid, yAtEnd, tanT, cosT, perpOffset });
 
     // Create two wedges - left side (z0 to zMid) slopes up, right side (zMid to z1) slopes down
     const wedges = [];
 
-    // Left wedge: from z0 (wallTopY) to zMid (peakY)
+    // Left wedge: from z0 (eaves) to zMid (ridge)
     const posL = [
-      x0r, wallTopY, z0,
-      x1r, wallTopY, z0,
-      x1r, peakY, zMid,
-      x0r, peakY, zMid,
+      x0r, yAtStart, z0,
+      x1r, yAtStart, z0,
+      x1r, yAtMid, zMid,
+      x0r, yAtMid, zMid,
       x0r, yTop, z0,
       x1r, yTop, z0,
       x1r, yTop, zMid,
@@ -1550,12 +1597,12 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
     vdL.applyToMesh(wedgeL, true);
     wedges.push(wedgeL);
 
-    // Right wedge: from zMid (peakY) to z1 (wallTopY)
+    // Right wedge: from zMid (ridge) to z1 (eaves)
     const posR = [
-      x0r, peakY, zMid,
-      x1r, peakY, zMid,
-      x1r, wallTopY, z1,
-      x0r, wallTopY, z1,
+      x0r, yAtMid, zMid,
+      x1r, yAtMid, zMid,
+      x1r, yAtEnd, z1,
+      x0r, yAtEnd, z1,
       x0r, yTop, zMid,
       x1r, yTop, zMid,
       x1r, yTop, z1,
