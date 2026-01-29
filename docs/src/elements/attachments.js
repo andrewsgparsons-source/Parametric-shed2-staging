@@ -2169,111 +2169,13 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   createSlopedPanel(`att-${attId}-osb-R`, 'R', rafterLen_mm, ridge_mm, ROOF_OSB_MM, osbPerpOffset, osbMat, { part: 'osb', side: 'R' });
 
   // ========== 3. COVERING ==========
-  // Covering sits on top of OSB
+  // Covering sits on top of OSB - same size as OSB (no overhang, no fold-downs)
+  // Simpler approach: covering matches OSB exactly
   const coverPerpOffset = osbPerpOffset + ROOF_OSB_MM / 2 + COVERING_MM / 2 + 1;
   
-  // Extend covering past eaves by ovhEaves_mm
-  const coverLen = rafterLen_mm + ovhEaves_mm;
-  
-  // Need to offset center position for the extended length
-  // The extension is at the eaves (outer) end, so shift center outward
-  const coverExtensionShift = ovhEaves_mm / 2 * cosT;  // horizontal shift
-  
-  ['L', 'R'].forEach(side => {
-    const sMid = coverLen / 2;
-    const runMid = (sMid - ovhEaves_mm / 2) * cosT;  // adjust for extension
-    const dropMid = (sMid - ovhEaves_mm / 2) * sinT;
-    const ySurfMid = MEMBER_D + (rise_mm - dropMid);
-    
-    const normalSpan = (side === 'L') ? -sinT : sinT;
-    const normalY = cosT;
-    
-    let cx, cy, cz;
-    if (ridgeAlongX) {
-      const spanPos = (side === 'L')
-        ? (halfSpan_mm - runMid - coverExtensionShift)
-        : (halfSpan_mm + runMid + coverExtensionShift);
-      cx = ridge_mm / 2;
-      cy = ySurfMid + normalY * coverPerpOffset;
-      cz = spanPos + normalSpan * coverPerpOffset;
-    } else {
-      const spanPos = (side === 'L')
-        ? (halfSpan_mm - runMid - coverExtensionShift)
-        : (halfSpan_mm + runMid + coverExtensionShift);
-      cx = spanPos + normalSpan * coverPerpOffset;
-      cy = ySurfMid + normalY * coverPerpOffset;
-      cz = ridge_mm / 2;
-    }
-    
-    const cover = mkBox(`att-${attId}-covering-${side}`,
-      ridgeAlongX ? ridge_mm : coverLen,
-      COVERING_MM,
-      ridgeAlongX ? coverLen : ridge_mm,
-      cx, cy, cz, coveringMat, { part: 'covering', side });
-    
-    const rotAngle = (side === 'L') ? slopeAng : -slopeAng;
-    if (ridgeAlongX) {
-      cover.rotation = new BABYLON.Vector3(-rotAngle, 0, 0);
-    } else {
-      cover.rotation = new BABYLON.Vector3(0, 0, rotAngle);
-    }
-  });
-
-  // ========== 3b. COVERING FOLD-DOWNS ==========
-  // Fold-downs at eaves and verges to wrap under fascia boards
-  const FOLD_DOWN_MM = 100;
-  
-  // Eaves fold-downs (at outer edge of each slope, running along ridge direction)
-  // These fold down at the bottom of each slope
-  ['L', 'R'].forEach(side => {
-    // Position at the eaves (outer edge of slope)
-    // The covering extends past eaves by ovhEaves_mm, fold starts at that outer edge
-    const eavesFoldY = MEMBER_D - FOLD_DOWN_MM / 2;  // Hangs down from eaves level
-    
-    if (ridgeAlongX) {
-      // Eaves at Z edges, fold runs along X (ridge direction)
-      const foldZ = (side === 'L') ? -ovhEaves_mm - COVERING_MM / 2 : span_mm + ovhEaves_mm + COVERING_MM / 2;
-      mkBox(`att-${attId}-covering-fold-eaves-${side}`,
-        ridge_mm, FOLD_DOWN_MM, COVERING_MM,
-        ridge_mm / 2, eavesFoldY, foldZ,
-        coveringMat, { part: 'covering-fold', edge: 'eaves', side });
-    } else {
-      // Eaves at X edges, fold runs along Z (ridge direction)
-      const foldX = (side === 'L') ? -ovhEaves_mm - COVERING_MM / 2 : span_mm + ovhEaves_mm + COVERING_MM / 2;
-      mkBox(`att-${attId}-covering-fold-eaves-${side}`,
-        COVERING_MM, FOLD_DOWN_MM, ridge_mm,
-        foldX, eavesFoldY, ridge_mm / 2,
-        coveringMat, { part: 'covering-fold', edge: 'eaves', side });
-    }
-  });
-  
-  // Verge fold-downs (at gable ends) - vertical panels behind the barge boards
-  // These hang straight down from the covering edge, hidden behind fascia
-  // One fold per gable end (front and back), spanning from eaves to eaves
-  ['front', 'back'].forEach(end => {
-    // Fold hangs down from just below covering level, spans full width (both slopes)
-    // Position INSIDE the barge board so it's hidden
-    const foldTopY = MEMBER_D + rise_mm;  // At ridge height
-    const foldCenterY = foldTopY - FOLD_DOWN_MM / 2;
-    
-    if (ridgeAlongX) {
-      // Gable ends at X=0 (front) and X=ridge_mm (back)
-      // Fold runs along Z (spanning both slopes)
-      const foldX = (end === 'front') ? COVERING_MM / 2 : ridge_mm - COVERING_MM / 2;  // Inside the fascia
-      mkBox(`att-${attId}-covering-fold-verge-${end}`,
-        COVERING_MM, FOLD_DOWN_MM, span_mm,
-        foldX, foldCenterY, span_mm / 2,
-        coveringMat, { part: 'covering-fold', edge: 'verge', end });
-    } else {
-      // Gable ends at Z=0 (front) and Z=ridge_mm (back)
-      // Fold runs along X (spanning both slopes)
-      const foldZ = (end === 'front') ? COVERING_MM / 2 : ridge_mm - COVERING_MM / 2;  // Inside the fascia
-      mkBox(`att-${attId}-covering-fold-verge-${end}`,
-        span_mm, FOLD_DOWN_MM, COVERING_MM,
-        span_mm / 2, foldCenterY, foldZ,
-        coveringMat, { part: 'covering-fold', edge: 'verge', end });
-    }
-  });
+  // Use same dimensions as OSB panels
+  createSlopedPanel(`att-${attId}-covering-L`, 'L', rafterLen_mm, ridge_mm, COVERING_MM, coverPerpOffset, coveringMat, { part: 'covering', side: 'L' });
+  createSlopedPanel(`att-${attId}-covering-R`, 'R', rafterLen_mm, ridge_mm, COVERING_MM, coverPerpOffset, coveringMat, { part: 'covering', side: 'R' });
 
   // ========== 4. FASCIA ==========
   // Eaves fascia (horizontal boards at eaves edges) and barge boards (sloped boards at gable ends)
