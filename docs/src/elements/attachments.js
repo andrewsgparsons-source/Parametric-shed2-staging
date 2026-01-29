@@ -2217,35 +2217,95 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   });
 
   // ========== 4. FASCIA ==========
-  // Fascia hangs down at eaves edges
+  // Eaves fascia (horizontal boards at eaves edges) and barge boards (sloped boards at gable ends)
   const fasciaTopY = MEMBER_D + osbPerpOffset + ROOF_OSB_MM / 2;
   const fasciaCy = fasciaTopY - FASCIA_DEPTH_MM / 2;
   
+  // Eaves fascia (horizontal, at outer edges of each slope)
   if (ridgeAlongX) {
-    // Eaves fascia at Z=0 and Z=span_mm
+    // Eaves at Z=0 and Z=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
       ridge_mm / 2, fasciaCy, -FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, ridge_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
       ridge_mm / 2, fasciaCy, span_mm + FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'eaves-R' });
-    
-    // Verge fascia at X=0 and X=ridge_mm
-    mkBox(`att-${attId}-fascia-verge-F`, FASCIA_THK_MM, FASCIA_DEPTH_MM, span_mm + 2 * FASCIA_THK_MM,
-      -FASCIA_THK_MM / 2, fasciaCy, halfSpan_mm, joistMat, { part: 'fascia', edge: 'verge-F' });
-    mkBox(`att-${attId}-fascia-verge-B`, FASCIA_THK_MM, FASCIA_DEPTH_MM, span_mm + 2 * FASCIA_THK_MM,
-      ridge_mm + FASCIA_THK_MM / 2, fasciaCy, halfSpan_mm, joistMat, { part: 'fascia', edge: 'verge-B' });
   } else {
-    // Eaves fascia at X=0 and X=span_mm
+    // Eaves at X=0 and X=span_mm
     mkBox(`att-${attId}-fascia-eaves-L`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
       -FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, joistMat, { part: 'fascia', edge: 'eaves-L' });
     mkBox(`att-${attId}-fascia-eaves-R`, FASCIA_THK_MM, FASCIA_DEPTH_MM, ridge_mm,
       span_mm + FASCIA_THK_MM / 2, fasciaCy, ridge_mm / 2, joistMat, { part: 'fascia', edge: 'eaves-R' });
-    
-    // Verge fascia at Z=0 and Z=ridge_mm
-    mkBox(`att-${attId}-fascia-verge-F`, span_mm + 2 * FASCIA_THK_MM, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      halfSpan_mm, fasciaCy, -FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'verge-F' });
-    mkBox(`att-${attId}-fascia-verge-B`, span_mm + 2 * FASCIA_THK_MM, FASCIA_DEPTH_MM, FASCIA_THK_MM,
-      halfSpan_mm, fasciaCy, ridge_mm + FASCIA_THK_MM / 2, joistMat, { part: 'fascia', edge: 'verge-B' });
   }
+
+  // Barge boards (sloped fascia running up to the ridge at gable ends)
+  // These run from eaves to crest on both sides of each gable end
+  const osbOuterOffset_mm = MEMBER_D / 2 + ROOF_OSB_MM / 2 + 2 + ROOF_OSB_MM;
+  
+  function createBargeFascia(side) {
+    // side: 'L' or 'R'
+    // Calculate mid-point along the slope for positioning
+    const sMid = rafterLen_mm / 2;
+    const runMid = sMid * cosT;  // horizontal from ridge
+    const dropMid = sMid * sinT; // vertical drop from ridge
+    
+    // Surface Y at mid-slope
+    const ySurfMid = MEMBER_D + (rise_mm - dropMid);
+    
+    // Normal direction for outward offset
+    const normalSpan = (side === 'L') ? -sinT : sinT;
+    const normalY = cosT;
+    
+    // Barge center position (offset outward from OSB surface)
+    const bargePerpOffset = osbOuterOffset_mm + FASCIA_THK_MM / 2;
+    
+    // Calculate span position at mid-slope
+    const spanPosMid = (side === 'L')
+      ? (halfSpan_mm - runMid)
+      : (halfSpan_mm + runMid);
+    
+    // Barge center Y - hanging down from surface
+    const bargeCy = ySurfMid + normalY * bargePerpOffset - (FASCIA_DEPTH_MM / 2) * cosT;
+    
+    if (ridgeAlongX) {
+      // Gable ends at X=0 (front) and X=ridge_mm (back)
+      // Barge runs along Z (slope direction)
+      const bargeCz = spanPosMid + normalSpan * bargePerpOffset;
+      
+      // Front barge
+      const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
+        FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
+        -FASCIA_THK_MM / 2, bargeCy, bargeCz,
+        joistMat, { part: 'fascia', side: side, edge: 'barge-front' });
+      bargeFront.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
+      
+      // Back barge
+      const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
+        FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
+        ridge_mm + FASCIA_THK_MM / 2, bargeCy, bargeCz,
+        joistMat, { part: 'fascia', side: side, edge: 'barge-back' });
+      bargeBack.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
+    } else {
+      // Gable ends at Z=0 (front) and Z=ridge_mm (back)
+      // Barge runs along X (slope direction)
+      const bargeCx = spanPosMid + normalSpan * bargePerpOffset;
+      
+      // Front barge
+      const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
+        rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+        bargeCx, bargeCy, -FASCIA_THK_MM / 2,
+        joistMat, { part: 'fascia', side: side, edge: 'barge-front' });
+      bargeFront.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
+      
+      // Back barge
+      const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
+        rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+        bargeCx, bargeCy, ridge_mm + FASCIA_THK_MM / 2,
+        joistMat, { part: 'fascia', side: side, edge: 'barge-back' });
+      bargeBack.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
+    }
+  }
+  
+  createBargeFascia('L');
+  createBargeFascia('R');
 
   // ========== 5. GABLE ENDS ==========
   // Skip for now - need to use CSG or ExtrudePolygon approach
