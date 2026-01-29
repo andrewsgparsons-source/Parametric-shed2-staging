@@ -4378,6 +4378,42 @@ function parseOverhangInput(val) {
       return Math.max(500, fasciaBottom - ROOF_STACK_MM);
     }
 
+    /**
+     * Get max apex crest height for attachment buildings.
+     * Must be 5mm below main building eaves.
+     */
+    function getMaxApexCrestHeight(mainState) {
+      var roofStyle = (mainState.roof && mainState.roof.style) || "apex";
+      var mainEaves;
+      if (roofStyle === "apex") {
+        var apex = mainState.roof && mainState.roof.apex;
+        mainEaves = Number(
+          (apex && apex.heightToEaves_mm) ||
+          (apex && apex.eavesHeight_mm) ||
+          1850
+        );
+      } else if (roofStyle === "pent") {
+        var pent = mainState.roof && mainState.roof.pent;
+        mainEaves = Number((pent && pent.minHeight_mm) || 2100);
+      } else {
+        mainEaves = 1850;
+      }
+      // Crest must be 5mm below main eaves
+      return mainEaves - 5;
+    }
+
+    /**
+     * Get default apex values for attachment buildings.
+     * Returns { crest, eaves } with correct defaults.
+     */
+    function getDefaultApexValues(mainState) {
+      var maxCrest = getMaxApexCrestHeight(mainState);
+      return {
+        crest: maxCrest,
+        eaves: 1300  // Andrew's preferred default
+      };
+    }
+
     /** Render the attachments list UI - creates expandable editors for each attachment */
     function renderAttachmentsList() {
       if (!attachmentsListEl) return;
@@ -4544,6 +4580,16 @@ function parseOverhangInput(val) {
           roofSection.appendChild(pentOptions);
 
           // Apex roof options
+          // Calculate correct defaults based on main building
+          var apexDefaults = getDefaultApexValues(mainState);
+          var maxApexCrest = getMaxApexCrestHeight(mainState);
+          var apexEaveVal = att.roof?.apex?.eaveHeight_mm || apexDefaults.eaves;
+          var apexCrestVal = att.roof?.apex?.crestHeight_mm || apexDefaults.crest;
+          // Ensure crest doesn't exceed max
+          apexCrestVal = Math.min(apexCrestVal, maxApexCrest);
+          // Ensure eaves doesn't exceed crest
+          apexEaveVal = Math.min(apexEaveVal, apexCrestVal);
+
           var apexOptions = document.createElement("div");
           apexOptions.className = "att-apex-options";
           apexOptions.style.display = roofType === "apex" ? "block" : "none";
@@ -4551,9 +4597,9 @@ function parseOverhangInput(val) {
           apexRow.className = "att-row three-col";
           apexRow.innerHTML =
             '<label><span>Eave (mm)</span>' +
-            '<input type="number" class="att-apex-eave" value="' + (att.roof?.apex?.eaveHeight_mm || 1200) + '" step="50" /></label>' +
+            '<input type="number" class="att-apex-eave" value="' + apexEaveVal + '" step="50" max="' + apexCrestVal + '" /></label>' +
             '<label><span>Crest (mm)</span>' +
-            '<input type="number" class="att-apex-crest" value="' + (att.roof?.apex?.crestHeight_mm || 1600) + '" step="50" /></label>' +
+            '<input type="number" class="att-apex-crest" value="' + apexCrestVal + '" step="50" max="' + maxApexCrest + '" /></label>' +
             '<label><span>Trusses</span>' +
             '<input type="number" class="att-apex-trusses" value="' + (att.roof?.apex?.trussCount || 2) + '" min="2" step="1" /></label>';
           apexOptions.appendChild(apexRow);
@@ -4655,6 +4701,35 @@ function parseOverhangInput(val) {
           // Show/hide appropriate options
           if (pentOptions) pentOptions.style.display = type === "pent" ? "block" : "none";
           if (apexOptions) apexOptions.style.display = type === "apex" ? "block" : "none";
+
+          // When switching to apex, set correct default values
+          if (type === "apex") {
+            var currentState = store.getState();
+            var apexDefaults = getDefaultApexValues(currentState);
+            var maxCrest = getMaxApexCrestHeight(currentState);
+
+            // Update UI inputs
+            var eaveInput = editor.querySelector(".att-apex-eave");
+            var crestInput = editor.querySelector(".att-apex-crest");
+            if (eaveInput) {
+              eaveInput.value = apexDefaults.eaves;
+              eaveInput.max = maxCrest;
+            }
+            if (crestInput) {
+              crestInput.value = apexDefaults.crest;
+              crestInput.max = maxCrest;
+            }
+
+            // Update state with correct defaults
+            patchAttachmentById(attId, {
+              roof: {
+                apex: {
+                  eaveHeight_mm: apexDefaults.eaves,
+                  crestHeight_mm: apexDefaults.crest
+                }
+              }
+            });
+          }
         });
       }
 
@@ -4701,12 +4776,36 @@ function parseOverhangInput(val) {
 
       if (apexEaveInput) {
         apexEaveInput.addEventListener("change", function() {
-          patchAttachmentById(attId, { roof: { apex: { eaveHeight_mm: parseInt(this.value, 10) || 100 } } });
+          var eaveVal = parseInt(this.value, 10) || 100;
+          // Eaves cannot exceed crest
+          var crestVal = apexCrestInput ? parseInt(apexCrestInput.value, 10) : 9999;
+          if (eaveVal > crestVal) {
+            eaveVal = crestVal;
+            this.value = eaveVal;
+          }
+          patchAttachmentById(attId, { roof: { apex: { eaveHeight_mm: eaveVal } } });
         });
       }
       if (apexCrestInput) {
         apexCrestInput.addEventListener("change", function() {
-          patchAttachmentById(attId, { roof: { apex: { crestHeight_mm: parseInt(this.value, 10) || 400 } } });
+          var currentState = store.getState();
+          var maxCrest = getMaxApexCrestHeight(currentState);
+          var crestVal = parseInt(this.value, 10) || 400;
+          // Cap crest at max allowed
+          if (crestVal > maxCrest) {
+            crestVal = maxCrest;
+            this.value = crestVal;
+          }
+          // Update eaves max attribute and clamp if needed
+          if (apexEaveInput) {
+            apexEaveInput.max = crestVal;
+            var currentEave = parseInt(apexEaveInput.value, 10) || 0;
+            if (currentEave > crestVal) {
+              apexEaveInput.value = crestVal;
+              patchAttachmentById(attId, { roof: { apex: { eaveHeight_mm: crestVal } } });
+            }
+          }
+          patchAttachmentById(attId, { roof: { apex: { crestHeight_mm: crestVal } } });
         });
       }
       if (apexTrussesInput) {
