@@ -2026,6 +2026,71 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     });
   });
 
+  // ========== 1b. PURLINS ==========
+  // Purlins run parallel to the ridge, spaced at 609mm along the slope
+  // They sit on top of the rafters (perpendicular offset from slope surface)
+  const PURLIN_STEP_MM = 609;
+  const PURLIN_CLEAR_MM = 1;
+  const purlinOutOffset_mm = (MEMBER_D / 2) + PURLIN_CLEAR_MM;
+
+  // Calculate slope stations: start at ridge (0), step 609mm, always include bottom
+  const runBottom_mm = halfSpan_mm;
+  const sBottom_mm = cosT > 1e-6 ? (runBottom_mm / cosT) : rafterLen_mm;
+  
+  const sList = [0];
+  let sNext = PURLIN_STEP_MM;
+  while (sNext < sBottom_mm) {
+    sList.push(Math.round(sNext));
+    sNext += PURLIN_STEP_MM;
+  }
+  const sBottomRounded = Math.round(sBottom_mm);
+  if (sList[sList.length - 1] !== sBottomRounded) sList.push(sBottomRounded);
+
+  console.log("[apex-v2] Creating", sList.length * 2, "purlins at stations:", sList);
+
+  sList.forEach((s_mm, idx) => {
+    // Clamp within usable slope length
+    const run_mm = Math.min(halfSpan_mm, Math.max(0, Math.round(s_mm * cosT)));
+    const drop_mm = Math.min(rise_mm, Math.max(0, Math.round(s_mm * sinT)));
+
+    // Roof surface Y in local coords (tie beam top = MEMBER_D)
+    const ySurf_mm = MEMBER_D + (rise_mm - drop_mm);
+
+    ['L', 'R'].forEach(side => {
+      const spanPos = (side === 'L')
+        ? (halfSpan_mm - run_mm)
+        : (halfSpan_mm + run_mm);
+      
+      const normalSpan = (side === 'L') ? -sinT : sinT;
+      const normalY = cosT;
+
+      let cx, cy, cz;
+      if (ridgeAlongX) {
+        cx = ridge_mm / 2;  // centered along ridge
+        cy = ySurf_mm + normalY * purlinOutOffset_mm;
+        cz = spanPos + normalSpan * purlinOutOffset_mm;
+      } else {
+        cx = spanPos + normalSpan * purlinOutOffset_mm;
+        cy = ySurf_mm + normalY * purlinOutOffset_mm;
+        cz = ridge_mm / 2;  // centered along ridge
+      }
+
+      const purlin = mkBox(`att-${attId}-purlin-${side}-${idx}`,
+        ridgeAlongX ? ridge_mm : MEMBER_W,
+        MEMBER_D,
+        ridgeAlongX ? MEMBER_W : ridge_mm,
+        cx, cy, cz, joistMat, { part: 'purlin', side, idx });
+
+      // Rotate to match slope
+      const rotAngle = (side === 'L') ? slopeAng : -slopeAng;
+      if (ridgeAlongX) {
+        purlin.rotation = new BABYLON.Vector3(-rotAngle, 0, 0);
+      } else {
+        purlin.rotation = new BABYLON.Vector3(0, 0, rotAngle);
+      }
+    });
+  });
+
   // ========== 2. OSB ==========
   // OSB sits on rafters, offset perpendicular by half rafter depth
   const osbPerpOffset = MEMBER_D / 2 + ROOF_OSB_MM / 2 + 2;  // +2 for clearance
