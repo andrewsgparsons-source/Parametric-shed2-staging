@@ -45,20 +45,20 @@ export function boot(canvas) {
 
   // Slower, smoother zoom (reference values), plus rails
   if (camera.wheelDeltaPercentage !== undefined) {
-    camera.wheelDeltaPercentage = 0.008;  // Slower desktop scroll (was 0.015)
-    camera.pinchDeltaPercentage = 0.004;  // Slower mobile pinch (was 0.008)
+    camera.wheelDeltaPercentage = 0.008;  // Desktop scroll - feels good
+    camera.pinchDeltaPercentage = 0.002;  // Mobile pinch - slower (was 0.004)
   } else {
     camera.wheelPrecision = Math.max(200, camera.wheelPrecision || 100);
-    camera.pinchPrecision = Math.max(400, camera.pinchPrecision || 100); // Higher = slower/finer pinch
+    camera.pinchPrecision = Math.max(600, camera.pinchPrecision || 100); // Higher = slower/finer pinch
   }
   camera.inertia = 0.85;
   camera.lowerRadiusLimit = 2;    // Don't let user zoom inside the model
   camera.upperRadiusLimit = 50;   // Don't let user zoom too far out
   
   // Better touch controls - higher values = slower/less sensitive
-  camera.panningSensibility = 400;      // Slower panning (was 200)
-  camera.angularSensibilityX = 2000;    // Slower rotation (was 1000)
-  camera.angularSensibilityY = 2000;
+  camera.panningSensibility = 600;      // Slower panning for mobile (was 400)
+  camera.angularSensibilityX = 3000;    // Slower rotation for mobile (was 2000)
+  camera.angularSensibilityY = 3000;
 
   new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
 
