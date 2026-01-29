@@ -1197,14 +1197,15 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     // Get wall height from heightAtX function
     const wallHeight = heightAtX(0);
 
-    // Apex crest height is measured from floor, so peak Y = baseY + apexCrestHeight
-    // Wall top Y = baseY + wallHeight
+    // Wall top Y = baseY + wallHeight (eaves level)
+    // Apex crest height from UI is ABSOLUTE from Y=0, not from floor surface
+    // So peakY = apexCrestHeight (absolute), not baseY + apexCrestHeight
     const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
     const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
-    const peakY = apexCrestHeight + baseY - PENT_CLIP_DROP_MM;
+    const peakY = apexCrestHeight - PENT_CLIP_DROP_MM;  // Already absolute from Y=0
     const yTop = peakY + 20000;
 
-    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, wallTopY, peakY, yTop, z0r, z1r, wallHeight, apexCrestHeight });
+    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, wallTopY, peakY, yTop, z0r, z1r, wallHeight, apexCrestHeight, baseY });
 
     // Create two wedges - left side (x0 to xMid) slopes up, right side (xMid to x1) slopes down
     const wedges = [];
@@ -1505,15 +1506,15 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
     const z1 = zOffset + length;
     const zMid = zOffset + length / 2;
 
-    // Apex crest height is measured from floor, so peak Y = baseY + apexCrestHeight
-    // Wall top Y = baseY + wallHeight
-    // The gable starts at wall top and peaks at crest
+    // Wall top Y = baseY + wallHeight (eaves level)
+    // Apex crest height from UI is ABSOLUTE from Y=0, not from floor surface
+    // So peakY = apexCrestHeight (absolute), not baseY + apexCrestHeight
     const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
     const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
-    const peakY = apexCrestHeight + baseY - PENT_CLIP_DROP_MM;
+    const peakY = apexCrestHeight - PENT_CLIP_DROP_MM;  // Already absolute from Y=0
     const yTop = peakY + 20000;
 
-    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, wallTopY, peakY, yTop, x0r, x1r, wallHeight, apexCrestHeight });
+    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, wallTopY, peakY, yTop, x0r, x1r, wallHeight, apexCrestHeight, baseY });
 
     // Create two wedges - left side (z0 to zMid) slopes up, right side (zMid to z1) slopes down
     const wedges = [];
