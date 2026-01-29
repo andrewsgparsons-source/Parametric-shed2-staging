@@ -2024,6 +2024,73 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
         rafter.rotation = new BABYLON.Vector3(0, 0, rotAngle);
       }
     });
+
+    // King post (cripple stud): vertical strut from tie midpoint to apex
+    const tieTopY_mm = MEMBER_D;  // top of tie beam
+    const postH_mm = Math.max(1, Math.floor(rise_mm - tieTopY_mm));
+    
+    if (postH_mm > 20) {  // Only create if there's meaningful height
+      // Triangular cap that fits between rafters
+      const capH_mm = Math.max(20, Math.min(Math.floor(postH_mm * 0.35), Math.floor(MEMBER_W * 0.9)));
+      const bodyH_mm = Math.max(1, postH_mm - capH_mm);
+      
+      // King post body (vertical box)
+      const postCx = ridgeAlongX ? trussCenterAlongRidge : halfSpan_mm;
+      const postCy = tieTopY_mm + bodyH_mm / 2;
+      const postCz = ridgeAlongX ? halfSpan_mm : trussCenterAlongRidge;
+      
+      mkBox(`att-${attId}-truss-${idx}-kingpost`,
+        ridgeAlongX ? MEMBER_W : MEMBER_D,
+        bodyH_mm,
+        ridgeAlongX ? MEMBER_D : MEMBER_W,
+        postCx, postCy, postCz, joistMat, { part: 'truss', member: 'kingpost' });
+      
+      // King post cap (triangular) using ExtrudeShape
+      const halfRun_mm = Math.max(1, Math.round(capH_mm / Math.max(1e-6, Math.tan(slopeAng))));
+      
+      // Build triangle shape - points defined relative to center
+      let capShape, capPath;
+      if (ridgeAlongX) {
+        // Ridge along X, slopes face Z - triangle in Y-Z plane, extrude along X
+        capShape = [
+          new BABYLON.Vector3(0, 0, -halfRun_mm / 1000),
+          new BABYLON.Vector3(0, capH_mm / 1000, 0),
+          new BABYLON.Vector3(0, 0, halfRun_mm / 1000),
+          new BABYLON.Vector3(0, 0, -halfRun_mm / 1000)  // close the shape
+        ];
+        capPath = [
+          new BABYLON.Vector3(-MEMBER_W / 2000, 0, 0),
+          new BABYLON.Vector3(MEMBER_W / 2000, 0, 0)
+        ];
+      } else {
+        // Ridge along Z, slopes face X - triangle in X-Y plane, extrude along Z
+        capShape = [
+          new BABYLON.Vector3(-halfRun_mm / 1000, 0, 0),
+          new BABYLON.Vector3(0, capH_mm / 1000, 0),
+          new BABYLON.Vector3(halfRun_mm / 1000, 0, 0),
+          new BABYLON.Vector3(-halfRun_mm / 1000, 0, 0)  // close the shape
+        ];
+        capPath = [
+          new BABYLON.Vector3(0, 0, -MEMBER_W / 2000),
+          new BABYLON.Vector3(0, 0, MEMBER_W / 2000)
+        ];
+      }
+      
+      const cap = BABYLON.MeshBuilder.ExtrudeShape(
+        `att-${attId}-truss-${idx}-kingpost-cap`,
+        { shape: capShape, path: capPath, cap: BABYLON.Mesh.CAP_ALL },
+        scene
+      );
+      
+      cap.position = new BABYLON.Vector3(
+        postCx / 1000,
+        (tieTopY_mm + bodyH_mm) / 1000,
+        postCz / 1000
+      );
+      cap.material = joistMat;
+      cap.parent = roofRoot;
+      cap.metadata = { dynamic: true, attachmentId: attId, type: 'roof', part: 'truss', member: 'kingpost-cap' };
+    }
   });
 
   // ========== 1b. PURLINS ==========
