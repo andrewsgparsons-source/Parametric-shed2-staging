@@ -1794,6 +1794,7 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
   }
 
   if (roofType === "pent") {
+    console.log("[attachments] PENT ROOF - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
                   attachWall, joistMat, osbMat, coveringMat, claddingMat, attachment);
   } else if (roofType === "apex") {
@@ -1955,6 +1956,8 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   // Fascia boards (hang down from roof edges)
   const fasciaTopY = RAFTER_D_MM + ROOF_OSB_MM;
   const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
+
+  console.log("[buildPentRoof] FASCIA - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
 
   // Eaves fascia (at A=0) - uses cladding color to match walls
   mkBox(`att-${attId}-fascia-eaves`, FASCIA_THK_MM, FASCIA_DEPTH_MM, B_mm + 2 * FASCIA_THK_MM, -FASCIA_THK_MM, fasciaBottomY, -FASCIA_THK_MM, claddingMat, { part: 'fascia', edge: 'eaves' });
