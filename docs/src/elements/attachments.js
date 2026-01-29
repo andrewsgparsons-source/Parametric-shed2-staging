@@ -813,12 +813,9 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    { x: 0, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null);
-      if (isApex) {
-        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
-      }
+      // For apex roofs, pass the crest height so cladding extends into the gable
+      const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
+      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest);
     }
 
   } else if (attachWall === "right") {
@@ -853,12 +850,9 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    { x: extentX - wallThk, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null);
-      if (isApex) {
-        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        buildGableInfill('outer', 'z', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
-      }
+      // For apex roofs, pass the crest height so cladding extends into the gable
+      const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
+      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest);
     }
 
   } else if (attachWall === "front") {
@@ -893,12 +887,9 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    { x: wallThk, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk);
-      if (isApex) {
-        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
-      }
+      // For apex roofs, pass the crest height so cladding extends into the gable
+      const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
+      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest);
     }
 
   } else if (attachWall === "back") {
@@ -933,12 +924,9 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
                    { x: wallThk, z: extentZ - wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
                    plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk);
-      if (isApex) {
-        const crestH = attachment.roof?.apex?.crestHeight_mm || 400;
-        const wallTopY = wallBaseY + wallHeightOuter;
-        buildGableInfill('outer', 'x', outerLen, wallThk, wallTopY, wallTopY + crestH, cladMat);
-      }
+      // For apex roofs, pass the crest height so cladding extends into the gable
+      const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
+      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest);
     }
   }
 }
@@ -1041,17 +1029,19 @@ function createCladdingMaterial(scene, name) {
  * For sloped walls, uses CSG to cleanly clip cladding at the roof line (matching main building)
  * @param {number} xOffset - optional X offset for walls that start after x=0 (e.g., outer wall between side walls)
  */
-function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, isSloped, heightAtX, cladMat, xOffset = 0) {
-  const maxWallHeight = isSloped ? Math.max(heightAtX(0), heightAtX(length)) : heightAtX(0);
+function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, isSloped, heightAtX, cladMat, xOffset = 0, isApexGable = false, apexCrestHeight = 0) {
+  // For apex gables, we need to build up to the crest height
+  const maxWallHeight = isApexGable ? apexCrestHeight : (isSloped ? Math.max(heightAtX(0), heightAtX(length)) : heightAtX(0));
   // Build extra courses above roof line for ALL walls:
   // - Sloped walls: CSG will trim them to the slope
   // - Non-sloped walls: extra courses extend behind fascia (hidden)
-  const extraHeight = isSloped ? 500 : 200;
+  // - Apex gables: CSG will trim to triangular peak
+  const extraHeight = isSloped ? 500 : (isApexGable ? 200 : 200);
   const cladHeight = maxWallHeight + CLAD_BOTTOM_DROP_MM + extraHeight;
   const numCourses = Math.ceil(cladHeight / CLAD_H_MM);
 
   console.log("[attachments] buildCladdingAlongX:", wallId, "length:", length, "baseY:", baseY, "zPos:", zPos,
-              "xOffset:", xOffset, "maxWallHeight:", maxWallHeight, "numCourses:", numCourses, "isSloped:", isSloped);
+              "xOffset:", xOffset, "maxWallHeight:", maxWallHeight, "numCourses:", numCourses, "isSloped:", isSloped, "isApexGable:", isApexGable, "apexCrestHeight:", apexCrestHeight);
 
   // Calculate roof line Y values (absolute Y, not relative to baseY)
   const roofYAtStart = heightAtX(0) + baseY;  // Wall top Y at X=0
@@ -1193,6 +1183,97 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
 
     try { cutterCSG = BABYLON.CSG.FromMesh(wedge); } catch (e) { cutterCSG = null; }
     try { if (wedge && !wedge.isDisposed()) wedge.dispose(false, true); } catch (e) {}
+  } else if (isApexGable && apexCrestHeight > 0) {
+    // APEX GABLE: triangular cutter with peak at center of wall (along X axis)
+    // Creates two wedges meeting at the center, sloping down to both ends
+    const CUT_EXTRA = 120;
+    const z0r = zPos - CUT_EXTRA;
+    const z1r = zPos + CLAD_T_MM + CUT_EXTRA;
+
+    const x0 = xOffset;
+    const x1 = xOffset + length;
+    const xMid = xOffset + length / 2;
+
+    // Get wall height from heightAtX function
+    const wallHeight = heightAtX(0);
+
+    // Apex crest height is measured from floor, so peak Y = baseY + apexCrestHeight
+    // Wall top Y = baseY + wallHeight
+    const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
+    const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
+    const peakY = apexCrestHeight + baseY - PENT_CLIP_DROP_MM;
+    const yTop = peakY + 20000;
+
+    console.log('[ATT_APEX_GABLE_X_DEBUG]', { x0, x1, xMid, wallTopY, peakY, yTop, z0r, z1r, wallHeight, apexCrestHeight });
+
+    // Create two wedges - left side (x0 to xMid) slopes up, right side (xMid to x1) slopes down
+    const wedges = [];
+
+    // Left wedge: from x0 (wallTopY) to xMid (peakY)
+    const posL = [
+      x0, wallTopY, z0r,
+      xMid, peakY, z0r,
+      xMid, peakY, z1r,
+      x0, wallTopY, z1r,
+      x0, yTop, z0r,
+      xMid, yTop, z0r,
+      xMid, yTop, z1r,
+      x0, yTop, z1r,
+    ].map((v) => v / 1000);
+
+    const indices = [
+      0, 2, 1, 0, 3, 2,
+      4, 5, 6, 4, 6, 7,
+      0, 5, 4, 0, 1, 5,
+      3, 6, 2, 3, 7, 6,
+      0, 7, 3, 0, 4, 7,
+      1, 6, 5, 1, 2, 6
+    ];
+
+    const normalsL = [];
+    BABYLON.VertexData.ComputeNormals(posL, indices, normalsL);
+    const vdL = new BABYLON.VertexData();
+    vdL.positions = posL;
+    vdL.indices = indices;
+    vdL.normals = normalsL;
+    const wedgeL = new BABYLON.Mesh(`att-${attId}-clad-${wallId}-cutter-L`, scene);
+    vdL.applyToMesh(wedgeL, true);
+    wedges.push(wedgeL);
+
+    // Right wedge: from xMid (peakY) to x1 (wallTopY)
+    const posR = [
+      xMid, peakY, z0r,
+      x1, wallTopY, z0r,
+      x1, wallTopY, z1r,
+      xMid, peakY, z1r,
+      xMid, yTop, z0r,
+      x1, yTop, z0r,
+      x1, yTop, z1r,
+      xMid, yTop, z1r,
+    ].map((v) => v / 1000);
+
+    const normalsR = [];
+    BABYLON.VertexData.ComputeNormals(posR, indices, normalsR);
+    const vdR = new BABYLON.VertexData();
+    vdR.positions = posR;
+    vdR.indices = indices;
+    vdR.normals = normalsR;
+    const wedgeR = new BABYLON.Mesh(`att-${attId}-clad-${wallId}-cutter-R`, scene);
+    vdR.applyToMesh(wedgeR, true);
+    wedges.push(wedgeR);
+
+    // Union the two wedges
+    try {
+      cutterCSG = BABYLON.CSG.FromMesh(wedges[0]);
+      cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[1]));
+    } catch (e) {
+      console.error('[APEX_GABLE_X] CSG error:', e);
+      cutterCSG = null;
+    }
+
+    for (const w of wedges) {
+      try { if (w && !w.isDisposed()) w.dispose(false, true); } catch (e) {}
+    }
   } else {
     // NON-SLOPED walls: use flat box cutter at constant height
     // Matching main building walls.js approach for flat-topped walls
@@ -1261,18 +1342,20 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
  * For sloped walls, uses CSG to cleanly clip cladding at the roof line (matching main building)
  * @param {number} zOffset - Z offset for the cladding start position
  */
-function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPos, baseY, zOffset, cladMat, isSloped, heightAtZ) {
-  const effectiveHeight = isSloped && heightAtZ ? Math.max(heightAtZ(0), heightAtZ(length)) : wallHeight;
+function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPos, baseY, zOffset, cladMat, isSloped, heightAtZ, isApexGable = false, apexCrestHeight = 0) {
+  // For apex gables, we need to build up to the crest height
+  const effectiveHeight = isApexGable ? apexCrestHeight : (isSloped && heightAtZ ? Math.max(heightAtZ(0), heightAtZ(length)) : wallHeight);
   // Build extra courses above roof line for ALL walls:
   // - Sloped walls: CSG will trim them to the slope
   // - Non-sloped walls: extra courses extend behind fascia (hidden)
-  const extraHeight = (isSloped && heightAtZ) ? 500 : 200;
+  // - Apex gables: CSG will trim to triangular peak
+  const extraHeight = (isSloped && heightAtZ) ? 500 : (isApexGable ? 200 : 200);
   const cladHeight = effectiveHeight + CLAD_BOTTOM_DROP_MM + extraHeight;
   const numCourses = Math.ceil(cladHeight / CLAD_H_MM);
 
   console.log("[attachments] buildCladdingAlongZ:", wallId, "length:", length, "wallHeight:", wallHeight,
               "xPos:", xPos, "baseY:", baseY, "zOffset:", zOffset, "effectiveHeight:", effectiveHeight,
-              "numCourses:", numCourses, "isSloped:", isSloped);
+              "numCourses:", numCourses, "isSloped:", isSloped, "isApexGable:", isApexGable, "apexCrestHeight:", apexCrestHeight);
 
   // Calculate roof line Y values (absolute Y)
   const roofYAtStart = (isSloped && heightAtZ) ? (heightAtZ(0) + baseY) : (wallHeight + baseY);
@@ -1411,6 +1494,95 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
 
     try { cutterCSG = BABYLON.CSG.FromMesh(wedge); } catch (e) { cutterCSG = null; }
     try { if (wedge && !wedge.isDisposed()) wedge.dispose(false, true); } catch (e) {}
+  } else if (isApexGable && apexCrestHeight > 0) {
+    // APEX GABLE: triangular cutter with peak at center of wall
+    // Creates two wedges meeting at the center, sloping down to both ends
+    const CUT_EXTRA = 120;
+    const x0r = xPos - CUT_EXTRA;
+    const x1r = xPos + CLAD_T_MM + CUT_EXTRA;
+
+    const z0 = zOffset;
+    const z1 = zOffset + length;
+    const zMid = zOffset + length / 2;
+
+    // Apex crest height is measured from floor, so peak Y = baseY + apexCrestHeight
+    // Wall top Y = baseY + wallHeight
+    // The gable starts at wall top and peaks at crest
+    const PENT_CLIP_DROP_MM = PLATE_HEIGHT_MM; // 50mm
+    const wallTopY = wallHeight + baseY - PENT_CLIP_DROP_MM;
+    const peakY = apexCrestHeight + baseY - PENT_CLIP_DROP_MM;
+    const yTop = peakY + 20000;
+
+    console.log('[ATT_APEX_GABLE_Z_DEBUG]', { z0, z1, zMid, wallTopY, peakY, yTop, x0r, x1r, wallHeight, apexCrestHeight });
+
+    // Create two wedges - left side (z0 to zMid) slopes up, right side (zMid to z1) slopes down
+    const wedges = [];
+
+    // Left wedge: from z0 (wallTopY) to zMid (peakY)
+    const posL = [
+      x0r, wallTopY, z0,
+      x1r, wallTopY, z0,
+      x1r, peakY, zMid,
+      x0r, peakY, zMid,
+      x0r, yTop, z0,
+      x1r, yTop, z0,
+      x1r, yTop, zMid,
+      x0r, yTop, zMid,
+    ].map((v) => v / 1000);
+
+    const indices = [
+      0, 2, 1, 0, 3, 2,
+      4, 5, 6, 4, 6, 7,
+      0, 5, 4, 0, 1, 5,
+      3, 6, 2, 3, 7, 6,
+      0, 7, 3, 0, 4, 7,
+      1, 6, 5, 1, 2, 6
+    ];
+
+    const normalsL = [];
+    BABYLON.VertexData.ComputeNormals(posL, indices, normalsL);
+    const vdL = new BABYLON.VertexData();
+    vdL.positions = posL;
+    vdL.indices = indices;
+    vdL.normals = normalsL;
+    const wedgeL = new BABYLON.Mesh(`att-${attId}-clad-${wallId}-cutter-L`, scene);
+    vdL.applyToMesh(wedgeL, true);
+    wedges.push(wedgeL);
+
+    // Right wedge: from zMid (peakY) to z1 (wallTopY)
+    const posR = [
+      x0r, peakY, zMid,
+      x1r, peakY, zMid,
+      x1r, wallTopY, z1,
+      x0r, wallTopY, z1,
+      x0r, yTop, zMid,
+      x1r, yTop, zMid,
+      x1r, yTop, z1,
+      x0r, yTop, z1,
+    ].map((v) => v / 1000);
+
+    const normalsR = [];
+    BABYLON.VertexData.ComputeNormals(posR, indices, normalsR);
+    const vdR = new BABYLON.VertexData();
+    vdR.positions = posR;
+    vdR.indices = indices;
+    vdR.normals = normalsR;
+    const wedgeR = new BABYLON.Mesh(`att-${attId}-clad-${wallId}-cutter-R`, scene);
+    vdR.applyToMesh(wedgeR, true);
+    wedges.push(wedgeR);
+
+    // Union the two wedges
+    try {
+      cutterCSG = BABYLON.CSG.FromMesh(wedges[0]);
+      cutterCSG = cutterCSG.union(BABYLON.CSG.FromMesh(wedges[1]));
+    } catch (e) {
+      console.error('[APEX_GABLE_Z] CSG error:', e);
+      cutterCSG = null;
+    }
+
+    for (const w of wedges) {
+      try { if (w && !w.isDisposed()) w.dispose(false, true); } catch (e) {}
+    }
   } else {
     // NON-SLOPED walls: use flat box cutter at constant height
     // Matching main building walls.js lines 1264-1305
