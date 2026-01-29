@@ -331,9 +331,16 @@ export function build3D(mainState, attachment, ctx) {
 }
 
 /**
- * Calculate the world position for an attachment
- * Attachment snaps to center of the specified wall with optional offset
- * Note: Main building meshes are shifted by -WALL_OVERHANG_MM (-25mm) in X and Z
+ * Calculates the world position for an attachment relative to the main building.
+ * Attachment snaps to center of the specified wall with optional offset.
+ * 
+ * Note: Main building meshes are shifted by -WALL_OVERHANG_MM (-25mm) in X and Z,
+ * so attachment positions must account for this.
+ * 
+ * @param {Object} mainState - Main building state with dimensions
+ * @param {Object} attachment - Attachment definition with attachTo and dimensions
+ * @returns {Object} Position {x, y, z} in world coordinates (mm)
+ * @private
  */
 function calculateAttachmentPosition(mainState, attachment) {
   const attachWall = attachment.attachTo?.wall || "left";
@@ -379,7 +386,16 @@ function calculateAttachmentPosition(mainState, attachment) {
 }
 
 /**
- * Build the base (foundation grid) for the attachment
+ * Builds the foundation grid (base) for an attachment.
+ * Creates dark grid support blocks at 500mm intervals.
+ * 
+ * @param {BABYLON.Scene} scene - Babylon.js scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment identifier
+ * @param {number} extentX - X extent in mm
+ * @param {number} extentZ - Z extent in mm
+ * @param {Object} materials - Material definitions
+ * @private
  */
 function buildAttachmentBase(scene, root, attId, extentX, extentZ, materials) {
   const gridSize = CONFIG.grid.size; // 500mm
@@ -1823,6 +1839,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   // Left/Right attachments: ridge along X (extentX), span along Z (extentZ)
   // Front/Back attachments: ridge along Z (extentZ), span along X (extentX)
 
+  // Get overhang values from attachment config (with defaults)
+  const apexOvh = attachment?.roof?.apex?.overhang || {};
+  const ovhEaves_mm = apexOvh.eaves_mm ?? 75;
+  const ovhVergeL_mm = apexOvh.vergeLeft_mm ?? 75;
+  const ovhVergeR_mm = apexOvh.vergeRight_mm ?? 75;
+  
+  console.log("[attachments] Apex overhangs - eaves:", ovhEaves_mm, "vergeL:", ovhVergeL_mm, "vergeR:", ovhVergeR_mm);
+
   // crestHeight_mm is the ABSOLUTE height of the peak from floor surface
   // roofBaseY is the eaves height (wall top) from floor surface
   // rise = peak height - eaves height
@@ -2008,15 +2032,28 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
     const ySurf_mm = MEMBER_D_MM + (rise_mm - drop_mm);
     
     // Purlin sits ON TOP of rafter - offset perpendicular to slope
-    // At the ridge (s_mm = 0), use minimal offset since rafters meet at peak
-    // Along slopes, use full perpendicular offset
     const isRidge = s_mm === 0;
-    const effectiveOffset = isRidge ? (MEMBER_D_MM / 2 + 5) : purlinPerpOffset;
     
-    // Perpendicular offset in Y = offset * cos(slope)
-    // Perpendicular offset in Z/X = offset * sin(slope) toward ridge
-    const yOffset = effectiveOffset * cosT;
-    const zOffset = isRidge ? 0 : effectiveOffset * sinT;  // No Z offset at ridge
+    let yOffset, zOffset, ySurfAdjusted;
+    if (isRidge) {
+      // Ridge purlins: position them slightly down the slope so they sit flat on rafters
+      // Calculate as if they're at position = half purlin width down the slope
+      const ridgeSlope_mm = MEMBER_W_MM / 2;  // Distance down slope for ridge purlin
+      const ridgeDrop = ridgeSlope_mm * sinT;  // Y drop for this distance
+      const ridgeRun = ridgeSlope_mm * cosT;   // Horizontal distance for this
+      
+      ySurfAdjusted = ySurf_mm - ridgeDrop;  // Lower Y to match slope position
+      
+      // Perpendicular offset to sit ON TOP of rafter
+      const perpOffset = (MEMBER_D_MM / 2) + 2;
+      yOffset = perpOffset * cosT;
+      zOffset = ridgeRun + perpOffset * sinT;  // Move away from ridge + perpendicular
+    } else {
+      // Normal slope purlins: offset perpendicular to surface
+      ySurfAdjusted = ySurf_mm;
+      yOffset = purlinPerpOffset * cosT;
+      zOffset = purlinPerpOffset * sinT;
+    }
 
     if (ridgeAlongX) {
       // Purlins along X, positioned at Z stations down the slope
@@ -2026,14 +2063,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       // Left purlin - offset toward ridge (+Z) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, ySurf_mm + yOffset, zL + zOffset,
+        ridge_mm / 2, ySurfAdjusted + yOffset, zL + zOffset,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
       // Right purlin - offset toward ridge (-Z) and up  
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         ridge_mm, MEMBER_D_MM, MEMBER_W_MM,
-        ridge_mm / 2, ySurf_mm + yOffset, zR - zOffset,
+        ridge_mm / 2, ySurfAdjusted + yOffset, zR - zOffset,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
 
@@ -2045,14 +2082,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       // Left purlin - offset toward ridge (+X) and up
       const purlinL = mkBoxCentered(`att-${attId}-purlin-L-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xL + zOffset, ySurf_mm + yOffset, ridge_mm / 2,
+        xL + zOffset, ySurfAdjusted + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'L' });
       purlinL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
       // Right purlin - offset toward ridge (-X) and up
       const purlinR = mkBoxCentered(`att-${attId}-purlin-R-${idx}`,
         MEMBER_W_MM, MEMBER_D_MM, ridge_mm,
-        xR - zOffset, ySurf_mm + yOffset, ridge_mm / 2,
+        xR - zOffset, ySurfAdjusted + yOffset, ridge_mm / 2,
         joistMat, { part: 'purlin', side: 'R' });
       purlinR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
     }
@@ -2122,38 +2159,38 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
   
   if (ridgeAlongX) {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverLCz = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    const coverLCz = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - ovhEaves_mm * cosT / 2;
     
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
-      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm, COVERING_MM, rafterLen_mm + ovhEaves_mm,
       ridge_mm / 2, coverLCy, coverLCz,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
 
     const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverRCz = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    const coverRCz = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + ovhEaves_mm * cosT / 2;
     
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
-      ridge_mm, COVERING_MM, rafterLen_mm + OVERHANG_MM,
+      ridge_mm, COVERING_MM, rafterLen_mm + ovhEaves_mm,
       ridge_mm / 2, coverRCy, coverRCz,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
     
   } else {
     const coverLCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverLCx = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - OVERHANG_MM * cosT / 2;
+    const coverLCx = halfSpan_mm / 2 - coverPerpOffset_mm * sinT - ovhEaves_mm * cosT / 2;
     
     const coverL = mkBoxCentered(`att-${attId}-covering-L`,
-      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      rafterLen_mm + ovhEaves_mm, COVERING_MM, ridge_mm,
       coverLCx, coverLCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'L' });
     coverL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
 
     const coverRCy = osbBaseY_mm + rise_mm / 2 + coverPerpOffset_mm * cosT;
-    const coverRCx = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + OVERHANG_MM * cosT / 2;
+    const coverRCx = halfSpan_mm + halfSpan_mm / 2 + coverPerpOffset_mm * sinT + ovhEaves_mm * cosT / 2;
     
     const coverR = mkBoxCentered(`att-${attId}-covering-R`,
-      rafterLen_mm + OVERHANG_MM, COVERING_MM, ridge_mm,
+      rafterLen_mm + ovhEaves_mm, COVERING_MM, ridge_mm,
       coverRCx, coverRCy, ridge_mm / 2,
       coveringMat, { part: 'covering', side: 'R' });
     coverR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
@@ -2277,7 +2314,10 @@ export function disposeAttachment(scene, attachmentId) {
 }
 
 /**
- * Dispose all attachment meshes
+ * Disposes all attachment meshes and root nodes from the scene.
+ * Used when clearing all attachments (e.g., before rebuild).
+ * 
+ * @param {BABYLON.Scene} scene - The Babylon.js scene
  */
 export function disposeAllAttachments(scene) {
   const meshes = scene.meshes.filter(m =>
