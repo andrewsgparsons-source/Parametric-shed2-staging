@@ -2248,12 +2248,16 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
 
   // Barge boards (sloped fascia running up to the ridge at gable ends)
   // These run from eaves to crest on both sides of each gable end
+  // Extend at bottom to cover eaves fascia end grain + 10mm overlap
   const osbOuterOffset_mm = MEMBER_D / 2 + ROOF_OSB_MM / 2 + 2 + ROOF_OSB_MM;
+  const BARGE_EXTENSION_MM = FASCIA_THK_MM + 10; // Extra length to cover fascia end grain
   
   function createBargeFascia(side) {
     // side: 'L' or 'R'
-    // Calculate mid-point along the slope for positioning
-    const sMid = rafterLen_mm / 2;
+    // Barge length = rafter length + extension at eaves end
+    const bargeLen_mm = rafterLen_mm + BARGE_EXTENSION_MM;
+    // Calculate mid-point along the slope for positioning (shifted down by half extension)
+    const sMid = rafterLen_mm / 2 + BARGE_EXTENSION_MM / 2;
     const runMid = sMid * cosT;  // horizontal from ridge
     const dropMid = sMid * sinT; // vertical drop from ridge
     
@@ -2282,14 +2286,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       
       // Front barge
       const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
-        FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
+        FASCIA_THK_MM, FASCIA_DEPTH_MM, bargeLen_mm,
         -FASCIA_THK_MM / 2, bargeCy, bargeCz,
         fasciaMat, { part: 'fascia', side: side, edge: 'barge-front' });
       bargeFront.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
       
       // Back barge
       const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
-        FASCIA_THK_MM, FASCIA_DEPTH_MM, rafterLen_mm,
+        FASCIA_THK_MM, FASCIA_DEPTH_MM, bargeLen_mm,
         ridge_mm + FASCIA_THK_MM / 2, bargeCy, bargeCz,
         fasciaMat, { part: 'fascia', side: side, edge: 'barge-back' });
       bargeBack.rotation = new BABYLON.Vector3((side === 'L') ? -slopeAng : slopeAng, 0, 0);
@@ -2300,14 +2304,14 @@ function buildApexRoof(scene, root, attId, extentX, extentZ, roofBaseY, attachWa
       
       // Front barge
       const bargeFront = mkBox(`att-${attId}-fascia-barge-${side}-front`,
-        rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+        bargeLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
         bargeCx, bargeCy, -FASCIA_THK_MM / 2,
         fasciaMat, { part: 'fascia', side: side, edge: 'barge-front' });
       bargeFront.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
       
       // Back barge
       const bargeBack = mkBox(`att-${attId}-fascia-barge-${side}-back`,
-        rafterLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
+        bargeLen_mm, FASCIA_DEPTH_MM, FASCIA_THK_MM,
         bargeCx, bargeCy, ridge_mm + FASCIA_THK_MM / 2,
         fasciaMat, { part: 'fascia', side: side, edge: 'barge-back' });
       bargeBack.rotation = new BABYLON.Vector3(0, 0, (side === 'L') ? slopeAng : -slopeAng);
