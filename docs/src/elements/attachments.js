@@ -68,6 +68,46 @@ const CLAD_Hb_MM = 20;      // Bottom strip height
 const CLAD_Rb_MM = 5;       // Rebate depth - upper strip is recessed by this amount
 
 /**
+ * Calculate the main building's apex diamond top height
+ * Used to cap attachment crest heights when ridges run parallel
+ * @param {object} mainState - The main building state  
+ * @returns {number} The top of the decorative diamond in mm from floor surface
+ */
+function getMainBuildingDiamondTop(mainState) {
+  const DIAMOND_SIZE_MM = 120;  // Same as in roof.js
+  
+  // Get crest and eaves heights
+  const crestHeight = Number(
+    mainState.roof?.apex?.heightToCrest_mm || 
+    mainState.roof?.apex?.crestHeight_mm || 
+    2200
+  );
+  const eavesHeight = Number(
+    mainState.roof?.apex?.heightToEaves_mm ||
+    mainState.roof?.apex?.eavesHeight_mm ||
+    1850
+  );
+  
+  // Get building width to calculate pitch
+  const buildingWidth = Number(mainState.base?.width_mm || 2400);
+  const halfSpan = buildingWidth / 2;
+  
+  // Calculate roof pitch
+  const rise = crestHeight - eavesHeight;
+  const pitchAngle = Math.atan2(rise, halfSpan);
+  const cosT = Math.cos(pitchAngle);
+  
+  // Diamond center Y (simplified from roof.js formula)
+  // ridgeY ≈ crestHeight for this purpose
+  const diamondCenterY = crestHeight - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 4;
+  
+  // Diamond top = center + half the diagonal (it's rotated 45°)
+  const diamondTop = diamondCenterY + DIAMOND_SIZE_MM / 2;
+  
+  return diamondTop;
+}
+
+/**
  * Calculate the main building's lowest fascia bottom height
  * This is used to cap attachment roof heights
  * @param {object} mainState - The main building state
@@ -229,13 +269,9 @@ export function build3D(mainState, attachment, ctx) {
     
     let defaultCrest;
     if (roofRidgesParallel) {
-      // Ridges run parallel - can go higher (5cm below primary apex)
-      const mainCrestHeight = Number(
-        mainState.roof?.apex?.heightToCrest_mm || 
-        mainState.roof?.apex?.crestHeight_mm || 
-        2200
-      );
-      defaultCrest = mainCrestHeight - 50;  // 5cm below primary apex
+      // Ridges run parallel - can go higher (5cm below primary's diamond top)
+      const mainDiamondTop = getMainBuildingDiamondTop(mainState);
+      defaultCrest = mainDiamondTop - 50;  // 5cm below diamond top
     } else {
       defaultCrest = mainFasciaBottom - 200;
     }
@@ -249,10 +285,10 @@ export function build3D(mainState, attachment, ctx) {
     let eavesHeight_mm = userEaves ?? defaultEaves;
     
     // Calculate max crest height based on roof configuration
-    // For parallel ridges (front/back on apex primary): 5cm below primary apex
-    // Otherwise: same as default (200mm below fascia bottom)
+    // For parallel ridges (front/back on apex primary): 5cm below primary's diamond top
+    // Otherwise: 200mm below fascia bottom
     const maxCrestHeight = roofRidgesParallel
-      ? Number(mainState.roof?.apex?.heightToCrest_mm || mainState.roof?.apex?.crestHeight_mm || 2200) - 50
+      ? getMainBuildingDiamondTop(mainState) - 50
       : mainFasciaBottom - 200;
     
     console.log("[attachments] Apex UI values - userEaves:", userEaves, "userCrest:", userCrest,
