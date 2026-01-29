@@ -93,7 +93,7 @@ export function getBuiltInPresets() {
               "enabled": true,
               "x_mm": 500,
               "width_mm": 800,
-              "height_mm": 1900
+              "height_mm": 1850
             },
             {
               "id": "win1",
