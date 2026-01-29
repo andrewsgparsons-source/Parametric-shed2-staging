@@ -4818,12 +4818,45 @@ function parseOverhangInput(val) {
     // Add attachment button handler
     if (addAttachmentBtnEl) {
       addAttachmentBtnEl.addEventListener("click", function() {
-        var attWall = attachmentWallEl ? attachmentWallEl.value : "left";
+        var currentAtts = getAttachmentsFromState(store.getState());
+        
+        // Wall priority order: right, back, front, left
+        var wallPriority = ["right", "back", "front", "left"];
+        
+        // Find walls that already have attachments
+        var usedWalls = {};
+        for (var i = 0; i < currentAtts.length; i++) {
+          var wall = currentAtts[i].attachTo && currentAtts[i].attachTo.wall;
+          if (wall) usedWalls[wall] = true;
+        }
+        
+        // Find next available wall
+        var nextWall = null;
+        for (var j = 0; j < wallPriority.length; j++) {
+          if (!usedWalls[wallPriority[j]]) {
+            nextWall = wallPriority[j];
+            break;
+          }
+        }
+        
+        // If all walls have attachments, show alert and return
+        if (!nextWall) {
+          alert("All walls already have attachments. Remove an attachment first.");
+          return;
+        }
+        
+        // Use the selected wall from dropdown, but if it's already taken, use next available
+        var selectedWall = attachmentWallEl ? attachmentWallEl.value : "right";
+        var attWall = usedWalls[selectedWall] ? nextWall : selectedWall;
+        
+        // Update dropdown to show next available wall for future additions
+        if (attachmentWallEl) {
+          attachmentWallEl.value = nextWall;
+        }
 
         // Use the new createAttachment function from params.js
         var newAttachment = createAttachment(attWall);
 
-        var currentAtts = getAttachmentsFromState(store.getState());
         currentAtts.push(newAttachment);
         setAttachments(currentAtts);
       });
@@ -4834,6 +4867,46 @@ function parseOverhangInput(val) {
       removeAllAttachmentsBtnEl.addEventListener("click", function() {
         setAttachments([]);
       });
+    }
+
+    // Update attachment wall dropdown to show next available wall
+    function updateAttachmentWallDropdown() {
+      if (!attachmentWallEl) return;
+      
+      var currentAtts = getAttachmentsFromState(store.getState());
+      var wallPriority = ["right", "back", "front", "left"];
+      
+      // Find walls that already have attachments
+      var usedWalls = {};
+      for (var i = 0; i < currentAtts.length; i++) {
+        var wall = currentAtts[i].attachTo && currentAtts[i].attachTo.wall;
+        if (wall) usedWalls[wall] = true;
+      }
+      
+      // Update dropdown options to show availability
+      var options = attachmentWallEl.options;
+      for (var j = 0; j < options.length; j++) {
+        var opt = options[j];
+        var wallName = opt.value;
+        var isUsed = usedWalls[wallName];
+        opt.disabled = isUsed;
+        opt.text = wallName.charAt(0).toUpperCase() + wallName.slice(1) + (isUsed ? " (used)" : "");
+      }
+      
+      // Select next available wall
+      for (var k = 0; k < wallPriority.length; k++) {
+        if (!usedWalls[wallPriority[k]]) {
+          attachmentWallEl.value = wallPriority[k];
+          break;
+        }
+      }
+      
+      // Disable add button if all walls are used
+      if (addAttachmentBtnEl) {
+        var allUsed = wallPriority.every(function(w) { return usedWalls[w]; });
+        addAttachmentBtnEl.disabled = allUsed;
+        addAttachmentBtnEl.textContent = allUsed ? "All walls used" : "+ Add Attachment";
+      }
     }
 
     // Track if we need to re-render after blur
@@ -4847,11 +4920,15 @@ function parseOverhangInput(val) {
         (activeEl.tagName === "INPUT" || activeEl.tagName === "SELECT");
       if (!isEditingAttachment) {
         renderAttachmentsList();
+        updateAttachmentWallDropdown();
         pendingAttachmentRender = false;
       } else {
         pendingAttachmentRender = true;
       }
     });
+    
+    // Initial update of dropdown
+    updateAttachmentWallDropdown();
 
     // Re-render when user finishes editing (on blur from attachment inputs)
     if (attachmentsListEl) {
