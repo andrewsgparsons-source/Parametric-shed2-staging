@@ -3602,7 +3602,7 @@ function commitPentHeightsFromInputs() {
       
       // Pent height constraints: 1000-2400mm for both walls
       var PENT_MIN = 1000;
-      var PENT_MAX = 2400;
+      var PENT_MAX = 2800;
       
       var minVal = parseFloat(roofMinHeightEl.value) || 0;
       var maxVal = parseFloat(roofMaxHeightEl.value) || 0;
