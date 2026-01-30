@@ -2949,7 +2949,15 @@ function parseOpeningDim(val, defaultMm) {
             patchOpeningById(id, { x_mm: parseOpeningDim(xField.inp.value, Math.floor(Number(door.x_mm ?? 0))) });
           });
           wireCommitOnly(wField.inp, function () {
-            patchOpeningById(id, { width_mm: parseOpeningDim(wField.inp.value, Math.floor(Number(door.width_mm ?? 900))) });
+            var oldWidth = Math.floor(Number(door.width_mm ?? 900));
+            var newWidth = parseOpeningDim(wField.inp.value, oldWidth);
+            var deltaWidth = newWidth - oldWidth;
+            // Expand from centre: shift x left by half the width increase
+            var oldX = Math.floor(Number(door.x_mm ?? 0));
+            var newX = oldX - Math.floor(deltaWidth / 2);
+            // Clamp x to minimum edge gap
+            if (newX < 100) newX = 100;
+            patchOpeningById(id, { width_mm: newWidth, x_mm: newX });
           });
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(door.height_mm ?? 2000))) });
@@ -3140,7 +3148,14 @@ function parseOpeningDim(val, defaultMm) {
             patchOpeningById(id, { y_mm: parseOpeningDim(yField.inp.value, Math.floor(Number(win.y_mm ?? 0))) });
           });
           wireCommitOnly(wField.inp, function () {
-            patchOpeningById(id, { width_mm: parseOpeningDim(wField.inp.value, Math.floor(Number(win.width_mm ?? 900))) });
+            var oldWidth = Math.floor(Number(win.width_mm ?? 900));
+            var newWidth = parseOpeningDim(wField.inp.value, oldWidth);
+            var deltaWidth = newWidth - oldWidth;
+            // Expand from centre: shift x left by half the width increase
+            var oldX = Math.floor(Number(win.x_mm ?? 0));
+            var newX = oldX - Math.floor(deltaWidth / 2);
+            if (newX < 100) newX = 100;
+            patchOpeningById(id, { width_mm: newWidth, x_mm: newX });
           });
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(win.height_mm ?? 600))) });
