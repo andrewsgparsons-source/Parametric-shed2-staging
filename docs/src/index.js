@@ -2149,15 +2149,19 @@ if (getWallsEnabled(state)) {
             if (y < MIN_EDGE_GAP) y = MIN_EDGE_GAP;
           }
           
-          // Clamp width to wall length
-          if (w > wallLen - 2 * MIN_EDGE_GAP) {
-            w = wallLen - 2 * MIN_EDGE_GAP;
+          // Clamp x position first (left edge)
+          if (x < MIN_EDGE_GAP) x = MIN_EDGE_GAP;
+          
+          // Clamp width to available space at current x position
+          // This keeps the left edge fixed and prevents the door from sliding
+          var maxWidthAtX = wallLen - MIN_EDGE_GAP - x;
+          if (w > maxWidthAtX) {
+            w = maxWidthAtX;
           }
           
-          // Clamp x position
-          if (x < MIN_EDGE_GAP) x = MIN_EDGE_GAP;
-          if (x + w > wallLen - MIN_EDGE_GAP) {
-            x = wallLen - MIN_EDGE_GAP - w;
+          // Also apply absolute max width (for very narrow walls)
+          if (w > wallLen - 2 * MIN_EDGE_GAP) {
+            w = wallLen - 2 * MIN_EDGE_GAP;
           }
           
           // Update the opening
