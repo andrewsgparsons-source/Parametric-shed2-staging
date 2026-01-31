@@ -2417,73 +2417,170 @@ if (roofParts.osb) {
     
     console.log('[ROOF_INS] Created insulation for', trussPos.length - 1, 'bays');
     
-    // ---- GABLE END INSULATION TRIANGLES ----
-    // Small triangular wedges at front and back gable ends, either side of king post
-    // These fill the void above the horizontal insulation, between the sloped panels and the king post
-    // They taper to a point at the bottom where the rafter slope meets the horizontal insulation level
+    // ---- GABLE END INSULATION (TRAPEZOIDAL) ----
+    // Fills the gable WALL area: from wall top plate (Y=0) up to the raised tie beam underside
+    // Shape is trapezoidal because the left/right edges follow the rafter slope
+    // These sit INSIDE the truss cavity, behind the gable truss face
     
-    const gableInsDepth_mm = INS_THICKNESS_MM; // Depth into building (Z dimension)
+    const gableInsDepth_mm = INS_THICKNESS_MM; // 50mm depth into building (Z dimension)
     
-    // Calculate key positions
-    const horizInsTopY_mm = raisedTieY_mm + memberD_mm; // Top surface of horizontal insulation
+    // Key positions:
+    // - Y=0 is wall top plate level (eaves)
+    // - Y=raisedTieY_mm is raised tie beam underside (top of gable wall area)
+    // - Rafter inner face position varies with height (follows slope)
     
-    // The point where the rafter slope meets the horizontal insulation level
-    // At this X position, the rafter Y would equal horizInsTopY_mm
-    // Rafter equation (left side): Y = memberD_mm + (X / halfSpan_mm) * rise_mm
-    // (Rafter goes UP from eaves at X=0 to apex at X=halfSpan_mm)
-    // Solve for X when Y = horizInsTopY_mm:
-    // horizInsTopY_mm = memberD_mm + (X / halfSpan_mm) * rise_mm
-    // raisedTieY_mm + memberD_mm = memberD_mm + (X / halfSpan_mm) * rise_mm
-    // raisedTieY_mm = (X / halfSpan_mm) * rise_mm
-    // X = halfSpan_mm * raisedTieY_mm / rise_mm
-    const pointX_mm = halfSpan_mm * raisedTieY_mm / rise_mm;
+    // Rafter slope: at height Y, the rafter BOTTOM is at X position where:
+    //   Y = memberD_mm + (X / halfSpan_mm) * rise_mm
+    // Solving for X: X = (Y - memberD_mm) * halfSpan_mm / rise_mm
+    // But below Y=memberD_mm (where rafter sits on wall plate), use X=0
     
-    // Top of triangle is where rafter meets king post
-    // King post left edge at: halfSpan_mm - memberW_mm/2
-    // Rafter Y at king post edge: memberD_mm + (kingPostLeftX_mm / halfSpan_mm) * rise_mm
+    // For the gable insulation, we care about the rafter INNER face
+    // Left rafter inner face (right side of rafter) is offset by memberW_mm from the roof edge
+    
+    const topY_mm = raisedTieY_mm - INS_GAP_MM; // Top of insulation (just below tie beam)
+    const bottomY_mm = 0; // Bottom at wall plate level
+    
+    // King post edges
     const kingPostLeftX_mm = halfSpan_mm - memberW_mm / 2;
-    const rafterYatKingPost_mm = memberD_mm + (kingPostLeftX_mm / halfSpan_mm) * rise_mm;
+    const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
     
-    // Build triangular prisms for each gable end
-    function buildGableInsTriangle(gableEnd, side) {
+    // Calculate X position of rafter inner face at a given Y
+    // Left rafter: inner face is at X = memberW_mm + max(0, (Y - memberD_mm)) * halfSpan_mm / rise_mm
+    // (Starts at memberW_mm at Y=0, then follows slope once above memberD_mm)
+    function leftRafterInnerX(y_mm) {
+      if (y_mm <= memberD_mm) {
+        // Below rafter bottom - use the rafter width as boundary
+        return memberW_mm;
+      }
+      // Above rafter bottom - follows the slope
+      // Rafter bottom X at height Y: (Y - memberD_mm) * halfSpan_mm / rise_mm
+      // Inner face is offset by memberW_mm from left edge
+      return memberW_mm + (y_mm - memberD_mm) * halfSpan_mm / rise_mm;
+    }
+    
+    // Right rafter: inner face mirrors the left
+    function rightRafterInnerX(y_mm) {
+      return A_mm - leftRafterInnerX(y_mm);
+    }
+    
+    // Build trapezoidal gable insulation for one side of king post
+    function buildGableInsTrapezoid(gableEnd, side, gableDoor) {
       // gableEnd: "front" or "back"
       // side: "L" (left of king post) or "R" (right of king post)
+      // gableDoor: door info if a door extends into this gable, or null
       
-      // Z position: at the gable truss, just inside the truss face
+      // Z position: set back into the truss cavity
       let z_mm;
       if (gableEnd === "front") {
-        z_mm = trussPos[0] + memberW_mm + INS_GAP_MM; // Just behind front truss
+        z_mm = trussPos[0] + memberW_mm + INS_GAP_MM; // Just behind front truss face
       } else {
         z_mm = trussPos[trussPos.length - 1] - gableInsDepth_mm - INS_GAP_MM; // Just in front of back truss
       }
       
-      // Triangle shape (2D cross-section in XY plane)
-      // For LEFT side of king post:
-      //   Bottom-left point (the taper point): (pointX_mm, horizInsTopY_mm)
-      //   Bottom-right: (kingPostLeftX_mm, horizInsTopY_mm)
-      //   Top: (kingPostLeftX_mm, rafterYatKingPost_mm - INS_GAP_MM)
+      // Build the 2D trapezoid shape (XY cross-section)
+      let shape = [];
       
-      let shape;
       if (side === "L") {
-        const p1 = new BABYLON.Vector3(pointX_mm / 1000, horizInsTopY_mm / 1000, 0);
-        const p2 = new BABYLON.Vector3(kingPostLeftX_mm / 1000, horizInsTopY_mm / 1000, 0);
-        const p3 = new BABYLON.Vector3(kingPostLeftX_mm / 1000, (rafterYatKingPost_mm - INS_GAP_MM) / 1000, 0);
-        shape = [p1, p2, p3, p1]; // Closed path
-      } else {
-        // RIGHT side (mirror)
-        const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
-        const pointX_R_mm = A_mm - pointX_mm; // Mirrored point X
-        // Right rafter equation: Y = memberD_mm + ((A_mm - X) / halfSpan_mm) * rise_mm
-        // (measured from right edge, going up toward apex)
-        const rafterYatKingPostR_mm = memberD_mm + ((A_mm - kingPostRightX_mm) / halfSpan_mm) * rise_mm;
+        // LEFT trapezoid: from left rafter inner face to king post left edge
+        const bottomLeftX = leftRafterInnerX(bottomY_mm);
+        const topLeftX = leftRafterInnerX(topY_mm);
+        const bottomRightX = kingPostLeftX_mm;
+        const topRightX = kingPostLeftX_mm;
         
-        const p1 = new BABYLON.Vector3(kingPostRightX_mm / 1000, horizInsTopY_mm / 1000, 0);
-        const p2 = new BABYLON.Vector3(pointX_R_mm / 1000, horizInsTopY_mm / 1000, 0);
-        const p3 = new BABYLON.Vector3(kingPostRightX_mm / 1000, (rafterYatKingPostR_mm - INS_GAP_MM) / 1000, 0);
-        shape = [p1, p2, p3, p1]; // Closed path
+        // Check if there's a door cutout needed
+        if (gableDoor) {
+          // Door coordinates in roof-local space
+          const doorLeftEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) - (gableDoor.studW || 50);
+          const doorRightEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) + Math.floor(Number(gableDoor.width_mm || 800)) + (gableDoor.studW || 50);
+          const doorTopY = Math.floor(Number(gableDoor.doorTopY || 0)) - (Number(apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850);
+          
+          // Only cut if door overlaps this trapezoid
+          if (doorLeftEdge < bottomRightX && doorRightEdge > bottomLeftX && doorTopY > bottomY_mm) {
+            // Door overlaps - create shape with notch
+            // Start from bottom-left, go clockwise
+            const cutLeft = Math.max(doorLeftEdge, bottomLeftX);
+            const cutRight = Math.min(doorRightEdge, bottomRightX);
+            const cutTop = Math.min(doorTopY, topY_mm);
+            
+            // Trapezoid with rectangular notch cut from bottom
+            shape = [
+              new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),           // BL corner
+              new BABYLON.Vector3(cutLeft / 1000, bottomY_mm / 1000, 0),               // Before door
+              new BABYLON.Vector3(cutLeft / 1000, cutTop / 1000, 0),                   // Up to door top
+              new BABYLON.Vector3(cutRight / 1000, cutTop / 1000, 0),                  // Across door top
+              new BABYLON.Vector3(cutRight / 1000, bottomY_mm / 1000, 0),              // Down after door
+              new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),          // BR corner
+              new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),                // TR corner
+              new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),                 // TL corner
+            ];
+          } else {
+            // No overlap - simple trapezoid
+            shape = [
+              new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),
+              new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),
+            ];
+          }
+        } else {
+          // No door - simple trapezoid
+          shape = [
+            new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),
+            new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),
+          ];
+        }
+      } else {
+        // RIGHT trapezoid: from king post right edge to right rafter inner face
+        const bottomLeftX = kingPostRightX_mm;
+        const topLeftX = kingPostRightX_mm;
+        const bottomRightX = rightRafterInnerX(bottomY_mm);
+        const topRightX = rightRafterInnerX(topY_mm);
+        
+        // Check if there's a door cutout needed
+        if (gableDoor) {
+          const doorLeftEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) - (gableDoor.studW || 50);
+          const doorRightEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) + Math.floor(Number(gableDoor.width_mm || 800)) + (gableDoor.studW || 50);
+          const doorTopY = Math.floor(Number(gableDoor.doorTopY || 0)) - (Number(apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850);
+          
+          if (doorLeftEdge < bottomRightX && doorRightEdge > bottomLeftX && doorTopY > bottomY_mm) {
+            const cutLeft = Math.max(doorLeftEdge, bottomLeftX);
+            const cutRight = Math.min(doorRightEdge, bottomRightX);
+            const cutTop = Math.min(doorTopY, topY_mm);
+            
+            shape = [
+              new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(cutLeft / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(cutLeft / 1000, cutTop / 1000, 0),
+              new BABYLON.Vector3(cutRight / 1000, cutTop / 1000, 0),
+              new BABYLON.Vector3(cutRight / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),
+              new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),
+            ];
+          } else {
+            shape = [
+              new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),
+              new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),
+              new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),
+            ];
+          }
+        } else {
+          shape = [
+            new BABYLON.Vector3(bottomLeftX / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(bottomRightX / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(topRightX / 1000, topY_mm / 1000, 0),
+            new BABYLON.Vector3(topLeftX / 1000, topY_mm / 1000, 0),
+          ];
+        }
       }
       
-      // Extrude the triangle along Z
+      // Close the shape
+      shape.push(shape[0].clone());
+      
+      // Extrude along Z
       const path = [
         new BABYLON.Vector3(0, 0, z_mm / 1000),
         new BABYLON.Vector3(0, 0, (z_mm + gableInsDepth_mm) / 1000)
@@ -2513,17 +2610,17 @@ if (roofParts.osb) {
       return gableIns;
     }
     
-    // Create gable insulation triangles (only if there's space - king post exists)
-    if (rise_mm > raisedTieY_mm + INS_GAP_MM * 2) {
+    // Create gable insulation trapezoids (only if there's a raised tie beam area to fill)
+    if (raisedTieY_mm > INS_GAP_MM * 2) {
       // Front gable
-      buildGableInsTriangle("front", "L");
-      buildGableInsTriangle("front", "R");
+      buildGableInsTrapezoid("front", "L", frontGableDoor);
+      buildGableInsTrapezoid("front", "R", frontGableDoor);
       
       // Back gable
-      buildGableInsTriangle("back", "L");
-      buildGableInsTriangle("back", "R");
+      buildGableInsTrapezoid("back", "L", backGableDoor);
+      buildGableInsTrapezoid("back", "R", backGableDoor);
       
-      console.log('[ROOF_INS] Created gable end insulation triangles');
+      console.log('[ROOF_INS] Created gable end insulation trapezoids');
     }
   }
 
