@@ -2289,9 +2289,8 @@ if (roofParts.osb) {
     const sinT = Math.sin(slopeAng);
     const cosT = Math.cos(slopeAng);
     
-    // Insulation sits INSIDE the rafters (on inner face, toward interior)
-    // Offset from rafter surface by small gap
-    const INS_INSET_MM = 2;
+    // Small gap between panels and structure
+    const INS_GAP_MM = 2;
     
     // For each bay between trusses
     for (let bayIdx = 0; bayIdx < trussPos.length - 1; bayIdx++) {
@@ -2306,38 +2305,38 @@ if (roofParts.osb) {
       console.log('[ROOF_INS] Bay', bayIdx, '- z:', z0_mm, 'to', z1_mm, 'depth:', bayDepth_mm);
       
       // --- SLOPED PANELS (left and right) ---
-      // These follow the rafter angle from EAVES (wall plate) UP to TIE BEAM intersection
+      // Insulation sits IN the rafter cavity with TOP surface flush with rafter top (purlin bottom)
       // 
-      // Geometry for LEFT slope:
-      //   - Eaves point: X=0, Y=memberD_mm (bottom of slope)
-      //   - Tie beam point: X = halfSpan_mm - raisedTieHalfSpan_mm, Y = raisedTieY_mm + memberD_mm
-      //   - Midpoint: halfway between these
+      // The sloped panels extend from eaves UP to where they meet the horizontal panel.
+      // The horizontal panel sits at tie beam level.
+      // 
+      // KEY: Sloped panel TOP must be at rafter surface level (where purlins sit)
+      //      So panel CENTER is offset INWARD by INS_THICKNESS_MM/2 from rafter surface
       
-      // Slope run (horizontal) from eaves to tie beam intersection
+      // Slope from eaves to tie beam level
       const slopeRunX_mm = halfSpan_mm - raisedTieHalfSpan_mm;
-      // Slope rise (vertical) 
       const slopeRiseY_mm = raisedTieY_mm;
-      // Length along slope
       const slopedLen_mm = Math.sqrt(slopeRunX_mm * slopeRunX_mm + slopeRiseY_mm * slopeRiseY_mm);
       
       // Panel dimensions
-      const slopedPanelLen_mm = slopedLen_mm - INS_INSET_MM * 2;
-      const slopedPanelDepth_mm = bayDepth_mm - INS_INSET_MM * 2;
+      const slopedPanelLen_mm = slopedLen_mm - INS_GAP_MM;
+      const slopedPanelDepth_mm = bayDepth_mm - INS_GAP_MM * 2;
       
-      // Midpoint along the slope (in XY coordinates before rotation)
+      // Midpoint along the rafter surface (before any offset)
       // LEFT slope: from (0, memberD_mm) to (slopeRunX_mm, slopeRiseY_mm + memberD_mm)
       const midX_L_mm = slopeRunX_mm / 2;
       const midY_mm = memberD_mm + slopeRiseY_mm / 2;
       
-      // Offset inward from the rafter surface (toward interior)
-      // Normal to left slope points toward +X (interior)
-      const insetX_mm = sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
-      const insetY_mm = cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
+      // Offset CENTER inward from rafter surface so TOP is flush with rafter top
+      // Normal to left slope (outward): (+sinT, +cosT) after rotation
+      // So inward offset (for CENTER) is: (-sinT, -cosT) * INS_THICKNESS_MM/2
+      const offsetX_mm = sinT * (INS_THICKNESS_MM / 2);
+      const offsetY_mm = cosT * (INS_THICKNESS_MM / 2);
       
-      // LEFT sloped panel
+      // LEFT sloped panel - offset INWARD (toward interior, into cavity)
       {
-        const cx_mm = midX_L_mm + insetX_mm;
-        const cy_mm = midY_mm + insetY_mm;
+        const cx_mm = midX_L_mm + offsetX_mm;  // +X is toward interior for left slope
+        const cy_mm = midY_mm - offsetY_mm;   // -Y is toward interior (down into cavity)
         
         const insLeft = mkBoxCenteredLocal(
           `${meshPrefix}roof-ins-bay${bayIdx}-L`,
@@ -2360,11 +2359,10 @@ if (roofParts.osb) {
       }
       
       // RIGHT sloped panel (mirror of left)
-      // From (A_mm, memberD_mm) to (halfSpan_mm + raisedTieHalfSpan_mm, slopeRiseY_mm + memberD_mm)
       {
         const midX_R_mm = A_mm - slopeRunX_mm / 2;
-        const cx_mm = midX_R_mm - insetX_mm; // Offset toward interior (-X direction)
-        const cy_mm = midY_mm + insetY_mm;
+        const cx_mm = midX_R_mm - offsetX_mm;  // -X is toward interior for right slope
+        const cy_mm = midY_mm - offsetY_mm;    // -Y is toward interior
         
         const insRight = mkBoxCenteredLocal(
           `${meshPrefix}roof-ins-bay${bayIdx}-R`,
@@ -2387,14 +2385,15 @@ if (roofParts.osb) {
       }
       
       // --- HORIZONTAL PANEL (between tie beams) ---
-      // Flat panel at tie beam height, spanning the width between tie beam ends
+      // Sits at tie beam level with TOP flush with tie beam top surface
+      // This creates a flat ceiling between the raised tie beams
       {
-        const horizWidth_mm = raisedTieSpan_mm - INS_INSET_MM * 2; // Width between tie beams
-        const horizDepth_mm = slopedPanelDepth_mm; // Same depth as sloped panels
+        const horizWidth_mm = raisedTieSpan_mm - INS_GAP_MM * 2;
+        const horizDepth_mm = slopedPanelDepth_mm;
         
-        // Position: centered on ridge line, at tie beam top
+        // Position: centered on ridge, TOP at tie beam top level
         const cx_mm = halfSpan_mm;
-        const cy_mm = raisedTieY_mm + memberD_mm + INS_THICKNESS_MM / 2 + INS_INSET_MM;
+        const cy_mm = raisedTieY_mm + memberD_mm - INS_THICKNESS_MM / 2; // TOP at tie beam top
         
         const insHoriz = mkBoxCenteredLocal(
           `${meshPrefix}roof-ins-bay${bayIdx}-H`,
