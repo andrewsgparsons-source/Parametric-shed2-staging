@@ -2469,12 +2469,14 @@ if (roofParts.osb) {
       // side: "L" (left of king post) or "R" (right of king post)
       // gableDoor: door info if a door extends into this gable, or null
       
-      // Z position: set back into the truss cavity
+      // Z position: flush with inside surface of gable frame
       let z_mm;
       if (gableEnd === "front") {
-        z_mm = trussPos[0] + memberW_mm + INS_GAP_MM; // Just behind front truss face
+        // Back face of insulation flush with inner face of front gable frame
+        z_mm = trussPos[0] + memberW_mm - gableInsDepth_mm;
       } else {
-        z_mm = trussPos[trussPos.length - 1] - gableInsDepth_mm - INS_GAP_MM; // Just in front of back truss
+        // Front face of insulation flush with inner face of back gable frame
+        z_mm = trussPos[trussPos.length - 1] - memberW_mm;
       }
       
       // Build the 2D trapezoid shape (XY cross-section)
