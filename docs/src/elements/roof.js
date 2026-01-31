@@ -2475,8 +2475,8 @@ if (roofParts.osb) {
         // Back face of insulation flush with inner face of front gable frame
         z_mm = trussPos[0] + memberW_mm - gableInsDepth_mm;
       } else {
-        // Front face of insulation flush with inner face of back gable frame
-        z_mm = trussPos[trussPos.length - 1] - memberW_mm;
+        // Back face of insulation flush with inner face of back gable frame
+        z_mm = trussPos[trussPos.length - 1] - gableInsDepth_mm;
       }
       
       // Build the 2D trapezoid shape (XY cross-section)
