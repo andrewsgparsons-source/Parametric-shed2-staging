@@ -2427,22 +2427,22 @@ if (roofParts.osb) {
     // Calculate key positions
     const horizInsTopY_mm = raisedTieY_mm + memberD_mm; // Top surface of horizontal insulation
     
-    // The point where the rafter slope (extended down) meets the horizontal insulation level
+    // The point where the rafter slope meets the horizontal insulation level
     // At this X position, the rafter Y would equal horizInsTopY_mm
-    // Rafter equation (left side): Y = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
+    // Rafter equation (left side): Y = memberD_mm + (X / halfSpan_mm) * rise_mm
+    // (Rafter goes UP from eaves at X=0 to apex at X=halfSpan_mm)
     // Solve for X when Y = horizInsTopY_mm:
-    // horizInsTopY_mm = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
-    // raisedTieY_mm + memberD_mm = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
-    // raisedTieY_mm = rise_mm - (X / halfSpan_mm) * rise_mm
-    // X / halfSpan_mm = (rise_mm - raisedTieY_mm) / rise_mm
-    // X = halfSpan_mm * (rise_mm - raisedTieY_mm) / rise_mm
-    const pointX_mm = halfSpan_mm * (rise_mm - raisedTieY_mm) / rise_mm;
+    // horizInsTopY_mm = memberD_mm + (X / halfSpan_mm) * rise_mm
+    // raisedTieY_mm + memberD_mm = memberD_mm + (X / halfSpan_mm) * rise_mm
+    // raisedTieY_mm = (X / halfSpan_mm) * rise_mm
+    // X = halfSpan_mm * raisedTieY_mm / rise_mm
+    const pointX_mm = halfSpan_mm * raisedTieY_mm / rise_mm;
     
     // Top of triangle is where rafter meets king post
     // King post left edge at: halfSpan_mm - memberW_mm/2
-    // Rafter Y at king post edge: memberD_mm + rise_mm - ((halfSpan_mm - memberW_mm/2) / halfSpan_mm) * rise_mm
+    // Rafter Y at king post edge: memberD_mm + (kingPostLeftX_mm / halfSpan_mm) * rise_mm
     const kingPostLeftX_mm = halfSpan_mm - memberW_mm / 2;
-    const rafterYatKingPost_mm = memberD_mm + rise_mm - (kingPostLeftX_mm / halfSpan_mm) * rise_mm;
+    const rafterYatKingPost_mm = memberD_mm + (kingPostLeftX_mm / halfSpan_mm) * rise_mm;
     
     // Build triangular prisms for each gable end
     function buildGableInsTriangle(gableEnd, side) {
@@ -2473,7 +2473,9 @@ if (roofParts.osb) {
         // RIGHT side (mirror)
         const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
         const pointX_R_mm = A_mm - pointX_mm; // Mirrored point X
-        const rafterYatKingPostR_mm = memberD_mm + rise_mm - ((A_mm - kingPostRightX_mm) / halfSpan_mm) * rise_mm;
+        // Right rafter equation: Y = memberD_mm + ((A_mm - X) / halfSpan_mm) * rise_mm
+        // (measured from right edge, going up toward apex)
+        const rafterYatKingPostR_mm = memberD_mm + ((A_mm - kingPostRightX_mm) / halfSpan_mm) * rise_mm;
         
         const p1 = new BABYLON.Vector3(kingPostRightX_mm / 1000, horizInsTopY_mm / 1000, 0);
         const p2 = new BABYLON.Vector3(pointX_R_mm / 1000, horizInsTopY_mm / 1000, 0);
