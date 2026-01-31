@@ -3080,6 +3080,44 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     
     // Only build insulation if showInsulation flag is true
     if (showInsulation) {
+      // NEW APPROACH: 
+      // 1. First, create BELOW/ABOVE panels for each opening (spanning across bays)
+      // 2. Then, fill remaining space in each bay with full-height panels
+      
+      const sillThickness = prof.studH || 100;
+      const headerThickness = prof.studH || 100;
+      
+      // Track which horizontal ranges are covered by openings (at different heights)
+      // We'll use this to avoid creating full-height panels that overlap openings
+      
+      // Step 1: Create BELOW and ABOVE panels for each opening (continuous, ignoring bay boundaries)
+      for (let oi = 0; oi < wallOpenings.length; oi++) {
+        const o = wallOpenings[oi];
+        const openingBottomY = plateY + Math.max(0, o.y0 || 0);
+        const openingTopY = plateY + Math.max(0, o.y1 || insHeight);
+        
+        // BELOW panel - spans full opening width (ignoring studs)
+        const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
+        if (insBelowTop > plateY + 50 && o.x1 > o.x0 + 30) {
+          if (createInsPanel(prefix + 'below-' + oi, o.x0, o.x1, plateY, insBelowTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added BELOW panel for opening ${oi}, x=${o.x0}-${o.x1}, height=${insBelowTop - plateY}mm`);
+          }
+        }
+        
+        // ABOVE panel - spans full opening width (ignoring studs)
+        const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
+        const insAboveTop = plateY + insHeight;
+        if (insAboveTop > insAboveBottom + 50 && o.x1 > o.x0 + 30) {
+          if (createInsPanel(prefix + 'above-' + oi, o.x0, o.x1, insAboveBottom, insAboveTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added ABOVE panel for opening ${oi}, x=${o.x0}-${o.x1}, height=${insAboveTop - insAboveBottom}mm`);
+          }
+        }
+      }
+      
+      // Step 2: For each bay, fill remaining horizontal space with full-height panels
+      // We need to find gaps between openings and wall edges
       for (let i = 0; i < studPositions.length - 1; i++) {
         const studStart = studPositions[i] + studW; // After this stud
         const studEnd = studPositions[i + 1]; // Before next stud
@@ -3087,60 +3125,44 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         
         if (bayWidth < 10) continue;
         
-        const overlapping = getOverlappingOpening(studStart, studEnd);
+        // Find ALL openings that overlap this bay horizontally
+        const bayOpenings = wallOpenings.filter(o => studStart < o.x1 && studEnd > o.x0);
         
-        if (!overlapping) {
-          // No opening - fill entire bay with insulation
+        if (bayOpenings.length === 0) {
+          // No openings - fill entire bay with insulation
           if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
             insCount++;
           }
         } else {
-          // Bay overlaps with an opening - need to fill around it carefully
-          const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
-          const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
+          // Sort openings by x0 to process left-to-right
+          bayOpenings.sort((a, b) => a.x0 - b.x0);
           
-          // Calculate where the opening actually intersects this bay (horizontally)
-          const openingStartInBay = Math.max(studStart, overlapping.x0);
-          const openingEndInBay = Math.min(studEnd, overlapping.x1);
+          // Find horizontal gaps in this bay where we can place full-height insulation
+          let currentX = studStart;
           
-          // Framing thickness around openings
-          const sillThickness = prof.studH || 100;
-          const headerThickness = prof.studH || 100;
-          
-          // 1. FULL HEIGHT insulation to the LEFT of the opening (if there's space in this bay)
-          // Panel extends from bay start to opening start (no gap)
-          if (openingStartInBay > studStart + 30) {
-            if (createInsPanel(prefix + i + '-left', studStart, openingStartInBay, plateY, plateY + insHeight)) {
-              insCount++;
-              console.log(`[WALL_INS] Added insulation LEFT of opening in bay ${i}, width=${openingStartInBay - studStart}mm`);
+          for (let j = 0; j < bayOpenings.length; j++) {
+            const o = bayOpenings[j];
+            // Clamp opening to bay boundaries
+            const openingStartInBay = Math.max(studStart, o.x0);
+            const openingEndInBay = Math.min(studEnd, o.x1);
+            
+            // Fill gap BEFORE this opening (if any)
+            if (openingStartInBay > currentX + 30) {
+              if (createInsPanel(prefix + i + '-gap-' + j, currentX, openingStartInBay, plateY, plateY + insHeight)) {
+                insCount++;
+                console.log(`[WALL_INS] Added full-height panel in bay ${i} before opening, x=${currentX}-${openingStartInBay}`);
+              }
             }
+            
+            // Move current position past this opening
+            currentX = Math.max(currentX, openingEndInBay);
           }
           
-          // 2. FULL HEIGHT insulation to the RIGHT of the opening (if there's space in this bay)
-          // Panel extends from opening end to bay end (no gap)
-          if (studEnd > openingEndInBay + 30) {
-            if (createInsPanel(prefix + i + '-right', openingEndInBay, studEnd, plateY, plateY + insHeight)) {
+          // Fill gap AFTER all openings (if any remains in this bay)
+          if (studEnd > currentX + 30) {
+            if (createInsPanel(prefix + i + '-gap-end', currentX, studEnd, plateY, plateY + insHeight)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation RIGHT of opening in bay ${i}, width=${studEnd - openingEndInBay}mm`);
-            }
-          }
-          
-          // 3. Insulation BELOW the opening (under the sill, spanning opening width)
-          const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          if (insBelowTop > plateY + 50 && openingEndInBay > openingStartInBay + 30) {
-            if (createInsPanel(prefix + i + '-below', openingStartInBay, openingEndInBay, plateY, insBelowTop)) {
-              insCount++;
-              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm, width=${openingEndInBay - openingStartInBay}mm`);
-            }
-          }
-          
-          // 4. Insulation ABOVE the opening (above the header, spanning opening width)
-          const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
-          const insAboveTop = plateY + insHeight;
-          if (insAboveTop > insAboveBottom + 50 && openingEndInBay > openingStartInBay + 30) {
-            if (createInsPanel(prefix + i + '-above', openingStartInBay, openingEndInBay, insAboveBottom, insAboveTop)) {
-              insCount++;
-              console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+              console.log(`[WALL_INS] Added full-height panel in bay ${i} after openings, x=${currentX}-${studEnd}`);
             }
           }
         }
