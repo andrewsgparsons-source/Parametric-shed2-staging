@@ -2306,25 +2306,38 @@ if (roofParts.osb) {
       console.log('[ROOF_INS] Bay', bayIdx, '- z:', z0_mm, 'to', z1_mm, 'depth:', bayDepth_mm);
       
       // --- SLOPED PANELS (left and right) ---
-      // These follow the rafter angle from wall plate up to tie beam intersection
-      // Length along slope = distance from eaves to tie beam intersection point
-      const slopedLen_mm = Math.max(1, Math.round(raisedTieY_mm / sinT)); // Length along slope
+      // These follow the rafter angle from EAVES (wall plate) UP to TIE BEAM intersection
+      // 
+      // Geometry for LEFT slope:
+      //   - Eaves point: X=0, Y=memberD_mm (bottom of slope)
+      //   - Tie beam point: X = halfSpan_mm - raisedTieHalfSpan_mm, Y = raisedTieY_mm + memberD_mm
+      //   - Midpoint: halfway between these
+      
+      // Slope run (horizontal) from eaves to tie beam intersection
+      const slopeRunX_mm = halfSpan_mm - raisedTieHalfSpan_mm;
+      // Slope rise (vertical) 
+      const slopeRiseY_mm = raisedTieY_mm;
+      // Length along slope
+      const slopedLen_mm = Math.sqrt(slopeRunX_mm * slopeRunX_mm + slopeRiseY_mm * slopeRiseY_mm);
       
       // Panel dimensions
       const slopedPanelLen_mm = slopedLen_mm - INS_INSET_MM * 2;
       const slopedPanelDepth_mm = bayDepth_mm - INS_INSET_MM * 2;
       
-      // Mid-slope position (halfway along the sloped section)
-      const sMid_mm = slopedLen_mm / 2;
-      const runMid_mm = sMid_mm * cosT;  // Horizontal run at mid-point
-      const dropMid_mm = sMid_mm * sinT; // Vertical drop at mid-point (from ridge)
+      // Midpoint along the slope (in XY coordinates before rotation)
+      // LEFT slope: from (0, memberD_mm) to (slopeRunX_mm, slopeRiseY_mm + memberD_mm)
+      const midX_L_mm = slopeRunX_mm / 2;
+      const midY_mm = memberD_mm + slopeRiseY_mm / 2;
+      
+      // Offset inward from the rafter surface (toward interior)
+      // Normal to left slope points toward +X (interior)
+      const insetX_mm = sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
+      const insetY_mm = cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
       
       // LEFT sloped panel
       {
-        const xSurf_mm = halfSpan_mm - runMid_mm; // X on roof surface
-        // Offset inward (toward interior) - for left slope, interior is +X direction
-        const cx_mm = xSurf_mm + sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
-        const cy_mm = (dropMid_mm) + cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM) + memberD_mm;
+        const cx_mm = midX_L_mm + insetX_mm;
+        const cy_mm = midY_mm + insetY_mm;
         
         const insLeft = mkBoxCenteredLocal(
           `${meshPrefix}roof-ins-bay${bayIdx}-L`,
@@ -2346,12 +2359,12 @@ if (roofParts.osb) {
         }
       }
       
-      // RIGHT sloped panel
+      // RIGHT sloped panel (mirror of left)
+      // From (A_mm, memberD_mm) to (halfSpan_mm + raisedTieHalfSpan_mm, slopeRiseY_mm + memberD_mm)
       {
-        const xSurf_mm = halfSpan_mm + runMid_mm; // X on roof surface (right side)
-        // Offset inward (toward interior) - for right slope, interior is -X direction
-        const cx_mm = xSurf_mm - sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
-        const cy_mm = (dropMid_mm) + cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM) + memberD_mm;
+        const midX_R_mm = A_mm - slopeRunX_mm / 2;
+        const cx_mm = midX_R_mm - insetX_mm; // Offset toward interior (-X direction)
+        const cy_mm = midY_mm + insetY_mm;
         
         const insRight = mkBoxCenteredLocal(
           `${meshPrefix}roof-ins-bay${bayIdx}-R`,
