@@ -2416,6 +2416,113 @@ if (roofParts.osb) {
     }
     
     console.log('[ROOF_INS] Created insulation for', trussPos.length - 1, 'bays');
+    
+    // ---- GABLE END INSULATION TRIANGLES ----
+    // Small triangular wedges at front and back gable ends, either side of king post
+    // These fill the void above the horizontal insulation, between the sloped panels and the king post
+    // They taper to a point at the bottom where the rafter slope meets the horizontal insulation level
+    
+    const gableInsDepth_mm = INS_THICKNESS_MM; // Depth into building (Z dimension)
+    
+    // Calculate key positions
+    const horizInsTopY_mm = raisedTieY_mm + memberD_mm; // Top surface of horizontal insulation
+    
+    // The point where the rafter slope (extended down) meets the horizontal insulation level
+    // At this X position, the rafter Y would equal horizInsTopY_mm
+    // Rafter equation (left side): Y = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
+    // Solve for X when Y = horizInsTopY_mm:
+    // horizInsTopY_mm = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
+    // raisedTieY_mm + memberD_mm = memberD_mm + rise_mm - (X / halfSpan_mm) * rise_mm
+    // raisedTieY_mm = rise_mm - (X / halfSpan_mm) * rise_mm
+    // X / halfSpan_mm = (rise_mm - raisedTieY_mm) / rise_mm
+    // X = halfSpan_mm * (rise_mm - raisedTieY_mm) / rise_mm
+    const pointX_mm = halfSpan_mm * (rise_mm - raisedTieY_mm) / rise_mm;
+    
+    // Top of triangle is where rafter meets king post
+    // King post left edge at: halfSpan_mm - memberW_mm/2
+    // Rafter Y at king post edge: memberD_mm + rise_mm - ((halfSpan_mm - memberW_mm/2) / halfSpan_mm) * rise_mm
+    const kingPostLeftX_mm = halfSpan_mm - memberW_mm / 2;
+    const rafterYatKingPost_mm = memberD_mm + rise_mm - (kingPostLeftX_mm / halfSpan_mm) * rise_mm;
+    
+    // Build triangular prisms for each gable end
+    function buildGableInsTriangle(gableEnd, side) {
+      // gableEnd: "front" or "back"
+      // side: "L" (left of king post) or "R" (right of king post)
+      
+      // Z position: at the gable truss, just inside the truss face
+      let z_mm;
+      if (gableEnd === "front") {
+        z_mm = trussPos[0] + memberW_mm + INS_GAP_MM; // Just behind front truss
+      } else {
+        z_mm = trussPos[trussPos.length - 1] - gableInsDepth_mm - INS_GAP_MM; // Just in front of back truss
+      }
+      
+      // Triangle shape (2D cross-section in XY plane)
+      // For LEFT side of king post:
+      //   Bottom-left point (the taper point): (pointX_mm, horizInsTopY_mm)
+      //   Bottom-right: (kingPostLeftX_mm, horizInsTopY_mm)
+      //   Top: (kingPostLeftX_mm, rafterYatKingPost_mm - INS_GAP_MM)
+      
+      let shape;
+      if (side === "L") {
+        const p1 = new BABYLON.Vector3(pointX_mm / 1000, horizInsTopY_mm / 1000, 0);
+        const p2 = new BABYLON.Vector3(kingPostLeftX_mm / 1000, horizInsTopY_mm / 1000, 0);
+        const p3 = new BABYLON.Vector3(kingPostLeftX_mm / 1000, (rafterYatKingPost_mm - INS_GAP_MM) / 1000, 0);
+        shape = [p1, p2, p3, p1]; // Closed path
+      } else {
+        // RIGHT side (mirror)
+        const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
+        const pointX_R_mm = A_mm - pointX_mm; // Mirrored point X
+        const rafterYatKingPostR_mm = memberD_mm + rise_mm - ((A_mm - kingPostRightX_mm) / halfSpan_mm) * rise_mm;
+        
+        const p1 = new BABYLON.Vector3(kingPostRightX_mm / 1000, horizInsTopY_mm / 1000, 0);
+        const p2 = new BABYLON.Vector3(pointX_R_mm / 1000, horizInsTopY_mm / 1000, 0);
+        const p3 = new BABYLON.Vector3(kingPostRightX_mm / 1000, (rafterYatKingPostR_mm - INS_GAP_MM) / 1000, 0);
+        shape = [p1, p2, p3, p1]; // Closed path
+      }
+      
+      // Extrude the triangle along Z
+      const path = [
+        new BABYLON.Vector3(0, 0, z_mm / 1000),
+        new BABYLON.Vector3(0, 0, (z_mm + gableInsDepth_mm) / 1000)
+      ];
+      
+      const meshName = `${meshPrefix}roof-ins-gable-${gableEnd}-${side}`;
+      const gableIns = BABYLON.MeshBuilder.ExtrudeShape(
+        meshName,
+        {
+          shape: shape,
+          path: path,
+          cap: BABYLON.Mesh.CAP_ALL
+        },
+        scene
+      );
+      
+      gableIns.material = roofInsMat;
+      gableIns.metadata = { dynamic: true, sectionId: sectionId || null, roof: "apex", part: "insulation-gable", end: gableEnd, side: side };
+      gableIns.parent = roofRoot;
+      
+      if (gableIns.enableEdgesRendering) {
+        gableIns.enableEdgesRendering();
+        gableIns.edgesWidth = 1;
+        gableIns.edgesColor = new BABYLON.Color4(0.5, 0.6, 0.3, 1);
+      }
+      
+      return gableIns;
+    }
+    
+    // Create gable insulation triangles (only if there's space - king post exists)
+    if (rise_mm > raisedTieY_mm + INS_GAP_MM * 2) {
+      // Front gable
+      buildGableInsTriangle("front", "L");
+      buildGableInsTriangle("front", "R");
+      
+      // Back gable
+      buildGableInsTriangle("back", "L");
+      buildGableInsTriangle("back", "R");
+      
+      console.log('[ROOF_INS] Created gable end insulation triangles');
+    }
   }
 
   // ---- Placement in world: align plan min corner to [-l,-f], then lift to wall height ----
