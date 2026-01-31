@@ -2470,13 +2470,16 @@ if (roofParts.osb) {
       // gableDoor: door info if a door extends into this gable, or null
       
       // Z position: flush with inside surface of gable frame
+      // Extrusion goes from z_mm (front face) to z_mm + gableInsDepth_mm (back face)
       let z_mm;
       if (gableEnd === "front") {
-        // Back face of insulation flush with inner face of front gable frame
+        // Interior is toward +Z, so BACK face should be flush with inner face of front gable
+        // Inner face of front gable is at trussPos[0] + memberW_mm
         z_mm = trussPos[0] + memberW_mm - gableInsDepth_mm;
       } else {
-        // Back face of insulation flush with inner face of back gable frame
-        z_mm = trussPos[trussPos.length - 1] - gableInsDepth_mm;
+        // Interior is toward -Z, so FRONT face should be flush with inner face of back gable
+        // Inner face of back gable is at trussPos[last] (front face of back truss member)
+        z_mm = trussPos[trussPos.length - 1];
       }
       
       // Build the 2D trapezoid shape (XY cross-section)
