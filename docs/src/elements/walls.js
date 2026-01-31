@@ -3095,28 +3095,55 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             insCount++;
           }
         } else {
-          // Bay overlaps with an opening - add partial insulation below and above
+          // Bay overlaps with an opening - add partial insulation around it
           const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
           const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
           
-          // Insulation BELOW the opening (from plate to sill area)
-          // Account for sill thickness (prof.studH)
+          // Calculate where the opening sits horizontally within this bay
+          const openingLeftX = Math.max(studStart, overlapping.x0);
+          const openingRightX = Math.min(studEnd, overlapping.x1);
+          
+          // Account for framing around openings (trimmer studs, sill, header)
           const sillThickness = prof.studH || 100;
+          const headerThickness = prof.studH || 100;
+          const trimmerWidth = prof.studW || 50; // Width of trimmer studs beside openings
+          
+          // Insulation to the LEFT of the opening (full height, beside the opening)
+          const insLeftEnd = openingLeftX - trimmerWidth;
+          if (insLeftEnd > studStart + 30) { // At least 30mm gap to be worth filling
+            if (createInsPanel(prefix + i + '-left', studStart, insLeftEnd, plateY, plateY + insHeight)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation LEFT of opening in bay ${i}, width=${insLeftEnd - studStart}mm`);
+            }
+          }
+          
+          // Insulation to the RIGHT of the opening (full height, beside the opening)
+          const insRightStart = openingRightX + trimmerWidth;
+          if (studEnd > insRightStart + 30) { // At least 30mm gap to be worth filling
+            if (createInsPanel(prefix + i + '-right', insRightStart, studEnd, plateY, plateY + insHeight)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation RIGHT of opening in bay ${i}, width=${studEnd - insRightStart}mm`);
+            }
+          }
+          
+          // Insulation BELOW the opening (between the side insulation, under the sill)
           const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+          const insBelowLeft = Math.max(studStart, openingLeftX - trimmerWidth);
+          const insBelowRight = Math.min(studEnd, openingRightX + trimmerWidth);
+          if (insBelowTop > plateY + 50 && insBelowRight > insBelowLeft + 30) {
+            if (createInsPanel(prefix + i + '-below', insBelowLeft, insBelowRight, plateY, insBelowTop)) {
               insCount++;
               console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
             }
           }
           
           // Insulation ABOVE the opening (from header to top plate)
-          // Account for header thickness
-          const headerThickness = prof.studH || 100;
           const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
           const insAboveTop = plateY + insHeight;
-          if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+          const insAboveLeft = Math.max(studStart, openingLeftX - trimmerWidth);
+          const insAboveRight = Math.min(studEnd, openingRightX + trimmerWidth);
+          if (insAboveTop > insAboveBottom + 50 && insAboveRight > insAboveLeft + 30) {
+            if (createInsPanel(prefix + i + '-above', insAboveLeft, insAboveRight, insAboveBottom, insAboveTop)) {
               insCount++;
               console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
             }
