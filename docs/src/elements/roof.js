@@ -2274,6 +2274,138 @@ if (roofParts.osb) {
     }
   }
 
+  // ---- ROOF INSULATION (PIR panels between rafters and tie beams) ----
+  // Only for raised tie beam configuration
+  const showRoofIns = (state.vis?.roofIns !== false) && (state.vis?.ins !== false);
+  
+  if (showRoofIns && tieBeamSetting === "raised" && trussPos.length >= 2) {
+    console.log('[ROOF_INS] Building roof insulation - trussCount:', trussPos.length, 'bays:', trussPos.length - 1);
+    
+    // Insulation material (green PIR - same as wall insulation)
+    const roofInsMat = new BABYLON.StandardMaterial('roofInsMat-' + Date.now(), scene);
+    roofInsMat.diffuseColor = new BABYLON.Color3(0.75, 0.85, 0.45); // Green PIR
+    
+    const INS_THICKNESS_MM = 50; // 50mm PIR insulation
+    const sinT = Math.sin(slopeAng);
+    const cosT = Math.cos(slopeAng);
+    
+    // Insulation sits INSIDE the rafters (on inner face, toward interior)
+    // Offset from rafter surface by small gap
+    const INS_INSET_MM = 2;
+    
+    // For each bay between trusses
+    for (let bayIdx = 0; bayIdx < trussPos.length - 1; bayIdx++) {
+      const z0_mm = trussPos[bayIdx] + memberW_mm; // After front truss
+      const z1_mm = trussPos[bayIdx + 1];          // Before back truss
+      const bayDepth_mm = Math.max(1, z1_mm - z0_mm);
+      
+      if (bayDepth_mm < 50) continue; // Skip tiny bays
+      
+      const bayZ_mm = z0_mm + bayDepth_mm / 2; // Center Z of bay
+      
+      console.log('[ROOF_INS] Bay', bayIdx, '- z:', z0_mm, 'to', z1_mm, 'depth:', bayDepth_mm);
+      
+      // --- SLOPED PANELS (left and right) ---
+      // These follow the rafter angle from wall plate up to tie beam intersection
+      // Length along slope = distance from eaves to tie beam intersection point
+      const slopedLen_mm = Math.max(1, Math.round(raisedTieY_mm / sinT)); // Length along slope
+      
+      // Panel dimensions
+      const slopedPanelLen_mm = slopedLen_mm - INS_INSET_MM * 2;
+      const slopedPanelDepth_mm = bayDepth_mm - INS_INSET_MM * 2;
+      
+      // Mid-slope position (halfway along the sloped section)
+      const sMid_mm = slopedLen_mm / 2;
+      const runMid_mm = sMid_mm * cosT;  // Horizontal run at mid-point
+      const dropMid_mm = sMid_mm * sinT; // Vertical drop at mid-point (from ridge)
+      
+      // LEFT sloped panel
+      {
+        const xSurf_mm = halfSpan_mm - runMid_mm; // X on roof surface
+        // Offset inward (toward interior) - for left slope, interior is +X direction
+        const cx_mm = xSurf_mm + sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
+        const cy_mm = (dropMid_mm) + cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM) + memberD_mm;
+        
+        const insLeft = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ins-bay${bayIdx}-L`,
+          slopedPanelLen_mm,
+          INS_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofInsMat,
+          { roof: "apex", part: "insulation", bay: bayIdx, side: "L" }
+        );
+        if (insLeft) {
+          insLeft.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+          insLeft.enableEdgesRendering();
+          insLeft.edgesWidth = 1;
+          insLeft.edgesColor = new BABYLON.Color4(0.5, 0.6, 0.3, 1);
+        }
+      }
+      
+      // RIGHT sloped panel
+      {
+        const xSurf_mm = halfSpan_mm + runMid_mm; // X on roof surface (right side)
+        // Offset inward (toward interior) - for right slope, interior is -X direction
+        const cx_mm = xSurf_mm - sinT * (INS_THICKNESS_MM / 2 + INS_INSET_MM);
+        const cy_mm = (dropMid_mm) + cosT * (INS_THICKNESS_MM / 2 + INS_INSET_MM) + memberD_mm;
+        
+        const insRight = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ins-bay${bayIdx}-R`,
+          slopedPanelLen_mm,
+          INS_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofInsMat,
+          { roof: "apex", part: "insulation", bay: bayIdx, side: "R" }
+        );
+        if (insRight) {
+          insRight.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+          insRight.enableEdgesRendering();
+          insRight.edgesWidth = 1;
+          insRight.edgesColor = new BABYLON.Color4(0.5, 0.6, 0.3, 1);
+        }
+      }
+      
+      // --- HORIZONTAL PANEL (between tie beams) ---
+      // Flat panel at tie beam height, spanning the width between tie beam ends
+      {
+        const horizWidth_mm = raisedTieSpan_mm - INS_INSET_MM * 2; // Width between tie beams
+        const horizDepth_mm = slopedPanelDepth_mm; // Same depth as sloped panels
+        
+        // Position: centered on ridge line, at tie beam top
+        const cx_mm = halfSpan_mm;
+        const cy_mm = raisedTieY_mm + memberD_mm + INS_THICKNESS_MM / 2 + INS_INSET_MM;
+        
+        const insHoriz = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ins-bay${bayIdx}-H`,
+          horizWidth_mm,
+          INS_THICKNESS_MM,
+          horizDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofInsMat,
+          { roof: "apex", part: "insulation", bay: bayIdx, side: "H" }
+        );
+        if (insHoriz) {
+          insHoriz.enableEdgesRendering();
+          insHoriz.edgesWidth = 1;
+          insHoriz.edgesColor = new BABYLON.Color4(0.5, 0.6, 0.3, 1);
+        }
+      }
+    }
+    
+    console.log('[ROOF_INS] Created insulation for', trussPos.length - 1, 'bays');
+  }
+
   // ---- Placement in world: align plan min corner to [-l,-f], then lift to wall height ----
   const targetMinX_m = (-l_mm) / 1000;
   const targetMinZ_m = (-f_mm) / 1000;
