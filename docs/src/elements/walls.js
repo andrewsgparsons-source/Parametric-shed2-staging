@@ -3095,28 +3095,55 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             insCount++;
           }
         } else {
-          // Bay overlaps with an opening - add partial insulation below and above
+          // Bay overlaps with an opening - need to fill around it carefully
           const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
           const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
           
-          // Insulation BELOW the opening (from plate to sill area)
-          // Account for sill thickness (prof.studH)
+          // Calculate where the opening actually intersects this bay (horizontally)
+          const openingStartInBay = Math.max(studStart, overlapping.x0);
+          const openingEndInBay = Math.min(studEnd, overlapping.x1);
+          
+          // Framing thickness around openings
           const sillThickness = prof.studH || 100;
+          const headerThickness = prof.studH || 100;
+          const trimmerWidth = 50; // Trimmer stud width beside openings
+          
+          // 1. FULL HEIGHT insulation to the LEFT of the opening (if there's space in this bay)
+          const leftInsEnd = openingStartInBay - trimmerWidth;
+          if (leftInsEnd > studStart + 30) {
+            if (createInsPanel(prefix + i + '-left', studStart, leftInsEnd, plateY, plateY + insHeight)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation LEFT of opening in bay ${i}, width=${leftInsEnd - studStart}mm`);
+            }
+          }
+          
+          // 2. FULL HEIGHT insulation to the RIGHT of the opening (if there's space in this bay)
+          const rightInsStart = openingEndInBay + trimmerWidth;
+          if (studEnd > rightInsStart + 30) {
+            if (createInsPanel(prefix + i + '-right', rightInsStart, studEnd, plateY, plateY + insHeight)) {
+              insCount++;
+              console.log(`[WALL_INS] Added insulation RIGHT of opening in bay ${i}, width=${studEnd - rightInsStart}mm`);
+            }
+          }
+          
+          // 3. Insulation BELOW the opening (only in the opening's horizontal span)
           const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
+          const belowLeft = Math.max(studStart, openingStartInBay - trimmerWidth);
+          const belowRight = Math.min(studEnd, openingEndInBay + trimmerWidth);
+          if (insBelowTop > plateY + 50 && belowRight > belowLeft + 30) {
+            if (createInsPanel(prefix + i + '-below', belowLeft, belowRight, plateY, insBelowTop)) {
               insCount++;
               console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
             }
           }
           
-          // Insulation ABOVE the opening (from header to top plate)
-          // Account for header thickness
-          const headerThickness = prof.studH || 100;
+          // 4. Insulation ABOVE the opening (only in the opening's horizontal span)
           const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
           const insAboveTop = plateY + insHeight;
-          if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+          const aboveLeft = Math.max(studStart, openingStartInBay - trimmerWidth);
+          const aboveRight = Math.min(studEnd, openingEndInBay + trimmerWidth);
+          if (insAboveTop > insAboveBottom + 50 && aboveRight > aboveLeft + 30) {
+            if (createInsPanel(prefix + i + '-above', aboveLeft, aboveRight, insAboveBottom, insAboveTop)) {
               insCount++;
               console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
             }
