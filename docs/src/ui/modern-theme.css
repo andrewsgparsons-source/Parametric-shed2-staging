@@ -358,6 +358,8 @@
   
   .boBox {
     padding: 14px;
+    overflow: visible;
+    max-height: none;
   }
   
   #controlPanel .row {
@@ -410,6 +412,21 @@
   #controlPanel .hint,
   #controlPanel p.hint {
     font-size: 12px;
+  }
+  
+  /* Lists of items (doors, windows, dividers) - make scrollable */
+  #doorsList,
+  #windowsList,
+  #dividersList {
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  #doorsList > div,
+  #windowsList > div,
+  #dividersList > div {
+    margin-bottom: 8px;
   }
 }
 
