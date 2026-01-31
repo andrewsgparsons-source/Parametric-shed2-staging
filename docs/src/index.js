@@ -3326,6 +3326,29 @@ if (wInputEl && dInputEl) {
           }
           if (roofApexTieBeamEl) {
             var tieBeamVal = (state && state.roof && state.roof.apex && state.roof.apex.tieBeam) || "eaves";
+            var variant = (state && state.walls && state.walls.variant) || "basic";
+            var isInsulatedApex = (variant === "insulated" && _roofStyleNow === "apex");
+            console.log('[TIE_BEAM_DEBUG] variant:', variant, 'roofStyle:', _roofStyleNow, 'isInsulatedApex:', isInsulatedApex);
+            
+            // Get the "eaves" option element
+            var eavesOption = roofApexTieBeamEl.querySelector('option[value="eaves"]');
+            if (eavesOption) {
+              if (isInsulatedApex) {
+                // Hide "At Eaves" option for insulated apex builds (requires raised tie beam)
+                eavesOption.style.display = "none";
+                eavesOption.disabled = true;
+                // Force raised tie beam
+                if (tieBeamVal === "eaves") {
+                  tieBeamVal = "raised";
+                  store.setState({ roof: { apex: { tieBeam: "raised" } } });
+                }
+              } else {
+                // Show "At Eaves" option for non-insulated or non-apex builds
+                eavesOption.style.display = "";
+                eavesOption.disabled = false;
+              }
+            }
+            
             roofApexTieBeamEl.value = tieBeamVal;
             if (!roofApexTieBeamEl.classList.contains("profile-disabled")) {
               roofApexTieBeamEl.disabled = (_roofStyleNow !== "apex");
