@@ -3126,22 +3126,24 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             }
           }
           
-          // 3. Insulation BELOW the opening (only in the opening's horizontal span)
+          // 3. Insulation BELOW the opening (directly under the opening, not beside it)
+          // The below panel should only span the opening width, not extend into left/right zones
           const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          const belowLeft = Math.max(studStart, openingStartInBay - trimmerWidth);
-          const belowRight = Math.min(studEnd, openingEndInBay + trimmerWidth);
+          // Use the opening's actual position within this bay (not expanded by trimmerWidth)
+          const belowLeft = openingStartInBay;
+          const belowRight = openingEndInBay;
           if (insBelowTop > plateY + 50 && belowRight > belowLeft + 30) {
             if (createInsPanel(prefix + i + '-below', belowLeft, belowRight, plateY, insBelowTop)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
+              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm, width=${belowRight - belowLeft}mm`);
             }
           }
           
-          // 4. Insulation ABOVE the opening (only in the opening's horizontal span)
+          // 4. Insulation ABOVE the opening (directly above the opening)
           const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
           const insAboveTop = plateY + insHeight;
-          const aboveLeft = Math.max(studStart, openingStartInBay - trimmerWidth);
-          const aboveRight = Math.min(studEnd, openingEndInBay + trimmerWidth);
+          const aboveLeft = openingStartInBay;
+          const aboveRight = openingEndInBay;
           if (insAboveTop > insAboveBottom + 50 && aboveRight > aboveLeft + 30) {
             if (createInsPanel(prefix + i + '-above', aboveLeft, aboveRight, insAboveBottom, insAboveTop)) {
               insCount++;
