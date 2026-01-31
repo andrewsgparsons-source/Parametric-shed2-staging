@@ -3106,46 +3106,39 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
           // Framing thickness around openings
           const sillThickness = prof.studH || 100;
           const headerThickness = prof.studH || 100;
-          const trimmerWidth = 50; // Trimmer stud width beside openings
           
           // 1. FULL HEIGHT insulation to the LEFT of the opening (if there's space in this bay)
-          const leftInsEnd = openingStartInBay - trimmerWidth;
-          if (leftInsEnd > studStart + 30) {
-            if (createInsPanel(prefix + i + '-left', studStart, leftInsEnd, plateY, plateY + insHeight)) {
+          // Panel extends from bay start to opening start (no gap)
+          if (openingStartInBay > studStart + 30) {
+            if (createInsPanel(prefix + i + '-left', studStart, openingStartInBay, plateY, plateY + insHeight)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation LEFT of opening in bay ${i}, width=${leftInsEnd - studStart}mm`);
+              console.log(`[WALL_INS] Added insulation LEFT of opening in bay ${i}, width=${openingStartInBay - studStart}mm`);
             }
           }
           
           // 2. FULL HEIGHT insulation to the RIGHT of the opening (if there's space in this bay)
-          const rightInsStart = openingEndInBay + trimmerWidth;
-          if (studEnd > rightInsStart + 30) {
-            if (createInsPanel(prefix + i + '-right', rightInsStart, studEnd, plateY, plateY + insHeight)) {
+          // Panel extends from opening end to bay end (no gap)
+          if (studEnd > openingEndInBay + 30) {
+            if (createInsPanel(prefix + i + '-right', openingEndInBay, studEnd, plateY, plateY + insHeight)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation RIGHT of opening in bay ${i}, width=${studEnd - rightInsStart}mm`);
+              console.log(`[WALL_INS] Added insulation RIGHT of opening in bay ${i}, width=${studEnd - openingEndInBay}mm`);
             }
           }
           
-          // 3. Insulation BELOW the opening (directly under the opening, not beside it)
-          // The below panel should only span the opening width, not extend into left/right zones
+          // 3. Insulation BELOW the opening (under the sill, spanning opening width)
           const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          // Use the opening's actual position within this bay (not expanded by trimmerWidth)
-          const belowLeft = openingStartInBay;
-          const belowRight = openingEndInBay;
-          if (insBelowTop > plateY + 50 && belowRight > belowLeft + 30) {
-            if (createInsPanel(prefix + i + '-below', belowLeft, belowRight, plateY, insBelowTop)) {
+          if (insBelowTop > plateY + 50 && openingEndInBay > openingStartInBay + 30) {
+            if (createInsPanel(prefix + i + '-below', openingStartInBay, openingEndInBay, plateY, insBelowTop)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm, width=${belowRight - belowLeft}mm`);
+              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm, width=${openingEndInBay - openingStartInBay}mm`);
             }
           }
           
-          // 4. Insulation ABOVE the opening (directly above the opening)
+          // 4. Insulation ABOVE the opening (above the header, spanning opening width)
           const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
           const insAboveTop = plateY + insHeight;
-          const aboveLeft = openingStartInBay;
-          const aboveRight = openingEndInBay;
-          if (insAboveTop > insAboveBottom + 50 && aboveRight > aboveLeft + 30) {
-            if (createInsPanel(prefix + i + '-above', aboveLeft, aboveRight, insAboveBottom, insAboveTop)) {
+          if (insAboveTop > insAboveBottom + 50 && openingEndInBay > openingStartInBay + 30) {
+            if (createInsPanel(prefix + i + '-above', openingStartInBay, openingEndInBay, insAboveBottom, insAboveTop)) {
               insCount++;
               console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
             }
