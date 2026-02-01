@@ -692,6 +692,95 @@ const osbMesh = mkBoxBottomLocal(
       );
     }
   }
+
+  // ---- Roof insulation (PIR 50mm between rafters) ----
+  if (roofParts.insulation) {
+    const INS_THICKNESS_MM = 50;
+    
+    // Insulation material (yellow PIR)
+    const insMat = (() => {
+      try {
+        if (scene._roofInsMat) return scene._roofInsMat;
+        const m = new BABYLON.StandardMaterial("roofInsMat", scene);
+        m.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4);
+        scene._roofInsMat = m;
+        return m;
+      } catch (e) { return null; }
+    })();
+    
+    // Insulation panel sits just below rafters, filling the depth between them
+    // Position: underside of rafters (y = 0 in local), pushed down by insulation thickness
+    // Dimensions: same as roof plan but inset slightly for rafters
+    let insX_mm = data.roofW_mm - 2 * data.rafterW_mm; // Inset from rafters at edges
+    let insZ_mm = data.roofD_mm - 2 * data.rafterW_mm;
+    
+    // Apply slope scaling to sloped dimension
+    if (data.isWShort) {
+      insX_mm = Math.round(insX_mm * slopeScale);
+    } else {
+      insZ_mm = Math.round(insZ_mm * slopeScale);
+    }
+    
+    // Insulation sits on the UNDERSIDE of rafters
+    const insY_m_local = -INS_THICKNESS_MM / 1000;
+    
+    mkBoxBottomLocal(
+      `${meshPrefix}roof-insulation`,
+      Math.max(100, insX_mm),
+      INS_THICKNESS_MM,
+      Math.max(100, insZ_mm),
+      data.rafterW_mm, // Offset to miss rim joist
+      insY_m_local,
+      data.rafterW_mm,
+      roofRoot,
+      insMat,
+      { roof: "pent", part: "insulation" }
+    );
+  }
+
+  // ---- Roof interior plywood lining (12mm) ----
+  if (roofParts.plywood) {
+    const PLY_THICKNESS_MM = 12;
+    
+    // Plywood material (light wood color)
+    const plyMat = (() => {
+      try {
+        if (scene._roofPlyMat) return scene._roofPlyMat;
+        const m = new BABYLON.StandardMaterial("roofPlyMat", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+        scene._roofPlyMat = m;
+        return m;
+      } catch (e) { return null; }
+    })();
+    
+    // Plywood covers the underside of insulation
+    // Same dimensions as insulation panel
+    let plyX_mm = data.roofW_mm - 2 * data.rafterW_mm;
+    let plyZ_mm = data.roofD_mm - 2 * data.rafterW_mm;
+    
+    if (data.isWShort) {
+      plyX_mm = Math.round(plyX_mm * slopeScale);
+    } else {
+      plyZ_mm = Math.round(plyZ_mm * slopeScale);
+    }
+    
+    // Plywood sits below insulation (insulation is 50mm, so plywood top is at -50mm)
+    const plyY_m_local = -(50 + PLY_THICKNESS_MM) / 1000;
+    
+    mkBoxBottomLocal(
+      `${meshPrefix}roof-plywood`,
+      Math.max(100, plyX_mm),
+      PLY_THICKNESS_MM,
+      Math.max(100, plyZ_mm),
+      data.rafterW_mm,
+      plyY_m_local,
+      data.rafterW_mm,
+      roofRoot,
+      plyMat,
+      { roof: "pent", part: "plywood" }
+    );
+  }
+
   // ---- Analytic alignment (no wall mesh queries) ----
   // Authoritative roof plan extents in world:
   // - Frame is at world X:[0..frameW], Z:[0..frameD]
@@ -2274,6 +2363,121 @@ if (roofParts.osb) {
     }
   }
 
+  // ---- Roof insulation (PIR 50mm on underside of rafters) ----
+  if (roofParts.insulation) {
+    const INS_THICKNESS_MM = 50;
+    
+    // Insulation material (yellow PIR)
+    const insMat = (() => {
+      try {
+        if (scene._roofInsMat) return scene._roofInsMat;
+        const m = new BABYLON.StandardMaterial("roofInsMat", scene);
+        m.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4);
+        scene._roofInsMat = m;
+        return m;
+      } catch (e) { return null; }
+    })();
+    
+    // Create insulation panels for left and right slopes
+    function createSlopeInsulation(side) {
+      const rotZ = (side === "L") ? slopeAng : -slopeAng;
+      const cosT = Math.cos(slopeAng);
+      const sinT = Math.sin(slopeAng);
+      
+      // Panel dimensions: rafter length x depth of building (B_mm)
+      // Inset from edges by rafter width
+      const insLen_mm = rafterLen_mm - memberW_mm;
+      const insWidth_mm = B_mm - 2 * memberW_mm;
+      
+      // Position below rafters (underside)
+      // Center point at mid-slope, mid-depth
+      const sMid_mm = rafterLen_mm / 2;
+      const runMid_mm = Math.round(sMid_mm * cosT);
+      const dropMid_mm = Math.round(sMid_mm * sinT);
+      
+      // Y position is below the rafters, then down by insulation thickness
+      const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
+      const yInsMid_mm = ySurfMid_mm - INS_THICKNESS_MM / 2 - memberD_mm; // Below rafter underside
+      
+      const xSurfMid_mm = (side === "L") 
+        ? (halfSpan_mm - runMid_mm)
+        : (halfSpan_mm + runMid_mm);
+      
+      const ins = mkBoxCenteredLocal(
+        `${meshPrefix}roof-insulation-${side}`,
+        insLen_mm,
+        INS_THICKNESS_MM,
+        insWidth_mm,
+        xSurfMid_mm,
+        yInsMid_mm,
+        B_mm / 2,
+        roofRoot,
+        insMat,
+        { roof: "apex", part: "insulation", side: side }
+      );
+      ins.rotation = new BABYLON.Vector3(0, 0, rotZ);
+    }
+    
+    createSlopeInsulation("L");
+    createSlopeInsulation("R");
+  }
+
+  // ---- Roof interior plywood lining (12mm) ----
+  if (roofParts.plywood) {
+    const PLY_THICKNESS_MM = 12;
+    const INS_THICKNESS_MM = 50;
+    
+    // Plywood material (light wood color)
+    const plyMat = (() => {
+      try {
+        if (scene._roofPlyMat) return scene._roofPlyMat;
+        const m = new BABYLON.StandardMaterial("roofPlyMat", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+        scene._roofPlyMat = m;
+        return m;
+      } catch (e) { return null; }
+    })();
+    
+    // Create plywood panels for left and right slopes (below insulation)
+    function createSlopePlywood(side) {
+      const rotZ = (side === "L") ? slopeAng : -slopeAng;
+      const cosT = Math.cos(slopeAng);
+      const sinT = Math.sin(slopeAng);
+      
+      const plyLen_mm = rafterLen_mm - memberW_mm;
+      const plyWidth_mm = B_mm - 2 * memberW_mm;
+      
+      const sMid_mm = rafterLen_mm / 2;
+      const runMid_mm = Math.round(sMid_mm * cosT);
+      const dropMid_mm = Math.round(sMid_mm * sinT);
+      
+      const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
+      // Plywood sits below insulation
+      const yPlyMid_mm = ySurfMid_mm - INS_THICKNESS_MM - PLY_THICKNESS_MM / 2 - memberD_mm;
+      
+      const xSurfMid_mm = (side === "L") 
+        ? (halfSpan_mm - runMid_mm)
+        : (halfSpan_mm + runMid_mm);
+      
+      const ply = mkBoxCenteredLocal(
+        `${meshPrefix}roof-plywood-${side}`,
+        plyLen_mm,
+        PLY_THICKNESS_MM,
+        plyWidth_mm,
+        xSurfMid_mm,
+        yPlyMid_mm,
+        B_mm / 2,
+        roofRoot,
+        plyMat,
+        { roof: "apex", part: "plywood", side: side }
+      );
+      ply.rotation = new BABYLON.Vector3(0, 0, rotZ);
+    }
+    
+    createSlopePlywood("L");
+    createSlopePlywood("R");
+  }
+
   // ---- Placement in world: align plan min corner to [-l,-f], then lift to wall height ----
   const targetMinX_m = (-l_mm) / 1000;
   const targetMinZ_m = (-f_mm) / 1000;
@@ -2640,10 +2844,14 @@ function getRoofFrameGauge(state) {
 function getRoofParts(state) {
   var vis = state && state.vis ? state.vis : null;
   var rp = vis && vis.roofParts && typeof vis.roofParts === "object" ? vis.roofParts : null;
+  // Check if walls are insulated variant (roof insulation/plywood only shows for insulated buildings)
+  var isInsulated = state && state.walls && state.walls.variant === "insulated";
   return {
     structure: rp ? (rp.structure !== false) : true,
     osb: rp ? (rp.osb !== false) : true,
-    covering: rp ? (rp.covering !== false) : true
+    covering: rp ? (rp.covering !== false) : true,
+    insulation: isInsulated && (rp ? (rp.insulation !== false) : true),
+    plywood: isInsulated && (rp ? (rp.plywood !== false) : true)
   };
 }
 
