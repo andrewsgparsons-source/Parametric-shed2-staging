@@ -2000,8 +2000,8 @@ if (getWallsEnabled(state)) {
         var roofEnabled = getRoofEnabled(state);
         console.log("[RENDER_LEGACY] Roof check:", { roofEnabled, roofStyle, visRoof: state?.vis?.roof });
 
-        // Build roof for supported styles (pent + apex). (No behavior change for pent.)
-        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+        // Build roof for supported styles (pent + apex + hipped). (No behavior change for pent.)
+        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
           console.log("[RENDER_LEGACY] Building roof...");
           var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
@@ -2117,7 +2117,7 @@ if (getWallsEnabled(state)) {
       var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
       var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
 
-      if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+      if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
@@ -2223,8 +2223,15 @@ if (getWallsEnabled(state)) {
         var apexEaves = (state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm)
           ? state.roof.apex.heightToEaves_mm : 1850;
         return Math.max(800, apexEaves);
+      } else if (roofStyle === "hipped") {
+        // For hipped roofs, use hipped settings or fall back to apex settings
+        var hippedEaves = (state.roof && state.roof.hipped && state.roof.hipped.heightToEaves_mm)
+          ? state.roof.hipped.heightToEaves_mm 
+          : (state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm)
+            ? state.roof.apex.heightToEaves_mm : 1850;
+        return Math.max(800, hippedEaves);
       } else {
-        // Hipped or default
+        // Default fallback
         return 2000;
       }
     }
