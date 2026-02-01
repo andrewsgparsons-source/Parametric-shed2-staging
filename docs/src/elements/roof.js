@@ -2378,38 +2378,50 @@ if (roofParts.osb) {
       } catch (e) { return null; }
     })();
     
+    const sinT = Math.sin(slopeAng);
+    const cosT = Math.cos(slopeAng);
+    
     // Create insulation panels for left and right slopes
     function createSlopeInsulation(side) {
       const rotZ = (side === "L") ? slopeAng : -slopeAng;
-      const cosT = Math.cos(slopeAng);
-      const sinT = Math.sin(slopeAng);
       
-      // Panel dimensions: rafter length x depth of building (B_mm)
-      // Inset from edges by rafter width
-      const insLen_mm = rafterLen_mm - memberW_mm;
+      // Panel dimensions: almost full rafter length x almost full building depth
+      const insLen_mm = rafterLen_mm - memberW_mm * 2;
       const insWidth_mm = B_mm - 2 * memberW_mm;
       
-      // Position below rafters (underside)
-      // Center point at mid-slope, mid-depth
+      // Position: sample mid-slope point, then offset DOWN by half insulation thickness
+      // (opposite direction from OSB which goes UP)
       const sMid_mm = rafterLen_mm / 2;
       const runMid_mm = Math.round(sMid_mm * cosT);
       const dropMid_mm = Math.round(sMid_mm * sinT);
       
-      // Y position is below the rafters, then down by insulation thickness
+      // Surface Y at mid-slope (top of rafters)
       const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
-      const yInsMid_mm = ySurfMid_mm - INS_THICKNESS_MM / 2 - memberD_mm; // Below rafter underside
       
+      // Insulation center is below the rafter underside
+      // Rafter underside at this point is: ySurfMid_mm - memberD_mm
+      // Insulation center is half thickness below that
+      const insOffset_mm = -(memberD_mm + INS_THICKNESS_MM / 2);
+      
+      // Calculate world position using surface normal (inward)
       const xSurfMid_mm = (side === "L") 
         ? (halfSpan_mm - runMid_mm)
         : (halfSpan_mm + runMid_mm);
+      
+      // Normal points outward from roof surface, we want inward
+      const normalX = (side === "L") ? -sinT : sinT;
+      const normalY = cosT;
+      
+      const cx = xSurfMid_mm + normalX * insOffset_mm;
+      const cy = ySurfMid_mm + normalY * insOffset_mm;
       
       const ins = mkBoxCenteredLocal(
         `${meshPrefix}roof-insulation-${side}`,
         insLen_mm,
         INS_THICKNESS_MM,
         insWidth_mm,
-        xSurfMid_mm,
-        yInsMid_mm,
+        cx,
+        cy,
         B_mm / 2,
         roofRoot,
         insMat,
@@ -2438,13 +2450,14 @@ if (roofParts.osb) {
       } catch (e) { return null; }
     })();
     
+    const sinT = Math.sin(slopeAng);
+    const cosT = Math.cos(slopeAng);
+    
     // Create plywood panels for left and right slopes (below insulation)
     function createSlopePlywood(side) {
       const rotZ = (side === "L") ? slopeAng : -slopeAng;
-      const cosT = Math.cos(slopeAng);
-      const sinT = Math.sin(slopeAng);
       
-      const plyLen_mm = rafterLen_mm - memberW_mm;
+      const plyLen_mm = rafterLen_mm - memberW_mm * 2;
       const plyWidth_mm = B_mm - 2 * memberW_mm;
       
       const sMid_mm = rafterLen_mm / 2;
@@ -2452,20 +2465,27 @@ if (roofParts.osb) {
       const dropMid_mm = Math.round(sMid_mm * sinT);
       
       const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
-      // Plywood sits below insulation
-      const yPlyMid_mm = ySurfMid_mm - INS_THICKNESS_MM - PLY_THICKNESS_MM / 2 - memberD_mm;
+      
+      // Plywood is below insulation: rafter depth + insulation + half plywood thickness
+      const plyOffset_mm = -(memberD_mm + INS_THICKNESS_MM + PLY_THICKNESS_MM / 2);
       
       const xSurfMid_mm = (side === "L") 
         ? (halfSpan_mm - runMid_mm)
         : (halfSpan_mm + runMid_mm);
+      
+      const normalX = (side === "L") ? -sinT : sinT;
+      const normalY = cosT;
+      
+      const cx = xSurfMid_mm + normalX * plyOffset_mm;
+      const cy = ySurfMid_mm + normalY * plyOffset_mm;
       
       const ply = mkBoxCenteredLocal(
         `${meshPrefix}roof-plywood-${side}`,
         plyLen_mm,
         PLY_THICKNESS_MM,
         plyWidth_mm,
-        xSurfMid_mm,
-        yPlyMid_mm,
+        cx,
+        cy,
         B_mm / 2,
         roofRoot,
         plyMat,
