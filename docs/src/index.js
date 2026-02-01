@@ -463,6 +463,9 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vAttRoofStructureEl = $("vAttRoofStructure");
     var vAttRoofOsbEl = $("vAttRoofOsb");
     var vAttRoofCoveringEl = $("vAttRoofCovering");
+    var vRoofInsulationEl = $("vRoofInsulation");
+    var vAttRoofInsulationEl = $("vAttRoofInsulation");
+    var vRoofPlyEl = $("vRoofPly");
 
     // Developer panel attachment visibility controls (mirrors the main visibility section)
     var devVAttBaseEl = $("devVAttBase");
@@ -1001,6 +1004,66 @@ function applyOpeningsVisibility(scene, on) {
       }
     }
 
+    // Roof Insulation visibility - controls insulation batts between rafters and gable end insulation
+    function applyRoofInsulationVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofInsulationVisibility:", visible);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var meta = m.metadata || {};
+
+        // Skip attachment meshes - handled separately
+        if (meta.attachmentId) continue;
+
+        var isInsulation = false;
+
+        // Main building roof insulation (batts between rafters)
+        if (meta.roof && meta.part === "insulation") {
+          isInsulation = true;
+        }
+        // Gable end insulation trapezoids
+        if (meta.roof && meta.part === "insulation-gable") {
+          isInsulation = true;
+        }
+
+        if (!isInsulation) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof Interior Plywood visibility - controls 12mm plywood lining on interior of roof
+    function applyRoofPlyVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofPlyVisibility:", visible);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var meta = m.metadata || {};
+
+        // Skip attachment meshes - handled separately
+        if (meta.attachmentId) continue;
+
+        var isPly = false;
+
+        // Main building roof plywood (sloped, horizontal, gable)
+        if (meta.roof && meta.part === "ply") {
+          isPly = true;
+        }
+        // Gable end plywood
+        if (meta.roof && meta.part === "ply-gable") {
+          isPly = true;
+        }
+
+        if (!isPly) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
     // ==================== ATTACHMENT VISIBILITY FUNCTIONS ====================
 
     /**
@@ -1281,6 +1344,26 @@ function applyOpeningsVisibility(scene, on) {
       console.log("[vis] attachment roof covering meshes affected:", count);
     }
 
+    // Attachment Roof Insulation visibility
+    function applyAttachmentRoofInsulationVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofInsulationVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var meta = m.metadata;
+        var isInsulation = (meta.part === "insulation" || meta.part === "insulation-gable");
+        if (isInsulation) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof insulation meshes affected:", count);
+    }
+
     /**
      * Get attachment visibility settings from state (with defaults to true)
      */
@@ -1301,7 +1384,8 @@ function applyOpeningsVisibility(scene, on) {
         wallOuter: attVis.wallOuter !== false,
         roofStructure: attVis.roofStructure !== false,
         roofOsb: attVis.roofOsb !== false,
-        roofCovering: attVis.roofCovering !== false
+        roofCovering: attVis.roofCovering !== false,
+        roofInsulation: attVis.roofInsulation !== false
       };
     }
 
@@ -1337,6 +1421,7 @@ function applyOpeningsVisibility(scene, on) {
         applyAttachmentRoofStructureVisibility(scene, av.roofStructure);
         applyAttachmentRoofOsbVisibility(scene, av.roofOsb);
         applyAttachmentRoofCoveringVisibility(scene, av.roofCovering);
+        applyAttachmentRoofInsulationVisibility(scene, av.roofInsulation);
       }
     }
 
@@ -1909,6 +1994,8 @@ if (getWallsEnabled(state)) {
           var _roofStructOn = rp.structure !== false;
           var _roofOsbOn = rp.osb !== false;
           var _roofCoverOn = rp.covering !== false;
+          var _roofInsOn = rp.insulation !== false;
+          var _roofPlyOn = rp.ply !== false;
 
           applyBaseVisibility(ctx.scene, _baseOn);
           applyWallsVisibility(ctx.scene, _wallsOn);
@@ -1916,6 +2003,8 @@ if (getWallsEnabled(state)) {
           applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
           applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
           applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
+          applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
+          applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
           applyCladdingVisibility(ctx.scene, _cladOn);
           applyOpeningsVisibility(ctx.scene, _openOn);
           applyAllAttachmentVisibility(ctx.scene, state);
@@ -1927,6 +2016,8 @@ if (getWallsEnabled(state)) {
             try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
             try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
             try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
+            try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
+            try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
             try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -2033,6 +2124,8 @@ if (getWallsEnabled(state)) {
         var _roofStructOn = rp.structure !== false;
         var _roofOsbOn = rp.osb !== false;
         var _roofCoverOn = rp.covering !== false;
+        var _roofInsOn = rp.insulation !== false;
+        var _roofPlyOn = rp.ply !== false;
 
         applyBaseVisibility(ctx.scene, _baseOn);
         applyWallsVisibility(ctx.scene, _wallsOn);
@@ -2040,6 +2133,8 @@ if (getWallsEnabled(state)) {
         applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
         applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
         applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
+        applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
+        applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
         applyCladdingVisibility(ctx.scene, _cladOn);
         applyOpeningsVisibility(ctx.scene, _openOn);
         applyAllAttachmentVisibility(ctx.scene, state);
@@ -2051,6 +2146,8 @@ if (getWallsEnabled(state)) {
           try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
           try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
           try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
+          try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
+          try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
           try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -3529,6 +3626,10 @@ if (state && state.overhang) {
         if (vRoofOsbEl) vRoofOsbEl.checked = rp ? (rp.osb !== false) : true;
         var vRoofCoveringEl = $("vRoofCovering");
         if (vRoofCoveringEl) vRoofCoveringEl.checked = rp ? (rp.covering !== false) : true;
+        var vRoofInsulationEl = $("vRoofInsulation");
+        if (vRoofInsulationEl) vRoofInsulationEl.checked = rp ? (rp.insulation !== false) : true;
+        var vRoofPlyEl = $("vRoofPly");
+        if (vRoofPlyEl) vRoofPlyEl.checked = rp ? (rp.ply !== false) : true;
 
         var parts = getWallParts(state);
         if (vWallFrontEl) vWallFrontEl.checked = !!parts.front;
@@ -3843,6 +3944,30 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       console.log("[vis] roof covering=", on ? "ON" : "OFF");
     });
 
+    if (vRoofInsulationEl) vRoofInsulationEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofInsulationVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.insulation = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof insulation=", on ? "ON" : "OFF");
+    });
+
+    if (vRoofPlyEl) vRoofPlyEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofPlyVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.ply = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof ply=", on ? "ON" : "OFF");
+    });
+
     if (vBaseAllEl) vBaseAllEl.addEventListener("change", function(e){
       var on = !!(e && e.target && e.target.checked);
       // Apply visibility immediately for responsiveness
@@ -3982,6 +4107,13 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       try { applyAttachmentRoofCoveringVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       store.setState({ vis: { attachments: { roofCovering: on } } });
       console.log("[vis] attachment roof covering=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofInsulationEl) vAttRoofInsulationEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofInsulationVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofInsulation: on } } });
+      console.log("[vis] attachment roof insulation=", on ? "ON" : "OFF");
     });
 
     // Developer panel attachment visibility controls (sync with main controls)

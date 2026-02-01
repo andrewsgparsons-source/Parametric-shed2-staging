@@ -1,0 +1,66 @@
+{
+  "w": 2436,
+  "d": 2862,
+  "dimMode": "frame",
+  "roof": {
+    "style": "apex",
+    "apex": {
+      "heightToEaves_mm": 1850,
+      "heightToCrest_mm": 2200,
+      "trussCount": 3,
+      "tieBeam": "eaves"
+    },
+    "pent": {
+      "minHeight_mm": 2200,
+      "maxHeight_mm": 2500
+    }
+  },
+  "overhang": {
+    "uniform_mm": 75
+  },
+  "walls": {
+    "variant": "basic",
+    "height_mm": 2400,
+    "openings": [
+      {
+        "id": "door1",
+        "wall": "front",
+        "type": "door",
+        "enabled": true,
+        "x_mm": 500,
+        "width_mm": 800,
+        "height_mm": 1900,
+        "style": "standard",
+        "handleSide": "left",
+        "isOpen": false
+      },
+      {
+        "id": "win1",
+        "wall": "left",
+        "type": "window",
+        "enabled": true,
+        "x_mm": 800,
+        "y_mm": 1050,
+        "width_mm": 600,
+        "height_mm": 400
+      }
+    ]
+  },
+  "frame": {
+    "thickness_mm": 50,
+    "depth_mm": 75
+  },
+  "vis": {
+    "roof": true,
+    "cladding": true,
+    "openings": true,
+    "base": true,
+    "ins": true,
+    "deck": true,
+    "grids": true,
+    "roofParts": {
+      "osb": true,
+      "covering": true
+    }
+  }
+}

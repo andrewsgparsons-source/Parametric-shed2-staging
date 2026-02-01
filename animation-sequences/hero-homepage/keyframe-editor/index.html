@@ -60,8 +60,9 @@
       <label style="display: block; margin-bottom: 8px; color: #00d4ff;">Paste Configurator URL (with state=):</label>
       <input type="text" id="configUrl" placeholder="https://...?state=..." style="width: 100%; padding: 10px; border-radius: 4px; border: none; background: #16213e; color: #fff; margin-bottom: 10px;">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button id="initFromUrlBtn" class="primary">🔗 Init ALL Frames from URL</button>
-        <button id="setFrameFromUrlBtn">📸 Set CURRENT Frame from URL</button>
+        <button id="initFromUrlBtn" class="primary">🔗 Init ALL Frames</button>
+        <button id="setFrameOnwardsBtn" class="primary">📸 Set This Frame ONWARDS</button>
+        <button id="setFrameFromUrlBtn">Set SINGLE Frame Only</button>
       </div>
     </div>
     
@@ -130,21 +131,36 @@ function updateKeyframesList() {
   }
   
   const frames = Object.keys(sequence.frames).map(Number).sort((a,b) => a-b);
-  document.getElementById('keyframeCount').textContent = `${frames.length} frames`;
   
-  // Show first 20 + any modified ones
-  const show = frames.slice(0, 20);
-  list.innerHTML = show.map(f => `
+  // Find frames where config CHANGES (actual keyframes)
+  const keyframes = [0]; // Always include first frame
+  let lastConfig = JSON.stringify(sequence.frames[0]);
+  
+  for (let i = 1; i < 180; i++) {
+    const thisConfig = JSON.stringify(sequence.frames[i]);
+    if (thisConfig !== lastConfig) {
+      keyframes.push(i);
+      lastConfig = thisConfig;
+    }
+  }
+  
+  document.getElementById('keyframeCount').textContent = `${keyframes.length} keyframe${keyframes.length !== 1 ? 's' : ''} (${frames.length} total)`;
+  
+  // Show all keyframes (where config changes)
+  list.innerHTML = keyframes.map(f => {
+    const nextKf = keyframes.find(k => k > f) || 180;
+    const range = nextKf > f + 1 ? ` → F${nextKf - 1}` : '';
+    return `
     <div class="keyframe-item">
-      <span class="frame-num">F${f}</span>
+      <span class="frame-num">F${f}${range}</span>
       <span class="config-preview">${configPreview(sequence.frames[f])}</span>
       <button onclick="goToFrame(${f})">Go</button>
       <button onclick="loadFrameConfig(${f})">Load</button>
     </div>
-  `).join('');
+  `}).join('');
   
-  if (frames.length > 20) {
-    list.innerHTML += `<p style="color:#666;text-align:center">... and ${frames.length - 20} more frames</p>`;
+  if (keyframes.length === 1) {
+    list.innerHTML += `<p style="color:#666;text-align:center;margin-top:10px">All frames have the same config. Change configs at different frames to create keyframes.</p>`;
   }
   
   updateTimeline();
@@ -265,6 +281,41 @@ document.getElementById('initFromUrlBtn').addEventListener('click', async () => 
   setStatus('Initialized! All 180 frames set to config from URL.', 'success');
 });
 
+document.getElementById('setFrameOnwardsBtn').addEventListener('click', () => {
+  if (!sequence) {
+    setStatus('Initialize sequence first!', 'error');
+    return;
+  }
+  
+  const urlInput = document.getElementById('configUrl').value.trim();
+  if (!urlInput) {
+    setStatus('Paste a configurator URL first!', 'error');
+    return;
+  }
+  
+  try {
+    const url = new URL(urlInput);
+    const state = url.searchParams.get('state');
+    if (!state) {
+      setStatus('URL has no state= parameter. Click "Copy Link" in configurator.', 'error');
+      return;
+    }
+    const config = JSON.parse(atob(state));
+    
+    // Apply to current frame and ALL subsequent frames
+    let count = 0;
+    for (let i = currentFrame; i < 180; i++) {
+      sequence.frames[i] = JSON.parse(JSON.stringify(config));
+      count++;
+    }
+    
+    updateKeyframesList();
+    setStatus(`Set frames ${currentFrame}-179 (${count} frames) to this config!`, 'success');
+  } catch (e) {
+    setStatus('Error parsing URL: ' + e.message, 'error');
+  }
+});
+
 document.getElementById('setFrameFromUrlBtn').addEventListener('click', () => {
   if (!sequence) {
     setStatus('Initialize sequence first!', 'error');
@@ -287,7 +338,7 @@ document.getElementById('setFrameFromUrlBtn').addEventListener('click', () => {
     const config = JSON.parse(atob(state));
     sequence.frames[currentFrame] = config;
     updateKeyframesList();
-    setStatus(`Set frame ${currentFrame} config from URL!`, 'success');
+    setStatus(`Set frame ${currentFrame} only`, 'success');
   } catch (e) {
     setStatus('Error parsing URL: ' + e.message, 'error');
   }

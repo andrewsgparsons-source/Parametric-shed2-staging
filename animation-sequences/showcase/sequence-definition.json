@@ -1,0 +1,20 @@
+{
+  "name": "20-Config Showcase Animation",
+  "description": "Progressive complexity showcase - 20 configurations morphing",
+  "fps": 12,
+  "framesPerConfig": 18,
+  "totalConfigs": 20,
+  "totalFrames": 360,
+  "duration": "30 seconds",
+  "camera": {
+    "startAlpha": 4.2,
+    "rotationPerConfig": 0.314,
+    "beta": 1.25,
+    "radius": 20
+  },
+  "notes": [
+    "Each config shows for 18 frames (1.5 sec)",
+    "Camera rotates ~18° per config (full 360° over 20 configs)",
+    "Rotation speed: 0.0175 rad/frame"
+  ]
+}

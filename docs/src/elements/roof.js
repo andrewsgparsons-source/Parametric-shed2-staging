@@ -2629,6 +2629,272 @@ if (roofParts.osb) {
     }
   }
 
+  // ---- ROOF INTERIOR PLYWOOD LINING (12mm boards covering insulation) ----
+  // Only for raised tie beam configuration with insulated variant
+  const showRoofPly = (state.vis?.roofParts?.ply !== false) && (state.walls?.variant === "insulated");
+  
+  if (showRoofPly && tieBeamSetting === "raised" && trussPos.length >= 2) {
+    console.log('[ROOF_PLY] Building roof interior plywood - trussCount:', trussPos.length, 'bays:', trussPos.length - 1);
+    
+    // Plywood material (light wood color - same as wall plywood)
+    const roofPlyMat = new BABYLON.StandardMaterial('roofPlyMat-' + Date.now(), scene);
+    roofPlyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65); // Light wood
+    
+    const PLY_THICKNESS_MM = 12; // 12mm plywood
+    const INS_THICKNESS_MM = 50; // 50mm insulation (to calculate offset)
+    const sinT = Math.sin(slopeAng);
+    const cosT = Math.cos(slopeAng);
+    
+    // Small gap between panels
+    const PLY_GAP_MM = 2;
+    
+    // For each bay between trusses
+    for (let bayIdx = 0; bayIdx < trussPos.length - 1; bayIdx++) {
+      const z0_mm = trussPos[bayIdx] + memberW_mm; // After front truss
+      const z1_mm = trussPos[bayIdx + 1];          // Before back truss
+      const bayDepth_mm = Math.max(1, z1_mm - z0_mm);
+      
+      if (bayDepth_mm < 50) continue; // Skip tiny bays
+      
+      const bayZ_mm = z0_mm + bayDepth_mm / 2; // Center Z of bay
+      
+      // --- SLOPED PLYWOOD PANELS (left and right) ---
+      // Plywood sits on the INTERIOR side of insulation
+      // The sloped panels extend from eaves UP to where they meet the horizontal ceiling
+      
+      // Slope from eaves to tie beam level
+      const slopeRunX_mm = halfSpan_mm - raisedTieHalfSpan_mm;
+      const slopeRiseY_mm = raisedTieY_mm;
+      const slopedLen_mm = Math.sqrt(slopeRunX_mm * slopeRunX_mm + slopeRiseY_mm * slopeRiseY_mm);
+      
+      // Panel dimensions - plywood goes all the way to meet horizontal ceiling
+      const slopedPanelLen_mm = slopedLen_mm - PLY_GAP_MM;
+      const slopedPanelDepth_mm = bayDepth_mm - PLY_GAP_MM * 2;
+      
+      // Midpoint along the rafter surface (before any offset)
+      const midX_L_mm = slopeRunX_mm / 2;
+      const midY_mm = memberD_mm + slopeRiseY_mm / 2;
+      
+      // Offset CENTER inward from rafter surface - plywood is INSIDE the insulation
+      // Total offset = insulation thickness + half of plywood thickness
+      const totalOffset_mm = INS_THICKNESS_MM + PLY_THICKNESS_MM / 2;
+      const offsetX_mm = sinT * totalOffset_mm;
+      const offsetY_mm = cosT * totalOffset_mm;
+      
+      // LEFT sloped plywood panel
+      {
+        const cx_mm = midX_L_mm + offsetX_mm;
+        const cy_mm = midY_mm - offsetY_mm;
+        
+        const plyLeft = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-L`,
+          slopedPanelLen_mm,
+          PLY_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "L" }
+        );
+        if (plyLeft) {
+          plyLeft.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+          plyLeft.enableEdgesRendering();
+          plyLeft.edgesWidth = 1;
+          plyLeft.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+      
+      // RIGHT sloped plywood panel (mirror of left)
+      {
+        const midX_R_mm = A_mm - slopeRunX_mm / 2;
+        const cx_mm = midX_R_mm - offsetX_mm;
+        const cy_mm = midY_mm - offsetY_mm;
+        
+        const plyRight = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-R`,
+          slopedPanelLen_mm,
+          PLY_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "R" }
+        );
+        if (plyRight) {
+          plyRight.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+          plyRight.enableEdgesRendering();
+          plyRight.edgesWidth = 1;
+          plyRight.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+      
+      // --- HORIZONTAL CEILING PLYWOOD (between sloped sections) ---
+      // This is the flat ceiling at tie beam level - UNDERSIDE visible from below
+      {
+        const horizWidth_mm = raisedTieSpan_mm - PLY_GAP_MM * 2;
+        const horizDepth_mm = slopedPanelDepth_mm;
+        
+        // Position: centered on ridge, BOTTOM at insulation bottom level
+        // Insulation bottom is at: raisedTieY_mm + memberD_mm - INS_THICKNESS_MM
+        // Plywood top should be at insulation bottom, so plywood center is offset down by PLY_THICKNESS_MM/2
+        const cx_mm = halfSpan_mm;
+        const cy_mm = raisedTieY_mm + memberD_mm - INS_THICKNESS_MM - PLY_THICKNESS_MM / 2;
+        
+        const plyHoriz = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-H`,
+          horizWidth_mm,
+          PLY_THICKNESS_MM,
+          horizDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "H" }
+        );
+        if (plyHoriz) {
+          plyHoriz.enableEdgesRendering();
+          plyHoriz.edgesWidth = 1;
+          plyHoriz.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+    }
+    
+    console.log('[ROOF_PLY] Created plywood lining for', trussPos.length - 1, 'bays');
+    
+    // ---- GABLE END PLYWOOD (TRAPEZOIDAL) ----
+    // Same shape as gable insulation but thinner (12mm) and offset inward
+    
+    const gablePlyDepth_mm = PLY_THICKNESS_MM; // 12mm depth
+    const topY_mm = raisedTieY_mm - PLY_GAP_MM;
+    const bottomY_mm = 0;
+    const kingPostLeftX_mm = halfSpan_mm - memberW_mm / 2;
+    const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
+    
+    // Rafter inner face position calculator (same as insulation)
+    function leftRafterInnerX(y_mm) {
+      if (y_mm <= memberD_mm) return memberW_mm;
+      return memberW_mm + (y_mm - memberD_mm) * halfSpan_mm / rise_mm;
+    }
+    function rightRafterInnerX(y_mm) {
+      return A_mm - leftRafterInnerX(y_mm);
+    }
+    
+    // Build trapezoidal gable plywood for one side of king post
+    // Now with door cutout support (same as gable insulation)
+    function buildGablePlyTrapezoid(gableEnd, side, gableDoor) {
+      // Z position: offset INWARD from gable frame by insulation thickness + ply position
+      let z_mm;
+      const gableOffset_mm = INS_THICKNESS_MM; // After insulation
+      if (gableEnd === "front") {
+        z_mm = trussPos[0] + memberW_mm + gableOffset_mm;
+      } else {
+        z_mm = trussPos[trussPos.length - 1] - gableOffset_mm - gablePlyDepth_mm;
+      }
+      
+      // Trapezoid corner positions (same as insulation trapezoid)
+      const leftAtBottom = leftRafterInnerX(bottomY_mm);
+      const leftAtTop = leftRafterInnerX(topY_mm);
+      const rightAtBottom = rightRafterInnerX(bottomY_mm);
+      const rightAtTop = rightRafterInnerX(topY_mm);
+      
+      let x0_bottom, x1_bottom, x0_top, x1_top;
+      if (side === "L") {
+        x0_bottom = leftAtBottom + PLY_GAP_MM;
+        x1_bottom = kingPostLeftX_mm - PLY_GAP_MM;
+        x0_top = leftAtTop + PLY_GAP_MM;
+        x1_top = kingPostLeftX_mm - PLY_GAP_MM;
+      } else {
+        x0_bottom = kingPostRightX_mm + PLY_GAP_MM;
+        x1_bottom = rightAtBottom - PLY_GAP_MM;
+        x0_top = kingPostRightX_mm + PLY_GAP_MM;
+        x1_top = rightAtTop - PLY_GAP_MM;
+      }
+      
+      // Build 2D shape - either simple trapezoid or with door notch
+      let shape = [];
+      
+      if (gableDoor) {
+        // Calculate door position in roof-local coordinates
+        const doorLeftEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) - (gableDoor.studW || 50);
+        const doorRightEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) + Math.floor(Number(gableDoor.width_mm || 800)) + (gableDoor.studW || 50);
+        const eavesH = Number(apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850;
+        const doorTopY = Math.floor(Number(gableDoor.doorTopY || 0)) - eavesH;
+        
+        // Check if door overlaps this trapezoid
+        if (doorLeftEdge < x1_bottom && doorRightEdge > x0_bottom && doorTopY > bottomY_mm) {
+          // Door overlaps - create shape with notch cut from bottom
+          const cutLeft = Math.max(doorLeftEdge, x0_bottom);
+          const cutRight = Math.min(doorRightEdge, x1_bottom);
+          const cutTop = Math.min(doorTopY, topY_mm);
+          
+          console.log('[ROOF_PLY] Cutting door notch in gable ply', gableEnd, side, 
+            'door:', doorLeftEdge, '-', doorRightEdge, 'y:', doorTopY,
+            'cut:', cutLeft, '-', cutRight, 'top:', cutTop);
+          
+          // Trapezoid with rectangular notch - go clockwise from bottom-left
+          shape = [
+            new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),    // BL corner
+            new BABYLON.Vector3(cutLeft / 1000, bottomY_mm / 1000, 0),      // Before door
+            new BABYLON.Vector3(cutLeft / 1000, cutTop / 1000, 0),          // Up to door header
+            new BABYLON.Vector3(cutRight / 1000, cutTop / 1000, 0),         // Across door header
+            new BABYLON.Vector3(cutRight / 1000, bottomY_mm / 1000, 0),     // Down after door
+            new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),    // BR corner
+            new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),          // TR corner
+            new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),          // TL corner
+          ];
+        } else {
+          // No overlap - simple trapezoid
+          shape = [
+            new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),
+            new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),
+          ];
+        }
+      } else {
+        // No door - simple trapezoid
+        shape = [
+          new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),
+          new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),
+          new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),
+          new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),
+        ];
+      }
+      
+      // Extrusion path along Z
+      const extrusionPath = [
+        new BABYLON.Vector3(0, 0, z_mm / 1000),
+        new BABYLON.Vector3(0, 0, (z_mm + gablePlyDepth_mm) / 1000)
+      ];
+      
+      const gablePly = BABYLON.MeshBuilder.ExtrudeShape(
+        `${meshPrefix}roof-ply-gable-${gableEnd}-${side}`,
+        { shape: shape, path: extrusionPath, cap: BABYLON.Mesh.CAP_ALL, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
+        scene
+      );
+      gablePly.material = roofPlyMat;
+      gablePly.parent = roofRoot;
+      gablePly.metadata = { dynamic: true, sectionId: sectionId || null, roof: "apex", part: "ply-gable", end: gableEnd, side: side };
+      gablePly.enableEdgesRendering();
+      gablePly.edgesWidth = 1;
+      gablePly.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+    }
+    
+    // Only build gable plywood if we have gable insulation area (raised tie beam gives headroom)
+    if (raisedTieY_mm > 50) {
+      buildGablePlyTrapezoid("front", "L", frontGableDoor);
+      buildGablePlyTrapezoid("front", "R", frontGableDoor);
+      buildGablePlyTrapezoid("back", "L", backGableDoor);
+      buildGablePlyTrapezoid("back", "R", backGableDoor);
+      console.log('[ROOF_PLY] Created gable end plywood trapezoids');
+    }
+  }
+
   // ---- Placement in world: align plan min corner to [-l,-f], then lift to wall height ----
   const targetMinX_m = (-l_mm) / 1000;
   const targetMinZ_m = (-f_mm) / 1000;
