@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keyframe Editor - Orbit Animation</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #1a1a2e; color: #eee; }
+    h1 { margin: 0 0 20px; font-size: 24px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    
+    .slider-section { background: #16213e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .frame-display { font-size: 48px; font-weight: bold; text-align: center; margin: 10px 0; color: #00d4ff; }
+    .slider-wrapper { padding: 10px 0; }
+    #frameSlider { width: 100%; height: 30px; cursor: pointer; }
+    .camera-info { display: flex; gap: 20px; justify-content: center; font-size: 14px; color: #888; margin-top: 10px; }
+    
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    button { background: #0f3460; border: none; color: #fff; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button:hover { background: #1a4a7a; }
+    button.primary { background: #00d4ff; color: #000; }
+    button.primary:hover { background: #00a8cc; }
+    button.danger { background: #e94560; }
+    button.danger:hover { background: #c73e54; }
+    
+    .keyframes-section { background: #16213e; padding: 20px; border-radius: 8px; }
+    .keyframes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .keyframes-list { max-height: 300px; overflow-y: auto; }
+    .keyframe-item { display: flex; align-items: center; gap: 10px; padding: 8px; background: #0f3460; border-radius: 4px; margin-bottom: 5px; }
+    .keyframe-item .frame-num { font-weight: bold; color: #00d4ff; min-width: 60px; }
+    .keyframe-item .config-preview { flex: 1; font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .keyframe-item button { padding: 6px 12px; font-size: 12px; }
+    
+    .status { padding: 10px; background: #0f3460; border-radius: 4px; margin-top: 20px; font-size: 14px; }
+    .status.success { background: #1b4332; }
+    .status.error { background: #4a1c1c; }
+    
+    .timeline { display: flex; height: 40px; background: #0f3460; border-radius: 4px; margin: 20px 0; overflow: hidden; }
+    .timeline-marker { width: 2px; background: #00d4ff; position: relative; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎬 Keyframe Editor - 180 Frame Orbit</h1>
+    
+    <div class="slider-section">
+      <div class="frame-display">Frame <span id="frameNum">0</span></div>
+      <div class="slider-wrapper">
+        <input type="range" id="frameSlider" min="0" max="179" value="0">
+      </div>
+      <div class="camera-info">
+        <span>Alpha: <span id="camAlpha">-</span></span>
+        <span>Beta: <span id="camBeta">-</span></span>
+        <span>Radius: <span id="camRadius">-</span></span>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 15px; padding: 15px; background: #0f3460; border-radius: 8px;">
+      <label style="display: block; margin-bottom: 8px; color: #00d4ff;">Paste Configurator URL (with state=):</label>
+      <input type="text" id="configUrl" placeholder="https://...?state=..." style="width: 100%; padding: 10px; border-radius: 4px; border: none; background: #16213e; color: #fff; margin-bottom: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button id="initFromUrlBtn" class="primary">🔗 Init ALL Frames from URL</button>
+        <button id="setFrameFromUrlBtn">📸 Set CURRENT Frame from URL</button>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button id="togglePanelBtn" class="primary">👁️ Show/Hide Panel</button>
+      <button id="loadFrameBtn">📥 Load Frame → Configurator</button>
+      <button id="saveBtn" class="primary">💾 Save Sequence</button>
+      <button id="exportBtn">📤 Export JSON</button>
+    </div>
+    
+    <div id="timeline" class="timeline"></div>
+    
+    <div class="keyframes-section">
+      <div class="keyframes-header">
+        <h3>Modified Keyframes</h3>
+        <span id="keyframeCount">0 modified</span>
+      </div>
+      <div id="keyframesList" class="keyframes-list">
+        <p style="color:#666">No modified keyframes yet. Use "Initialize" to start.</p>
+      </div>
+    </div>
+    
+    <div id="status" class="status">Ready. Click "Initialize" to load current config for all 180 frames.</div>
+  </div>
+
+<script>
+let sequence = null;
+let currentFrame = 0;
+
+const START_ALPHA = 4.076333253372242;
+
+function getCameraForFrame(frame) {
+  const t = frame / 180;
+  const orbitAngle = t * 2 * Math.PI;
+  return {
+    alpha: START_ALPHA + t * 2 * Math.PI,
+    beta: 1.125 + 0.125 * Math.cos(orbitAngle),
+    radius: 7.0 + 1.5 * Math.cos(orbitAngle)
+  };
+}
+
+function updateCameraDisplay(frame) {
+  const cam = getCameraForFrame(frame);
+  document.getElementById('camAlpha').textContent = cam.alpha.toFixed(2);
+  document.getElementById('camBeta').textContent = cam.beta.toFixed(2);
+  document.getElementById('camRadius').textContent = cam.radius.toFixed(2);
+}
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+function configPreview(config) {
+  if (!config) return 'No config';
+  return `${config.w}×${config.d}mm, ${config.roof?.style || 'apex'}`;
+}
+
+function updateKeyframesList() {
+  const list = document.getElementById('keyframesList');
+  if (!sequence || !sequence.frames) {
+    list.innerHTML = '<p style="color:#666">No sequence loaded.</p>';
+    document.getElementById('keyframeCount').textContent = '0 frames';
+    return;
+  }
+  
+  const frames = Object.keys(sequence.frames).map(Number).sort((a,b) => a-b);
+  document.getElementById('keyframeCount').textContent = `${frames.length} frames`;
+  
+  // Show first 20 + any modified ones
+  const show = frames.slice(0, 20);
+  list.innerHTML = show.map(f => `
+    <div class="keyframe-item">
+      <span class="frame-num">F${f}</span>
+      <span class="config-preview">${configPreview(sequence.frames[f])}</span>
+      <button onclick="goToFrame(${f})">Go</button>
+      <button onclick="loadFrameConfig(${f})">Load</button>
+    </div>
+  `).join('');
+  
+  if (frames.length > 20) {
+    list.innerHTML += `<p style="color:#666;text-align:center">... and ${frames.length - 20} more frames</p>`;
+  }
+  
+  updateTimeline();
+}
+
+function updateTimeline() {
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = '';
+  if (!sequence || !sequence.frames) return;
+  
+  // Just show current position marker
+  const marker = document.createElement('div');
+  marker.style.cssText = `position:absolute;left:${(currentFrame/180)*100}%;width:3px;height:100%;background:#00d4ff;`;
+  timeline.style.position = 'relative';
+  timeline.appendChild(marker);
+}
+
+async function goToFrame(frame) {
+  currentFrame = frame;
+  document.getElementById('frameSlider').value = frame;
+  document.getElementById('frameNum').textContent = frame;
+  updateCameraDisplay(frame);
+  updateTimeline();
+  
+  try {
+    await fetch('/api/camera', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ frame })
+    });
+  } catch (err) {
+    setStatus('Error moving camera: ' + err.message, 'error');
+  }
+}
+
+async function loadFrameConfig(frame) {
+  if (!sequence || !sequence.frames[frame]) {
+    setStatus('No config for frame ' + frame, 'error');
+    return;
+  }
+  
+  setStatus('Loading config for frame ' + frame + '...');
+  try {
+    const res = await fetch('/api/config/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: sequence.frames[frame] })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus('Loaded config for frame ' + frame, 'success');
+      await goToFrame(frame);
+    } else {
+      setStatus('Error: ' + data.error, 'error');
+    }
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'error');
+  }
+}
+
+// Event listeners
+document.getElementById('frameSlider').addEventListener('input', (e) => {
+  goToFrame(parseInt(e.target.value));
+});
+
+document.getElementById('initFromUrlBtn').addEventListener('click', async () => {
+  const urlInput = document.getElementById('configUrl').value.trim();
+  let config = null;
+  
+  if (urlInput) {
+    // Try to extract state from URL
+    try {
+      const url = new URL(urlInput);
+      const state = url.searchParams.get('state');
+      if (state) {
+        config = JSON.parse(atob(state));
+        setStatus('Extracted config from URL', 'success');
+      }
+    } catch (e) {
+      setStatus('Could not parse URL: ' + e.message, 'error');
+      return;
+    }
+  }
+  
+  if (!config) {
+    // Try to get from server
+    setStatus('Trying to get config from configurator...');
+    try {
+      const res = await fetch('/api/sequence/init', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        sequence = data.sequence;
+        updateKeyframesList();
+        setStatus('Initialized from configurator!', 'success');
+        return;
+      }
+    } catch (e) {}
+    
+    setStatus('Paste a configurator URL with state= parameter, or click "Copy Link" in configurator first.', 'error');
+    return;
+  }
+  
+  // Initialize sequence with the config
+  sequence = {
+    totalFrames: 180,
+    fps: 12,
+    cameraPath: 'v3-zoom',
+    startAlpha: 4.076333253372242,
+    target: { x: 2.05, y: 0.98, z: 2.06 },
+    frames: {}
+  };
+  
+  for (let i = 0; i < 180; i++) {
+    sequence.frames[i] = JSON.parse(JSON.stringify(config));
+  }
+  
+  updateKeyframesList();
+  setStatus('Initialized! All 180 frames set to config from URL.', 'success');
+});
+
+document.getElementById('setFrameFromUrlBtn').addEventListener('click', () => {
+  if (!sequence) {
+    setStatus('Initialize sequence first!', 'error');
+    return;
+  }
+  
+  const urlInput = document.getElementById('configUrl').value.trim();
+  if (!urlInput) {
+    setStatus('Paste a configurator URL first!', 'error');
+    return;
+  }
+  
+  try {
+    const url = new URL(urlInput);
+    const state = url.searchParams.get('state');
+    if (!state) {
+      setStatus('URL has no state= parameter. Click "Copy Link" in configurator.', 'error');
+      return;
+    }
+    const config = JSON.parse(atob(state));
+    sequence.frames[currentFrame] = config;
+    updateKeyframesList();
+    setStatus(`Set frame ${currentFrame} config from URL!`, 'success');
+  } catch (e) {
+    setStatus('Error parsing URL: ' + e.message, 'error');
+  }
+});
+
+document.getElementById('loadFrameBtn').addEventListener('click', () => {
+  loadFrameConfig(currentFrame);
+});
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  if (!sequence) {
+    setStatus('No sequence to save!', 'error');
+    return;
+  }
+  
+  setStatus('Saving sequence...');
+  try {
+    const res = await fetch('/api/sequence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sequence })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus('Sequence saved to sequence-data.json', 'success');
+    } else {
+      setStatus('Error: ' + data.error, 'error');
+    }
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'error');
+  }
+});
+
+let panelVisible = true;
+document.getElementById('togglePanelBtn').addEventListener('click', async () => {
+  panelVisible = !panelVisible;
+  setStatus('Toggling panel...');
+  try {
+    const res = await fetch('/api/panel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible: panelVisible })
+    });
+    const data = await res.json();
+    console.log('Panel toggle response:', data);
+    if (data.ok) {
+      setStatus(panelVisible ? 'Control panel shown' : 'Control panel hidden', 'success');
+    } else {
+      setStatus('Error: ' + data.error, 'error');
+    }
+  } catch (err) {
+    console.error('Panel toggle error:', err);
+    setStatus('Error toggling panel: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!sequence) {
+    setStatus('No sequence to export!', 'error');
+    return;
+  }
+  
+  const blob = new Blob([JSON.stringify(sequence, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sequence-data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('Exported sequence-data.json', 'success');
+});
+
+// Load existing sequence on startup
+(async () => {
+  try {
+    const res = await fetch('/api/sequence');
+    const data = await res.json();
+    if (data.ok && data.sequence) {
+      sequence = data.sequence;
+      updateKeyframesList();
+      setStatus('Loaded existing sequence.', 'success');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  updateCameraDisplay(0);
+})();
+</script>
+</body>
+</html>
