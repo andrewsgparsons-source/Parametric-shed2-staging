@@ -563,6 +563,50 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
       }
     }
 
+    /**
+     * Hide/show insulation and plywood visibility checkboxes based on variant.
+     * When "basic" variant is selected, these options don't apply and should be hidden.
+     * Also hides the corresponding roof insulation/plywood checkboxes for basic variant.
+     */
+    function updateInsulationControlsForVariant(state) {
+      var variant = (state && state.walls && state.walls.variant) ? String(state.walls.variant) : "insulated";
+      var isInsulated = (variant === "insulated");
+
+      // Helper to show/hide a checkbox and its parent label
+      function toggleCheckboxVisibility(el, show) {
+        if (!el) return;
+        var label = el.closest("label") || el.parentElement;
+        if (label) {
+          label.style.display = show ? "" : "none";
+        }
+      }
+
+      // Base insulation checkbox (vIns)
+      toggleCheckboxVisibility(vInsEl, isInsulated);
+
+      // Wall insulation and plywood checkboxes
+      toggleCheckboxVisibility(vWallInsulationEl, isInsulated);
+      toggleCheckboxVisibility(vWallPlywoodEl, isInsulated);
+
+      // Roof insulation and plywood checkboxes
+      toggleCheckboxVisibility(vRoofInsulationEl, isInsulated);
+      var vRoofPlyEl = $("vRoofPly");
+      toggleCheckboxVisibility(vRoofPlyEl, isInsulated);
+
+      // Also update BOM section visibility in HTML for insulation-related sections
+      var plySection = $("plySection");
+      var wallPirSection = $("wallPirSection");
+      var wallPlySection = $("wallPlySection");
+      var wallPirSection2 = $("wallPirSection2");
+      var wallPlySection2 = $("wallPlySection2");
+
+      if (plySection) plySection.style.display = isInsulated ? "" : "none";
+      if (wallPirSection) wallPirSection.style.display = isInsulated ? "" : "none";
+      if (wallPlySection) wallPlySection.style.display = isInsulated ? "" : "none";
+      if (wallPirSection2) wallPirSection2.style.display = isInsulated ? "" : "none";
+      if (wallPlySection2) wallPlySection2.style.display = isInsulated ? "" : "none";
+    }
+
     var asPosInt = function (v, def) {
       var n = Math.floor(Number(v));
       return Number.isFinite(n) && n > 0 ? n : def;
@@ -3680,6 +3724,7 @@ if (state && state.overhang) {
         }
 
         applyWallHeightUiLock(state);
+        updateInsulationControlsForVariant(state);
 
         var dv = validations && validations.doors ? validations.doors : null;
         var wv = validations && validations.windows ? validations.windows : null;
@@ -5572,6 +5617,7 @@ function parseOverhangInput(val) {
 
       try {
         applyWallHeightUiLock(store.getState());
+        updateInsulationControlsForVariant(store.getState());
       } catch (eWallLock) {
         console.error("[INIT] ERROR in applyWallHeightUiLock:", eWallLock);
       }
