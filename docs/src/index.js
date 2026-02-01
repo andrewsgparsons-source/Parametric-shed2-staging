@@ -411,8 +411,6 @@ function initApp() {
     var vRoofEl = $("vRoof");
     var vRoofStructureEl = $("vRoofStructure");
     var vRoofOsbEl = $("vRoofOsb");
-    var vRoofInsulationEl = $("vRoofInsulation");
-    var vRoofPlywoodEl = $("vRoofPlywood");
     var vBaseAllEl = $("vBaseAll");
     var vBaseEl = $("vBase");
     var vFrameEl = $("vFrame");
@@ -3395,8 +3393,6 @@ if (state && state.overhang) {
         if (vRoofOsbEl) vRoofOsbEl.checked = rp ? (rp.osb !== false) : true;
         var vRoofCoveringEl = $("vRoofCovering");
         if (vRoofCoveringEl) vRoofCoveringEl.checked = rp ? (rp.covering !== false) : true;
-        if (vRoofInsulationEl) vRoofInsulationEl.checked = rp ? (rp.insulation !== false) : true;
-        if (vRoofPlywoodEl) vRoofPlywoodEl.checked = rp ? (rp.plywood !== false) : true;
 
         var parts = getWallParts(state);
         if (vWallFrontEl) vWallFrontEl.checked = !!parts.front;
@@ -3709,26 +3705,6 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       next.covering = on;
       store.setState({ vis: { roofParts: next } });
       console.log("[vis] roof covering=", on ? "ON" : "OFF");
-    });
-
-    if (vRoofInsulationEl) vRoofInsulationEl.addEventListener("change", function (e) {
-      var on = !!(e && e.target && e.target.checked);
-      var s = store.getState();
-      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
-      var next = cur ? Object.assign({}, cur) : {};
-      next.insulation = on;
-      store.setState({ vis: { roofParts: next } });
-      console.log("[vis] roof insulation=", on ? "ON" : "OFF");
-    });
-
-    if (vRoofPlywoodEl) vRoofPlywoodEl.addEventListener("change", function (e) {
-      var on = !!(e && e.target && e.target.checked);
-      var s = store.getState();
-      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
-      var next = cur ? Object.assign({}, cur) : {};
-      next.plywood = on;
-      store.setState({ vis: { roofParts: next } });
-      console.log("[vis] roof plywood=", on ? "ON" : "OFF");
     });
 
     if (vBaseAllEl) vBaseAllEl.addEventListener("change", function(e){
