@@ -2033,12 +2033,22 @@ function scheduleFollowUpFinalisers() {
             
             // Calculate heights like build3D does
             let heightLocal = Math.max(100, Math.floor(s.walls?.height_mm || 2400));
-            if (s && s.roof && String(s.roof.style || "") === "apex") {
+            const roofStyleLocal = s && s.roof ? String(s.roof.style || "") : "";
+            if (roofStyleLocal === "apex") {
               const baseRise_mm = resolveBaseRiseMm(s);
               const apexH = resolveApexHeightsMm(s);
               if (apexH && Number.isFinite(apexH.eaves_mm)) {
                 const minWallH_mm = Math.max(100, 2 * 50 + 1);
                 heightLocal = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - baseRise_mm));
+              }
+            } else if (roofStyleLocal === "hipped") {
+              // Hipped roof: corner boards must stop at eaves height
+              // Use hardcoded WALL_RISE (168mm) to match main wall height calculation
+              const WALL_RISE_MM = 168;
+              const hippedH = resolveHippedHeightsMm(s);
+              if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+                const minWallH_mm = Math.max(100, 2 * 50 + 1);
+                heightLocal = Math.max(minWallH_mm, Math.floor(hippedH.eaves_mm - WALL_RISE_MM));
               }
             }
             
