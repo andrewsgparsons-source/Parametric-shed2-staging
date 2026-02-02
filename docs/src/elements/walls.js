@@ -79,11 +79,9 @@ export function build3D(state, ctx, sectionContext) {
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
   const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
   
-  // 🚨 HIPPED WALLS DEBUG - If this doesn't show in console, walls.js isn't being called!
-  console.log(`%c[WALLS BUILD] roofStyle="${roofStyle}"`, 'background: #222; color: #bada55; font-size: 14px;');
-  console.log(`[WALLS_HEIGHT_DEBUG] roofStyle="${roofStyle}", state.roof.style=`, state?.roof?.style);
-  console.log(`[WALLS_HEIGHT_DEBUG] state.roof.hipped=`, state?.roof?.hipped);
-  console.log(`[WALLS_HEIGHT_DEBUG] Full roof state:`, JSON.stringify(state?.roof, null, 2));
+  // 🚨 HIPPED WALLS DEBUG - Plain text logs (no %c formatting)
+  console.log(`[WALLS_BUILD_START] roofStyle="${roofStyle}" variant="${variant}"`);
+  console.log(`[WALLS_BUILD_STATE] roof.style=${state?.roof?.style} roof.hipped=`, JSON.stringify(state?.roof?.hipped));
   
   if (roofStyle === "apex") {
     const apexH = resolveApexHeightsMm(state);
