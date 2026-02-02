@@ -79,8 +79,11 @@ export function build3D(state, ctx, sectionContext) {
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
   const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
   
+  // 🚨 HIPPED WALLS DEBUG - If this doesn't show in console, walls.js isn't being called!
+  console.log(`%c[WALLS BUILD] roofStyle="${roofStyle}"`, 'background: #222; color: #bada55; font-size: 14px;');
   console.log(`[WALLS_HEIGHT_DEBUG] roofStyle="${roofStyle}", state.roof.style=`, state?.roof?.style);
   console.log(`[WALLS_HEIGHT_DEBUG] state.roof.hipped=`, state?.roof?.hipped);
+  console.log(`[WALLS_HEIGHT_DEBUG] Full roof state:`, JSON.stringify(state?.roof, null, 2));
   
   if (roofStyle === "apex") {
     const apexH = resolveApexHeightsMm(state);
@@ -1232,7 +1235,9 @@ for (let i = 0; i < wins.length; i++) {
 console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
           // Only proceed if we have a roof style that needs clipping
+          console.log('[DEBUG_ROOF_CLIP_CONDITION] roofStyle=', roofStyle, 'checking if pent/apex/hipped matches');
           if (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped") {
+            console.log('[DEBUG_ROOF_CLIP_ENTERED] Entered roof clip block for roofStyle=', roofStyle);
             const CUT_EXTRA_ROOF = 120;
             const cutDepthRoof = Math.max(1, Math.floor(CLAD_T + 2 * CUT_EXTRA_ROOF));
 
@@ -1452,6 +1457,7 @@ if (apexRoofModel) {
             }
 
             // HIPPED roofs: ALL four walls get a horizontal cut at eaves height
+            console.log('[HIPPED_CHECK] roofStyle=', roofStyle, 'cutterCSG=', cutterCSG, 'wallId=', wallId, 'isAlongX=', isAlongX);
             if (roofStyle === "hipped" && !cutterCSG) {
               const hippedH = resolveHippedHeightsMm(state);
               console.log('[HIPPED_DEBUG] resolveHippedHeightsMm returned:', hippedH);
