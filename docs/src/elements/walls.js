@@ -77,13 +77,23 @@ export function build3D(state, ctx, sectionContext) {
   const WALL_RISE_MM = 168; // Floor frame rise (applied externally in index.js)
 
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
-  if (state && state.roof && String(state.roof.style || "") === "apex") {
+  const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
+  
+  if (roofStyle === "apex") {
     const apexH = resolveApexHeightsMm(state);
     if (apexH && Number.isFinite(apexH.eaves_mm)) {
       // Wall frame height = eaves height - external wall rise shift
       const minWallH_mm = Math.max(100, 2 * 50 + 1); // 2 plates (approx) + 1mm
       height = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - WALL_RISE_MM));
       console.log(`[WALLS] Height to Eaves: ${apexH.eaves_mm}mm, WALL_RISE: ${WALL_RISE_MM}mm, Derived wall frame height: ${height}mm`);
+    }
+  } else if (roofStyle === "hipped") {
+    // HIPPED roofs: All four walls stop at eaves height (no gables)
+    const hippedH = resolveHippedHeightsMm(state);
+    if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+      const minWallH_mm = Math.max(100, 2 * 50 + 1);
+      height = Math.max(minWallH_mm, Math.floor(hippedH.eaves_mm - WALL_RISE_MM));
+      console.log(`[WALLS-HIPPED] Height to Eaves: ${hippedH.eaves_mm}mm, WALL_RISE: ${WALL_RISE_MM}mm, Derived wall frame height: ${height}mm`);
     }
   }
 
@@ -4345,6 +4355,42 @@ function resolveApexHeightsMm(state) {
     apex && apex.heightToCrest_mm,
     apex && apex.crest_mm,
     apex && apex.heightCrest_mm
+  );
+
+  let eaves_mm = (e == null) ? null : Math.max(0, e);
+  let crest_mm = (c == null) ? null : Math.max(0, c);
+
+  if (eaves_mm != null && crest_mm != null && crest_mm < eaves_mm) crest_mm = eaves_mm;
+
+  return { eaves_mm, crest_mm };
+}
+
+/**
+ * Resolve hipped roof heights from state.
+ * Similar to resolveApexHeightsMm but for hipped roofs.
+ */
+function resolveHippedHeightsMm(state) {
+  const hipped = state && state.roof && state.roof.hipped ? state.roof.hipped : null;
+
+  function pickMm() {
+    for (let i = 0; i < arguments.length; i++) {
+      const n = Number(arguments[i]);
+      if (Number.isFinite(n)) return Math.floor(n);
+    }
+    return null;
+  }
+
+  // Support likely key names
+  const e = pickMm(
+    hipped && hipped.eavesHeight_mm,
+    hipped && hipped.heightToEaves_mm,
+    hipped && hipped.eaves_mm
+  );
+
+  const c = pickMm(
+    hipped && hipped.crestHeight_mm,
+    hipped && hipped.heightToCrest_mm,
+    hipped && hipped.crest_mm
   );
 
   let eaves_mm = (e == null) ? null : Math.max(0, e);
