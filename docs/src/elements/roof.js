@@ -3665,27 +3665,27 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       for (let j = 1; j < jackCount; j++) {
         const distFromCorner = j * rafterSpacing_mm;
         
-        // This jack runs from left wall (X=0) toward hip line
-        // Hip line at Z=distFromCorner is at X=distFromCorner (45° angle)
-        // So jack runs from X=0 to X=distFromCorner at Z=distFromCorner
-        const jackRunX = distFromCorner;
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        // This jack mirrors the FL jack across the hip rafter
+        // FL jack runs along X at Z=distFromCorner
+        // LS-F jack runs along Z at X=distFromCorner (mirrored)
+        const jackRunZ = distFromCorner;  // Runs along Z axis
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        // Center position: at Z=distFromCorner, running from X=0 to X=distFromCorner
-        const cx_mm = distFromCorner / 2;
+        // Mirror position: at X=distFromCorner, running from Z=0 to Z=distFromCorner
+        const cx_mm = distFromCorner;  // At hip intersection X
         const cy_mm = heightAtHip / 2;
-        const cz_mm = distFromCorner;  // Same Z as the paired front jack
+        const cz_mm = distFromCorner / 2;  // Centered along Z run
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-LS-F-${j}`,
-          jackLen_mm,  // length along X
+          memberW_mm,  // width along X
           memberD_mm,
-          memberW_mm,  // width along Z
+          jackLen_mm,  // length along Z
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3693,7 +3693,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "left", end: "front" }
         );
-        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);  // Rotate around X for Z-running jack
       }
       
       // Back portion of left slope - jacks from left wall toward BL hip
@@ -3703,23 +3703,24 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       for (let j = 1; j < backJackCount; j++) {
         const distFromBackCorner = j * rafterSpacing_mm;
         
-        const jackRunX = distFromBackCorner;
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        // Mirror of BL jack - runs along Z at X=distFromBackCorner
+        const jackRunZ = distFromBackCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        const cx_mm = distFromBackCorner / 2;
+        const cx_mm = distFromBackCorner;  // At hip intersection X
         const cy_mm = heightAtHip / 2;
-        const cz_mm = B_mm - distFromBackCorner;  // Same Z as paired back jack
+        const cz_mm = B_mm - distFromBackCorner / 2;  // Centered along Z run toward back
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-LS-B-${j}`,
-          jackLen_mm,
-          memberD_mm,
           memberW_mm,
+          memberD_mm,
+          jackLen_mm,
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3727,38 +3728,38 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "left", end: "back" }
         );
-        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);  // Positive angle going toward back
       }
     }
     
     // Right slope jack rafters - from right wall toward FR and BR hip rafters
     {
-      // Front portion of right slope
+      // Front portion of right slope - mirrors FR jack
       const hipEndDepth = ridgeStartZ_mm;
       const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
       
       for (let j = 1; j < jackCount; j++) {
         const distFromCorner = j * rafterSpacing_mm;
         
-        // Jack runs from right wall (X=A) toward hip line
-        // Hip line at Z=distFromCorner is at X=A-distFromCorner
-        const jackRunX = distFromCorner;
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        // Mirror of FR jack - runs along Z at X=A_mm-distFromCorner
+        const jackRunZ = distFromCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        const cx_mm = A_mm - distFromCorner / 2;
+        // Mirror position: at X=A_mm-distFromCorner, running from Z=0 to Z=distFromCorner
+        const cx_mm = A_mm - distFromCorner;  // At hip intersection X (from right side)
         const cy_mm = heightAtHip / 2;
-        const cz_mm = distFromCorner;
+        const cz_mm = distFromCorner / 2;  // Centered along Z run
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-RS-F-${j}`,
-          jackLen_mm,
+          memberW_mm,  // width along X
           memberD_mm,
-          memberW_mm,
+          jackLen_mm,  // length along Z
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3766,33 +3767,33 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "right", end: "front" }
         );
-        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
       }
       
-      // Back portion of right slope
+      // Back portion of right slope - mirrors BR jack
       const backHipEndDepth = B_mm - ridgeEndZ_mm;
       const backJackCount = Math.floor(backHipEndDepth / rafterSpacing_mm) + 1;
       
       for (let j = 1; j < backJackCount; j++) {
         const distFromBackCorner = j * rafterSpacing_mm;
         
-        const jackRunX = distFromBackCorner;
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        const jackRunZ = distFromBackCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        const cx_mm = A_mm - distFromBackCorner / 2;
+        const cx_mm = A_mm - distFromBackCorner;  // At hip intersection X (from right side)
         const cy_mm = heightAtHip / 2;
-        const cz_mm = B_mm - distFromBackCorner;
+        const cz_mm = B_mm - distFromBackCorner / 2;  // Centered along Z run toward back
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-RS-B-${j}`,
-          jackLen_mm,
-          memberD_mm,
           memberW_mm,
+          memberD_mm,
+          jackLen_mm,
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3800,7 +3801,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "right", end: "back" }
         );
-        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
       }
     }
   }
