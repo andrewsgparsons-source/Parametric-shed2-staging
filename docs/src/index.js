@@ -497,6 +497,11 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var roofApexCrestHeightEl =
       $("roofApexCrestHeight");
 
+    // Hipped roof absolute heights (mm)
+    // These map to state.roof.hipped.heightToEaves_mm / heightToCrest_mm
+    var roofHippedEavesHeightEl = $("roofHippedEaveHeight");
+    var roofHippedCrestHeightEl = $("roofHippedCrestHeight");
+
     // Apex roof: truss count + spacing readout (mm only)
     var roofApexTrussCountEl = $("roofApexTrussCount");
     var roofApexTrussSpacingEl = $("roofApexTrussSpacing");
@@ -3870,6 +3875,52 @@ function commitApexHeightsFromInputs() {
       store.setState({ roof: { apex: { heightToEaves_mm: eaves, heightToCrest_mm: crest } } });
     }
 
+    // Commit hipped roof heights from UI inputs to state
+    function commitHippedHeightsFromInputs() {
+      if (!roofHippedEavesHeightEl || !roofHippedCrestHeightEl) return;
+
+      var s = store.getState();
+      var roofStyle = (s.roof && s.roof.style) ? s.roof.style : "apex";
+      if (roofStyle !== "hipped") return;
+      
+      // Hipped height constraints: same as apex
+      var HIPPED_EAVE_MIN = 800;
+      var HIPPED_EAVE_MAX = 2800;
+      var HIPPED_CREST_MIN = 1000;
+      var HIPPED_CREST_MAX = 4500;
+      
+      var unitMode = getUnitMode(s);
+      var eavesVal = parseFloat(roofHippedEavesHeightEl.value) || 0;
+      var crestVal = parseFloat(roofHippedCrestHeightEl.value) || 0;
+      
+      if (unitMode === "imperial") {
+        eavesVal = Math.round(eavesVal * 25.4);
+        crestVal = Math.round(crestVal * 25.4);
+      }
+
+      // Clamp to valid ranges
+      var eaves = clamp(Math.floor(eavesVal), HIPPED_EAVE_MIN, HIPPED_EAVE_MAX);
+      var crest = clamp(Math.floor(crestVal), HIPPED_CREST_MIN, HIPPED_CREST_MAX);
+
+      // Ensure crest > eaves (need some pitch)
+      if (crest <= eaves) {
+        crest = eaves + 100;
+        if (crest > HIPPED_CREST_MAX) {
+          crest = HIPPED_CREST_MAX;
+          eaves = crest - 100;
+        }
+      }
+
+      // Reflect clamp immediately in UI
+      try { 
+        roofHippedEavesHeightEl.value = String(eaves);
+        roofHippedCrestHeightEl.value = String(crest); 
+      } catch (e0) {}
+
+      console.log("[HIPPED_HEIGHTS] Committing eaves=" + eaves + ", crest=" + crest);
+      store.setState({ roof: { hipped: { heightToEaves_mm: eaves, heightToCrest_mm: crest } } });
+    }
+
 if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
       if (!isPentRoofStyle(store.getState())) return;
       commitPentHeightsFromInputs();
@@ -3882,6 +3933,10 @@ if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
     // Commit-only (blur/Enter) so changes deterministically trigger state->rebuild in the same pathway as other controls.
     if (roofApexEavesHeightEl) wireCommitOnly(roofApexEavesHeightEl, commitApexHeightsFromInputs);
    if (roofApexCrestHeightEl) wireCommitOnly(roofApexCrestHeightEl, commitApexHeightsFromInputs);
+
+    // Wire up hipped height inputs
+    if (roofHippedEavesHeightEl) wireCommitOnly(roofHippedEavesHeightEl, commitHippedHeightsFromInputs);
+    if (roofHippedCrestHeightEl) wireCommitOnly(roofHippedCrestHeightEl, commitHippedHeightsFromInputs);
 
     // Apex trusses (incl. gable ends): user-selected count
     // Apex trusses (incl. gable ends): user-selected count
@@ -5566,6 +5621,13 @@ function parseOverhangInput(val) {
           console.log("[INIT] commitPentHeightsFromInputs done");
         } catch (ePent) {
           console.error("[INIT] commitPentHeightsFromInputs error:", ePent);
+        }
+        try {
+          console.log("[INIT] Calling commitHippedHeightsFromInputs...");
+          commitHippedHeightsFromInputs();
+          console.log("[INIT] commitHippedHeightsFromInputs done");
+        } catch (eHipped) {
+          console.error("[INIT] commitHippedHeightsFromInputs error:", eHipped);
         }
       } else {
         console.log("[INIT] Skipping commitHeights - state loaded from URL parameters");
