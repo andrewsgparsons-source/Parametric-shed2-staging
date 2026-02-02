@@ -3817,20 +3817,42 @@ if (state && state.overhang) {
             dimChanged = true;
           }
           
-          if (dimChanged) {
-            console.log("[ROOF_STYLE_CHANGE] Hipped roof selected - enforcing minimum dimensions:", curW, "x", curD, "mm");
+          // Hipped roof minimum overhang: 200mm
+          var HIPPED_MIN_OVERHANG = 200;
+          var curOverhang = curState.overhang || {};
+          var curUniformOvh = curOverhang.uniform_mm || 0;
+          var ovhChanged = false;
+          
+          if (curUniformOvh < HIPPED_MIN_OVERHANG) {
+            curUniformOvh = HIPPED_MIN_OVERHANG;
+            ovhChanged = true;
+          }
+          
+          if (dimChanged || ovhChanged) {
+            console.log("[ROOF_STYLE_CHANGE] Hipped roof selected - enforcing minimums: dims=" + curW + "x" + curD + "mm, overhang=" + curUniformOvh + "mm");
             // Set a flag to prevent writeActiveDims from overwriting our changes
             window.__skipNextWriteActiveDims = true;
-            // Set everything in one state update - dimensions, roof style, and heights
-            store.setState({ 
-              w: curW, 
-              d: curD,
-              dim: { frameW_mm: curW, frameD_mm: curD },
+            // Set everything in one state update - dimensions, overhang, roof style, and heights
+            var stateUpdate = { 
               roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } 
-            });
+            };
+            if (dimChanged) {
+              stateUpdate.w = curW;
+              stateUpdate.d = curD;
+              stateUpdate.dim = { frameW_mm: curW, frameD_mm: curD };
+            }
+            if (ovhChanged) {
+              stateUpdate.overhang = { uniform_mm: curUniformOvh };
+            }
+            store.setState(stateUpdate);
             // Update UI inputs to match
-            if (wInputEl) wInputEl.value = formatDimension(curW, unitMode);
-            if (dInputEl) dInputEl.value = formatDimension(curD, unitMode);
+            if (dimChanged) {
+              if (wInputEl) wInputEl.value = formatDimension(curW, unitMode);
+              if (dInputEl) dInputEl.value = formatDimension(curD, unitMode);
+            }
+            if (ovhChanged && overUniformEl) {
+              overUniformEl.value = formatDimension(curUniformOvh, unitMode);
+            }
           } else {
             console.log("[ROOF_STYLE_CHANGE] Initializing hipped heights: eaves=" + eavesVal + ", crest=" + crestVal);
             store.setState({ roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } });
