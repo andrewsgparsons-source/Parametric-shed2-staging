@@ -3515,7 +3515,9 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     // Front hip end - jack rafters getting progressively shorter toward corners
     {
       const hipEndDepth = ridgeStartZ_mm; // Distance from front wall to ridge start
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm);
+      // Calculate how many jack rafters fit - at least 1 if there's 600mm of space
+      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
+      console.log(`[JACK_RAFTERS] Front: hipEndDepth=${hipEndDepth}mm, rafterSpacing=${rafterSpacing_mm}mm, jackCount=${jackCount}`);
       
       for (let j = 1; j < jackCount; j++) {
         const distFromCorner = j * rafterSpacing_mm;
@@ -3527,6 +3529,8 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // Height at hip intersection (jack rises at common rafter pitch)
         const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
         const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        console.log(`[JACK_RAFTERS] Front j=${j}: distFromCorner=${distFromCorner}mm, jackLen=${jackLen_mm}mm, minLen=${memberW_mm * 2}mm`);
         
         // Skip very short jacks (at corner)
         if (jackLen_mm < memberW_mm * 2) continue;
@@ -3582,7 +3586,8 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     // Back hip end - similar jack rafters (measured from back corners)
     {
       const hipEndDepth = B_mm - ridgeEndZ_mm; // Distance from ridge end to back wall (= halfSpan)
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm);
+      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
+      console.log(`[JACK_RAFTERS] Back: hipEndDepth=${hipEndDepth}mm, jackCount=${jackCount}`);
       
       for (let j = 1; j < jackCount; j++) {
         const distFromBackWall = j * rafterSpacing_mm;
