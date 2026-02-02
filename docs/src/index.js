@@ -3798,8 +3798,43 @@ if (state && state.overhang) {
           if (!eavesVal || eavesVal < 800) eavesVal = 2000;
           if (!crestVal || crestVal < 1000) crestVal = 2400;
           if (crestVal <= eavesVal) crestVal = eavesVal + 400;
-          console.log("[ROOF_STYLE_CHANGE] Initializing hipped heights: eaves=" + eavesVal + ", crest=" + crestVal);
-          store.setState({ roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } });
+          
+          // Hipped roof minimum dimensions: 2500mm x 3000mm
+          var HIPPED_MIN_W = 2500;
+          var HIPPED_MIN_D = 3000;
+          var curState = store.getState();
+          var unitMode = getUnitMode(curState);
+          var curW = curState.w || 0;
+          var curD = curState.d || 0;
+          var dimChanged = false;
+          
+          if (curW < HIPPED_MIN_W) {
+            curW = HIPPED_MIN_W;
+            dimChanged = true;
+          }
+          if (curD < HIPPED_MIN_D) {
+            curD = HIPPED_MIN_D;
+            dimChanged = true;
+          }
+          
+          if (dimChanged) {
+            console.log("[ROOF_STYLE_CHANGE] Hipped roof selected - enforcing minimum dimensions:", curW, "x", curD, "mm");
+            // Set a flag to prevent writeActiveDims from overwriting our changes
+            window.__skipNextWriteActiveDims = true;
+            // Set everything in one state update - dimensions, roof style, and heights
+            store.setState({ 
+              w: curW, 
+              d: curD,
+              dim: { frameW_mm: curW, frameD_mm: curD },
+              roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } 
+            });
+            // Update UI inputs to match
+            if (wInputEl) wInputEl.value = formatDimension(curW, unitMode);
+            if (dInputEl) dInputEl.value = formatDimension(curD, unitMode);
+          } else {
+            console.log("[ROOF_STYLE_CHANGE] Initializing hipped heights: eaves=" + eavesVal + ", crest=" + crestVal);
+            store.setState({ roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } });
+          }
         } else {
           store.setState({ roof: { style: v } });
         }
@@ -4305,6 +4340,12 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     }
 
 function writeActiveDims() {
+      // Skip if flagged (e.g., when hipped roof enforces minimum dimensions)
+      if (window.__skipNextWriteActiveDims) {
+        console.log("[writeActiveDims] Skipping - dimension change already applied by roof style change");
+        window.__skipNextWriteActiveDims = false;
+        return;
+      }
       var s = store.getState();
       var unitMode = getUnitMode(s);
       var w, d;
