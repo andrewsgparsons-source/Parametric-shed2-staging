@@ -1454,6 +1454,7 @@ if (apexRoofModel) {
             // HIPPED roofs: ALL four walls get a horizontal cut at eaves height
             if (roofStyle === "hipped" && !cutterCSG) {
               const hippedH = resolveHippedHeightsMm(state);
+              console.log('[HIPPED_DEBUG] resolveHippedHeightsMm returned:', hippedH);
               if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
                 const WALL_RISE_MM_HIPPED = 168;
                 // Cut height is at eaves, accounting for the wall rise shift
