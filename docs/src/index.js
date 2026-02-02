@@ -3788,7 +3788,21 @@ if (state && state.overhang) {
       roofStyleEl.addEventListener("change", function () {
         var v = String(roofStyleEl.value || "apex");
         if (v !== "apex" && v !== "pent" && v !== "hipped") v = "apex";
-        store.setState({ roof: { style: v } });
+        
+        // When switching to hipped, auto-initialize hipped heights from UI inputs or defaults
+        // This ensures state.roof.hipped exists so walls.js can read eaves height
+        if (v === "hipped") {
+          var eavesVal = roofHippedEavesHeightEl ? parseFloat(roofHippedEavesHeightEl.value) : 0;
+          var crestVal = roofHippedCrestHeightEl ? parseFloat(roofHippedCrestHeightEl.value) : 0;
+          // Use defaults if inputs are empty or invalid
+          if (!eavesVal || eavesVal < 800) eavesVal = 2000;
+          if (!crestVal || crestVal < 1000) crestVal = 2400;
+          if (crestVal <= eavesVal) crestVal = eavesVal + 400;
+          console.log("[ROOF_STYLE_CHANGE] Initializing hipped heights: eaves=" + eavesVal + ", crest=" + crestVal);
+          store.setState({ roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } });
+        } else {
+          store.setState({ roof: { style: v } });
+        }
         applyWallHeightUiLock(store.getState());
         updateRoofHeightBlocks(v);
       });

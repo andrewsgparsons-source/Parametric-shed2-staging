@@ -79,6 +79,9 @@ export function build3D(state, ctx, sectionContext) {
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
   const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
   
+  console.log(`[WALLS_HEIGHT_DEBUG] roofStyle="${roofStyle}", state.roof.style=`, state?.roof?.style);
+  console.log(`[WALLS_HEIGHT_DEBUG] state.roof.hipped=`, state?.roof?.hipped);
+  
   if (roofStyle === "apex") {
     const apexH = resolveApexHeightsMm(state);
     if (apexH && Number.isFinite(apexH.eaves_mm)) {
@@ -90,6 +93,7 @@ export function build3D(state, ctx, sectionContext) {
   } else if (roofStyle === "hipped") {
     // HIPPED roofs: All four walls stop at eaves height (no gables)
     const hippedH = resolveHippedHeightsMm(state);
+    console.log(`[WALLS_HIPPED_DEBUG] hippedH=`, hippedH);
     if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
       const minWallH_mm = Math.max(100, 2 * 50 + 1);
       height = Math.max(minWallH_mm, Math.floor(hippedH.eaves_mm - WALL_RISE_MM));
@@ -1228,7 +1232,7 @@ for (let i = 0; i < wins.length; i++) {
 console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
           // Only proceed if we have a roof style that needs clipping
-          if (roofStyle === "pent" || roofStyle === "apex") {
+          if (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped") {
             const CUT_EXTRA_ROOF = 120;
             const cutDepthRoof = Math.max(1, Math.floor(CLAD_T + 2 * CUT_EXTRA_ROOF));
 
@@ -1445,6 +1449,80 @@ if (apexRoofModel) {
                 try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
               }
               // Note: apex roofs don't need left/right wall trimming as they have constant eaves height
+            }
+
+            // HIPPED roofs: ALL four walls get a horizontal cut at eaves height
+            if (roofStyle === "hipped" && !cutterCSG) {
+              const hippedH = resolveHippedHeightsMm(state);
+              if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+                const WALL_RISE_MM_HIPPED = 168;
+                // Cut height is at eaves, accounting for the wall rise shift
+                const cutHeight = Math.floor(hippedH.eaves_mm);
+
+                console.log('[HIPPED_CLAD_CUT]', {
+                  wallId,
+                  panelIndex,
+                  isAlongX,
+                  eavesHeight: hippedH.eaves_mm,
+                  cutHeight
+                });
+
+                if (isAlongX) {
+                  // Front/back walls
+                  const wallOutsideFaceWorldZ = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+                  const cutMinZ_mm = Math.floor(wallOutsideFaceWorldZ - CUT_EXTRA_ROOF);
+                  const cutMaxZ_mm = Math.floor(wallOutsideFaceWorldZ + CLAD_T + CUT_EXTRA_ROOF);
+
+                  const xA0 = origin.x + Math.floor(Number(panelStart || 0));
+                  const xA1 = xA0 + Math.floor(Number(panelLen || 0));
+
+                  const cutterHeight = 20000;
+                  const cutterBox = BABYLON.MeshBuilder.CreateBox(
+                    `cladroofcut-${String(wallId)}-panel-${String(panelIndex)}-hipped`,
+                    {
+                      width: (xA1 - xA0) / 1000,
+                      height: cutterHeight / 1000,
+                      depth: (cutMaxZ_mm - cutMinZ_mm) / 1000
+                    },
+                    scene
+                  );
+                  cutterBox.position = new BABYLON.Vector3(
+                    (xA0 + (xA1 - xA0) / 2) / 1000,
+                    (cutHeight + cutterHeight / 2) / 1000,
+                    (cutMinZ_mm + (cutMaxZ_mm - cutMinZ_mm) / 2) / 1000
+                  );
+
+                  try { cutterCSG = BABYLON.CSG.FromMesh(cutterBox); } catch (e) { cutterCSG = null; }
+                  try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
+                } else {
+                  // Left/right walls
+                  const wallOutsideFaceWorldX = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+                  const cutMinX_mm = Math.floor(wallOutsideFaceWorldX - CUT_EXTRA_ROOF);
+                  const cutMaxX_mm = Math.floor(wallOutsideFaceWorldX + CLAD_T + CUT_EXTRA_ROOF);
+
+                  const zA0 = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + Math.floor(Number(panelStart || 0))));
+                  const zA1 = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + Math.floor(Number(panelStart || 0)) + Math.floor(Number(panelLen || 0))));
+
+                  const cutterHeight = 20000;
+                  const cutterBox = BABYLON.MeshBuilder.CreateBox(
+                    `cladroofcut-${String(wallId)}-panel-${String(panelIndex)}-hipped`,
+                    {
+                      width: (cutMaxX_mm - cutMinX_mm) / 1000,
+                      height: cutterHeight / 1000,
+                      depth: (zA1 - zA0) / 1000
+                    },
+                    scene
+                  );
+                  cutterBox.position = new BABYLON.Vector3(
+                    (cutMinX_mm + (cutMaxX_mm - cutMinX_mm) / 2) / 1000,
+                    (cutHeight + cutterHeight / 2) / 1000,
+                    (zA0 + (zA1 - zA0) / 2) / 1000
+                  );
+
+                  try { cutterCSG = BABYLON.CSG.FromMesh(cutterBox); } catch (e) { cutterCSG = null; }
+                  try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
+                }
+              }
             }
 
             if (cutterCSG) {
@@ -4368,35 +4446,44 @@ function resolveApexHeightsMm(state) {
 /**
  * Resolve hipped roof heights from state.
  * Similar to resolveApexHeightsMm but for hipped roofs.
+ * Falls back to apex values then to sensible defaults (matching roof.js behavior).
  */
 function resolveHippedHeightsMm(state) {
   const hipped = state && state.roof && state.roof.hipped ? state.roof.hipped : null;
+  const apex = state && state.roof && state.roof.apex ? state.roof.apex : null;
 
   function pickMm() {
     for (let i = 0; i < arguments.length; i++) {
       const n = Number(arguments[i]);
-      if (Number.isFinite(n)) return Math.floor(n);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
     }
     return null;
   }
 
-  // Support likely key names
+  // Support likely key names - fall back through hipped -> apex -> defaults (matching roof.js)
   const e = pickMm(
     hipped && hipped.eavesHeight_mm,
     hipped && hipped.heightToEaves_mm,
-    hipped && hipped.eaves_mm
+    hipped && hipped.eaves_mm,
+    apex && apex.heightToEaves_mm,
+    apex && apex.eavesHeight_mm,
+    apex && apex.eaves_mm
   );
 
   const c = pickMm(
     hipped && hipped.crestHeight_mm,
     hipped && hipped.heightToCrest_mm,
-    hipped && hipped.crest_mm
+    hipped && hipped.crest_mm,
+    apex && apex.heightToCrest_mm,
+    apex && apex.crestHeight_mm,
+    apex && apex.crest_mm
   );
 
-  let eaves_mm = (e == null) ? null : Math.max(0, e);
-  let crest_mm = (c == null) ? null : Math.max(0, c);
+  // Default to 1850 eaves / 2400 crest (matching roof.js defaults)
+  let eaves_mm = (e == null) ? 1850 : Math.max(0, e);
+  let crest_mm = (c == null) ? 2400 : Math.max(0, c);
 
-  if (eaves_mm != null && crest_mm != null && crest_mm < eaves_mm) crest_mm = eaves_mm;
+  if (crest_mm < eaves_mm) crest_mm = eaves_mm;
 
   return { eaves_mm, crest_mm };
 }
