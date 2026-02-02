@@ -3302,11 +3302,14 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
   const rise_mm = Math.max(100, crestH_mm - eavesH_mm);
 
   // Timber section
+  // For load-bearing rafters, timber should be "on its side" (tall and narrow)
+  // g.thickness_mm = narrow dimension (e.g., 50mm)
+  // g.depth_mm = tall dimension (e.g., 75 or 100mm)
   const g = getRoofFrameGauge(state);
-  const baseW = Math.max(1, Math.floor(Number(g.thickness_mm)));
-  const baseD = Math.max(1, Math.floor(Number(g.depth_mm)));
-  const memberW_mm = baseD; // width in plan
-  const memberD_mm = baseW; // vertical depth
+  const baseW = Math.max(1, Math.floor(Number(g.thickness_mm)));  // e.g., 50
+  const baseD = Math.max(1, Math.floor(Number(g.depth_mm)));      // e.g., 75/100
+  const memberW_mm = baseW; // width in plan = narrow (50mm)
+  const memberD_mm = baseD; // vertical depth = tall (75/100mm) - load bearing
 
   // Materials
   const joistMat = materials && materials.timber ? materials.timber : null;
@@ -3422,9 +3425,9 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       const dz = hip.ridgeZ - hip.z;
       const planAngle = Math.atan2(dz, dx); // Angle in XZ plane
       
-      // Center of hip rafter
+      // Center of hip rafter (midpoint between eaves at y=0 and ridge at y=rise)
       const cx_mm = (hip.x + hip.ridgeX) / 2;
-      const cy_mm = memberD_mm / 2 + rise_mm / 2;
+      const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
       const cz_mm = (hip.z + hip.ridgeZ) / 2;
 
       const hipMesh = mkBoxCenteredLocal(
@@ -3465,7 +3468,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // Left common rafter (from ridge to left wall)
         {
           const cx_mm = halfSpan_mm / 2;
-          const cy_mm = memberD_mm / 2 + rise_mm / 2;
+          const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
           
           const leftRafter = mkBoxCenteredLocal(
             `${meshPrefix}roof-hipped-common-L-${i}`,
@@ -3485,7 +3488,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // Right common rafter (from ridge to right wall)
         {
           const cx_mm = halfSpan_mm + halfSpan_mm / 2;
-          const cy_mm = memberD_mm / 2 + rise_mm / 2;
+          const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
           
           const rightRafter = mkBoxCenteredLocal(
             `${meshPrefix}roof-hipped-common-R-${i}`,
@@ -3505,6 +3508,10 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     }
 
     // === JACK RAFTERS (shortened rafters from wall to hip rafters) ===
+    // Jack rafters run perpendicular from wall plate TO the diagonal hip rafter line.
+    // They maintain common rafter pitch but get shorter as they approach corners.
+    // Key insight: at Z = distFromCorner, the hip line is at X = distFromCorner (45° in plan).
+    
     // Front hip end - jack rafters getting progressively shorter toward corners
     {
       const hipEndDepth = ridgeStartZ_mm; // Distance from front wall to ridge start
@@ -3513,19 +3520,24 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       for (let j = 1; j < jackCount; j++) {
         const distFromCorner = j * rafterSpacing_mm;
         
-        // Jack rafter length decreases as we approach the corner
-        // At the hip, the jack meets the hip rafter at a height proportional to its distance
-        const heightAtHip = (distFromCorner / hipEndDepth) * rise_mm;
-        const jackRunX = halfSpan_mm; // Still runs full width to center
+        // Jack runs from wall to hip line. At z=distFromCorner, hip line is at x=distFromCorner
+        // (because hip runs from corner at 45° in plan when ridgeStartZ = halfSpan)
+        const jackRunX = distFromCorner; // Horizontal run to hip line
+        
+        // Height at hip intersection (jack rises at common rafter pitch)
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
         const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
         
-        // Left jack (from left wall toward center)
+        // Skip very short jacks (at corner)
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Left jack (from left wall toward hip line)
         {
           const cx_mm = jackRunX / 2;
-          const cy_mm = memberD_mm / 2 + heightAtHip / 2;
+          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
           const cz_mm = distFromCorner;
           
-          const jackAngle = Math.atan2(heightAtHip, jackRunX);
+          const jackAngle = Math.atan2(heightAtHip, jackRunX); // = commonSlopeAng
           
           const jackL = mkBoxCenteredLocal(
             `${meshPrefix}roof-hipped-jack-FL-${j}`,
@@ -3542,10 +3554,10 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           jackL.rotation = new BABYLON.Vector3(0, 0, jackAngle);
         }
         
-        // Right jack (from right wall toward center)
+        // Right jack (from right wall toward hip line)
         {
           const cx_mm = A_mm - jackRunX / 2;
-          const cy_mm = memberD_mm / 2 + heightAtHip / 2;
+          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
           const cz_mm = distFromCorner;
           
           const jackAngle = Math.atan2(heightAtHip, jackRunX);
@@ -3567,24 +3579,29 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       }
     }
     
-    // Back hip end - similar jack rafters
+    // Back hip end - similar jack rafters (measured from back corners)
     {
-      const hipEndDepth = B_mm - ridgeEndZ_mm; // Distance from ridge end to back wall
+      const hipEndDepth = B_mm - ridgeEndZ_mm; // Distance from ridge end to back wall (= halfSpan)
       const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm);
       
       for (let j = 1; j < jackCount; j++) {
-        const distFromRidge = j * rafterSpacing_mm;
-        const distFromCorner = hipEndDepth - distFromRidge;
+        const distFromBackWall = j * rafterSpacing_mm;
         
-        const heightAtHip = (distFromCorner / hipEndDepth) * rise_mm;
-        const jackRunX = halfSpan_mm;
+        // Jack runs from wall to hip line
+        const jackRunX = distFromBackWall;
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
         const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        // Skip very short jacks
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Z position: measured from back wall
+        const cz_mm = B_mm - distFromBackWall;
         
         // Left jack
         {
           const cx_mm = jackRunX / 2;
-          const cy_mm = memberD_mm / 2 + heightAtHip / 2;
-          const cz_mm = ridgeEndZ_mm + distFromRidge;
+          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
           
           const jackAngle = Math.atan2(heightAtHip, jackRunX);
           
@@ -3606,8 +3623,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // Right jack
         {
           const cx_mm = A_mm - jackRunX / 2;
-          const cy_mm = memberD_mm / 2 + heightAtHip / 2;
-          const cz_mm = ridgeEndZ_mm + distFromRidge;
+          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
           
           const jackAngle = Math.atan2(heightAtHip, jackRunX);
           
@@ -3867,12 +3883,20 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
   roofRoot.position.x = targetMinX_m;
   roofRoot.position.z = targetMinZ_m;
   
-  // Height positioning - eaves height minus floor rise
+  // Height positioning
+  // shiftRoofMeshes() in index.js adds WALL_RISE_MM (168mm) to all roof mesh positions.
+  // Wall plates are at frame height = eavesH_mm - WALL_RISE_MM (in local coords).
+  // Rafter geometry has y=0 at eaves level. After shift, meshes at local y=0 
+  // end up at world y = roofRoot.y + 0 + shift = roofRoot.y + WALL_RISE_MM.
+  // For rafters to sit on wall plates: roofRoot.y + WALL_RISE_MM = eavesH_mm
+  // Therefore: roofRoot.y = eavesH_mm - WALL_RISE_MM
   const WALL_RISE_MM = 168;
-  const roofRootY_mm = eavesH_mm - WALL_RISE_MM;
-  roofRoot.position.y = roofRootY_mm / 1000;
+  roofRoot.position.y = (eavesH_mm - WALL_RISE_MM) / 1000;
 
-  console.log(`[HIPPED_ROOF] Built hipped roof: ${A_mm}mm x ${B_mm}mm, rise=${rise_mm}mm, ridge=${ridgeLen_mm}mm`);
+  console.log(`[HIPPED_ROOF] Built hipped roof: ${A_mm}mm x ${B_mm}mm`);
+  console.log(`[HIPPED_ROOF] eavesH_mm=${eavesH_mm}, crestH_mm=${crestH_mm}, rise_mm=${rise_mm}`);
+  console.log(`[HIPPED_ROOF] roofRoot.position.y=${roofRoot.position.y}m (world)`);
+  console.log(`[HIPPED_ROOF] memberW_mm=${memberW_mm}, memberD_mm=${memberD_mm}`);
 }
 
 /**
