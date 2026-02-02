@@ -3507,185 +3507,191 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       }
     }
 
-    // === JACK RAFTERS (shortened rafters from wall to hip rafters) ===
-    // Jack rafters run perpendicular from wall plate TO the diagonal hip rafter line.
-    // They maintain common rafter pitch but get shorter as they approach corners.
-    // Key insight: at Z = distFromCorner, the hip line is at X = distFromCorner (45° in plan).
+    // === JACK RAFTERS (shortened rafters on hip end slopes) ===
+    // Jack rafters are like common rafters but truncated by hip rafters at corners.
+    // They land on the FRONT/BACK wall plates and run along Z (parallel to common rafters).
+    // At the hip end, they form pairs on either side of each hip rafter.
     
-    // Front hip end - jack rafters getting progressively shorter toward corners
+    // FRONT HIP END - jack rafters landing on FRONT wall plate (Z=0)
+    // Run from front wall toward back, truncated by hip rafters
     {
-      const hipEndDepth = ridgeStartZ_mm; // Distance from front wall to ridge start
-      // Calculate how many jack rafters fit - at least 1 if there's 600mm of space
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
-      console.log(`[JACK_RAFTERS] Front: hipEndDepth=${hipEndDepth}mm, rafterSpacing=${rafterSpacing_mm}mm, jackCount=${jackCount}`);
-      
-      for (let j = 1; j < jackCount; j++) {
-        const distFromCorner = j * rafterSpacing_mm;
+      // Left side of front hip end (left of center, truncated by FL hip)
+      // Jack at X position meets FL hip at Z = X (since hip is 45° in plan)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = j * rafterSpacing_mm;  // Position along front wall from left corner
         
-        // Jack runs from wall to hip line. At z=distFromCorner, hip line is at x=distFromCorner
-        // (because hip runs from corner at 45° in plan when ridgeStartZ = halfSpan)
-        const jackRunX = distFromCorner; // Horizontal run to hip line
+        if (xPos >= halfSpan_mm) break;  // Stop at ridge centerline
         
-        // Height at hip intersection (jack rises at common rafter pitch)
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
-        
-        console.log(`[JACK_RAFTERS] Front j=${j}: distFromCorner=${distFromCorner}mm, jackLen=${jackLen_mm}mm, minLen=${memberW_mm * 2}mm`);
-        
-        // Skip very short jacks (at corner)
-        if (jackLen_mm < memberW_mm * 2) continue;
-        
-        // Left jack (from left wall toward hip line)
-        {
-          const cx_mm = jackRunX / 2;
-          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
-          const cz_mm = distFromCorner;
-          
-          const jackAngle = Math.atan2(heightAtHip, jackRunX); // = commonSlopeAng
-          
-          const jackL = mkBoxCenteredLocal(
-            `${meshPrefix}roof-hipped-jack-FL-${j}`,
-            jackLen_mm,
-            memberD_mm,
-            memberW_mm,
-            cx_mm,
-            cy_mm,
-            cz_mm,
-            roofRoot,
-            joistMat,
-            { roof: "hipped", part: "jack-rafter", end: "front", side: "L" }
-          );
-          jackL.rotation = new BABYLON.Vector3(0, 0, jackAngle);
-        }
-        
-        // Right jack (from right wall toward hip line)
-        {
-          const cx_mm = A_mm - jackRunX / 2;
-          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
-          const cz_mm = distFromCorner;
-          
-          const jackAngle = Math.atan2(heightAtHip, jackRunX);
-          
-          const jackR = mkBoxCenteredLocal(
-            `${meshPrefix}roof-hipped-jack-FR-${j}`,
-            jackLen_mm,
-            memberD_mm,
-            memberW_mm,
-            cx_mm,
-            cy_mm,
-            cz_mm,
-            roofRoot,
-            joistMat,
-            { roof: "hipped", part: "jack-rafter", end: "front", side: "R" }
-          );
-          jackR.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
-        }
-      }
-    }
-    
-    // Back hip end - similar jack rafters (measured from back corners)
-    {
-      const hipEndDepth = B_mm - ridgeEndZ_mm; // Distance from ridge end to back wall (= halfSpan)
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
-      console.log(`[JACK_RAFTERS] Back: hipEndDepth=${hipEndDepth}mm, jackCount=${jackCount}`);
-      
-      for (let j = 1; j < jackCount; j++) {
-        const distFromBackWall = j * rafterSpacing_mm;
-        
-        // Jack runs from wall to hip line
-        const jackRunX = distFromBackWall;
-        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
-        
-        // Skip very short jacks
-        if (jackLen_mm < memberW_mm * 2) continue;
-        
-        // Z position: measured from back wall
-        const cz_mm = B_mm - distFromBackWall;
-        
-        // Left jack
-        {
-          const cx_mm = jackRunX / 2;
-          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
-          
-          const jackAngle = Math.atan2(heightAtHip, jackRunX);
-          
-          const jackL = mkBoxCenteredLocal(
-            `${meshPrefix}roof-hipped-jack-BL-${j}`,
-            jackLen_mm,
-            memberD_mm,
-            memberW_mm,
-            cx_mm,
-            cy_mm,
-            cz_mm,
-            roofRoot,
-            joistMat,
-            { roof: "hipped", part: "jack-rafter", end: "back", side: "L" }
-          );
-          jackL.rotation = new BABYLON.Vector3(0, 0, jackAngle);
-        }
-        
-        // Right jack
-        {
-          const cx_mm = A_mm - jackRunX / 2;
-          const cy_mm = heightAtHip / 2;  // Center height between eaves (0) and hip intersection
-          
-          const jackAngle = Math.atan2(heightAtHip, jackRunX);
-          
-          const jackR = mkBoxCenteredLocal(
-            `${meshPrefix}roof-hipped-jack-BR-${j}`,
-            jackLen_mm,
-            memberD_mm,
-            memberW_mm,
-            cx_mm,
-            cy_mm,
-            cz_mm,
-            roofRoot,
-            joistMat,
-            { roof: "hipped", part: "jack-rafter", end: "back", side: "R" }
-          );
-          jackR.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
-        }
-      }
-    }
-    
-    // === PAIRED JACK RAFTERS ON SIDE SLOPES ===
-    // Each hip rafter has jacks on BOTH sides - one on hip end slope, one on side slope
-    // The front/back jacks above are on the hip end slopes
-    // These jacks are on the LEFT and RIGHT side slopes, meeting the hip at the same points
-    
-    // Left slope jack rafters - from left wall toward FL and BL hip rafters
-    // These pair with the front/back jacks at matching positions
-    {
-      // Front portion of left slope - jacks from left wall toward FL hip
-      const hipEndDepth = ridgeStartZ_mm;
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
-      console.log(`[JACK_RAFTERS] Left slope front: hipEndDepth=${hipEndDepth}mm, jackCount=${jackCount}`);
-      
-      for (let j = 1; j < jackCount; j++) {
-        const distFromCorner = j * rafterSpacing_mm;
-        
-        // This jack mirrors the FL jack across the hip rafter
-        // FL jack runs along X at Z=distFromCorner
-        // LS-F jack runs along Z at X=distFromCorner (mirrored)
-        const jackRunZ = distFromCorner;  // Runs along Z axis
+        // Hip is at Z = xPos at this X position
+        const jackRunZ = xPos;  // Length of horizontal run (to hip)
         const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
         const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        // Mirror position: at X=distFromCorner, running from Z=0 to Z=distFromCorner
-        const cx_mm = distFromCorner;  // At hip intersection X
+        // Jack lands on front wall at (xPos, 0, 0), rises to hip at (xPos, heightAtHip, xPos)
+        const cx_mm = xPos;
         const cy_mm = heightAtHip / 2;
-        const cz_mm = distFromCorner / 2;  // Centered along Z run
+        const cz_mm = jackRunZ / 2;  // Centered along Z run from wall
         
         const jackAngle = Math.atan2(heightAtHip, jackRunZ);
         
         const jack = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-jack-LS-F-${j}`,
+          `${meshPrefix}roof-hipped-jack-FL-${j}`,
           memberW_mm,  // width along X
           memberD_mm,
-          jackLen_mm,  // length along Z
+          jackLen_mm,  // length along Z (slope)
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "front", side: "L" }
+        );
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
+        
+        console.log(`[JACK_RAFTERS] FL-${j}: xPos=${xPos}mm, jackLen=${jackLen_mm}mm at (${cx_mm}, ${cy_mm}, ${cz_mm})`);
+      }
+      
+      // Right side of front hip end (right of center, truncated by FR hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = A_mm - j * rafterSpacing_mm;  // Position from right corner
+        
+        if (xPos <= halfSpan_mm) break;  // Stop at ridge centerline
+        
+        // Hip is at Z = (A_mm - xPos) at this X position
+        const distFromRightCorner = A_mm - xPos;
+        const jackRunZ = distFromRightCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = jackRunZ / 2;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-FR-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "front", side: "R" }
+        );
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
+        
+        console.log(`[JACK_RAFTERS] FR-${j}: xPos=${xPos}mm, jackLen=${jackLen_mm}mm`);
+      }
+    }
+    
+    // BACK HIP END - jack rafters landing on BACK wall plate (Z=B)
+    {
+      // Left side of back hip end (truncated by BL hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = j * rafterSpacing_mm;
+        
+        if (xPos >= halfSpan_mm) break;
+        
+        const jackRunZ = xPos;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on back wall at (xPos, 0, B), rises toward ridge
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = B_mm - jackRunZ / 2;  // Centered from back wall
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-BL-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "back", side: "L" }
+        );
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
+      }
+      
+      // Right side of back hip end (truncated by BR hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = A_mm - j * rafterSpacing_mm;
+        
+        if (xPos <= halfSpan_mm) break;
+        
+        const distFromRightCorner = A_mm - xPos;
+        const jackRunZ = distFromRightCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = B_mm - jackRunZ / 2;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-BR-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "back", side: "R" }
+        );
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
+      }
+    }
+    
+    // === PAIRED SIDE SLOPE JACKS ===
+    // These land on LEFT/RIGHT wall plates and pair with the front/back jacks at the hip
+    
+    // LEFT slope - jacks landing on LEFT wall (X=0), pairing with FL/BL jacks
+    {
+      // Front portion - pairs with FL jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = j * rafterSpacing_mm;  // Position along left wall from front corner
+        
+        if (zPos >= ridgeStartZ_mm) break;  // Stop at ridge start
+        
+        // Hip at this Z position is at X = zPos (45° angle)
+        const jackRunX = zPos;  // Run from left wall to hip
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on left wall at (0, 0, zPos), rises to hip
+        const cx_mm = jackRunX / 2;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = zPos;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-LS-F-${j}`,
+          jackLen_mm,  // length along X
+          memberD_mm,
+          memberW_mm,  // width along Z
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3693,34 +3699,33 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "left", end: "front" }
         );
-        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);  // Rotate around X for Z-running jack
+        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
       }
       
-      // Back portion of left slope - jacks from left wall toward BL hip
-      const backHipEndDepth = B_mm - ridgeEndZ_mm;
-      const backJackCount = Math.floor(backHipEndDepth / rafterSpacing_mm) + 1;
-      
-      for (let j = 1; j < backJackCount; j++) {
-        const distFromBackCorner = j * rafterSpacing_mm;
+      // Back portion - pairs with BL jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = B_mm - j * rafterSpacing_mm;
         
-        // Mirror of BL jack - runs along Z at X=distFromBackCorner
-        const jackRunZ = distFromBackCorner;
-        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        if (zPos <= ridgeEndZ_mm) break;
+        
+        const distFromBackCorner = B_mm - zPos;
+        const jackRunX = distFromBackCorner;
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        const cx_mm = distFromBackCorner;  // At hip intersection X
+        const cx_mm = jackRunX / 2;
         const cy_mm = heightAtHip / 2;
-        const cz_mm = B_mm - distFromBackCorner / 2;  // Centered along Z run toward back
+        const cz_mm = zPos;
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-LS-B-${j}`,
-          memberW_mm,
-          memberD_mm,
           jackLen_mm,
+          memberD_mm,
+          memberW_mm,
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3728,38 +3733,36 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "left", end: "back" }
         );
-        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);  // Positive angle going toward back
+        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
       }
     }
     
-    // Right slope jack rafters - from right wall toward FR and BR hip rafters
+    // RIGHT slope - jacks landing on RIGHT wall (X=A), pairing with FR/BR jacks
     {
-      // Front portion of right slope - mirrors FR jack
-      const hipEndDepth = ridgeStartZ_mm;
-      const jackCount = Math.floor(hipEndDepth / rafterSpacing_mm) + 1;
-      
-      for (let j = 1; j < jackCount; j++) {
-        const distFromCorner = j * rafterSpacing_mm;
+      // Front portion - pairs with FR jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = j * rafterSpacing_mm;
         
-        // Mirror of FR jack - runs along Z at X=A_mm-distFromCorner
-        const jackRunZ = distFromCorner;
-        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        if (zPos >= ridgeStartZ_mm) break;
+        
+        const jackRunX = zPos;  // Run from right wall to hip (toward center)
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        // Mirror position: at X=A_mm-distFromCorner, running from Z=0 to Z=distFromCorner
-        const cx_mm = A_mm - distFromCorner;  // At hip intersection X (from right side)
+        // Jack lands on right wall at (A, 0, zPos), rises toward hip at (A-zPos, height, zPos)
+        const cx_mm = A_mm - jackRunX / 2;
         const cy_mm = heightAtHip / 2;
-        const cz_mm = distFromCorner / 2;  // Centered along Z run
+        const cz_mm = zPos;
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-RS-F-${j}`,
-          memberW_mm,  // width along X
+          jackLen_mm,
           memberD_mm,
-          jackLen_mm,  // length along Z
+          memberW_mm,
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3767,33 +3770,33 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "right", end: "front" }
         );
-        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
+        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);  // Negative for right side
       }
       
-      // Back portion of right slope - mirrors BR jack
-      const backHipEndDepth = B_mm - ridgeEndZ_mm;
-      const backJackCount = Math.floor(backHipEndDepth / rafterSpacing_mm) + 1;
-      
-      for (let j = 1; j < backJackCount; j++) {
-        const distFromBackCorner = j * rafterSpacing_mm;
+      // Back portion - pairs with BR jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = B_mm - j * rafterSpacing_mm;
         
-        const jackRunZ = distFromBackCorner;
-        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
-        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        if (zPos <= ridgeEndZ_mm) break;
+        
+        const distFromBackCorner = B_mm - zPos;
+        const jackRunX = distFromBackCorner;
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
         
         if (jackLen_mm < memberW_mm * 2) continue;
         
-        const cx_mm = A_mm - distFromBackCorner;  // At hip intersection X (from right side)
+        const cx_mm = A_mm - jackRunX / 2;
         const cy_mm = heightAtHip / 2;
-        const cz_mm = B_mm - distFromBackCorner / 2;  // Centered along Z run toward back
+        const cz_mm = zPos;
         
-        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
         
         const jack = mkBoxCenteredLocal(
           `${meshPrefix}roof-hipped-jack-RS-B-${j}`,
-          memberW_mm,
-          memberD_mm,
           jackLen_mm,
+          memberD_mm,
+          memberW_mm,
           cx_mm,
           cy_mm,
           cz_mm,
@@ -3801,7 +3804,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
           joistMat,
           { roof: "hipped", part: "jack-rafter", slope: "right", end: "back" }
         );
-        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
+        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
       }
     }
   }
