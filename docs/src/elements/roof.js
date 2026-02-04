@@ -3830,7 +3830,8 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     if (ridgeLen_mm > 0) {
       // Left saddle rectangle
       {
-        const slopeLen_mm = commonRafterLen_mm;
+        // Extend past ridge to close gap (100mm overlap)
+        const slopeLen_mm = commonRafterLen_mm + 100;
         const panelWidth_mm = ridgeLen_mm;
         
         // Center of the slope
@@ -3842,9 +3843,10 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // X position (left slope goes from halfSpan toward 0)
         const xSurf_mm = halfSpan_mm - runMid_mm;
         
-        // Offset perpendicular to slope surface
-        const cx = xSurf_mm + (-sinT) * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
+        // Offset perpendicular to slope surface + shift toward ridge to close gap
+        const ridgeShift_mm = 200; // Shift center toward ridge (big shift)
+        const cx = xSurf_mm + (-sinT) * (osbThk / 2) + ridgeShift_mm * cosT;
+        const cy = ySurf_mm + cosT * (osbThk / 2) + ridgeShift_mm * sinT;
         const cz = ridgeStartZ_mm + panelWidth_mm / 2;
         
         const meshL = mkBoxCenteredLocal(
@@ -3869,7 +3871,8 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       
       // Right saddle rectangle
       {
-        const slopeLen_mm = commonRafterLen_mm;
+        // Extend past ridge to close gap (100mm overlap)
+        const slopeLen_mm = commonRafterLen_mm + 100;
         const panelWidth_mm = ridgeLen_mm;
         
         const sMid_mm = slopeLen_mm / 2;
@@ -3880,8 +3883,10 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // X position (right slope goes from halfSpan toward A_mm)
         const xSurf_mm = halfSpan_mm + runMid_mm;
         
-        const cx = xSurf_mm + sinT * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
+        // Offset perpendicular to slope surface + shift toward ridge to close gap
+        const ridgeShift_mm = 200; // Shift center toward ridge (big shift)
+        const cx = xSurf_mm + sinT * (osbThk / 2) - ridgeShift_mm * cosT;
+        const cy = ySurf_mm + cosT * (osbThk / 2) + ridgeShift_mm * sinT;
         const cz = ridgeStartZ_mm + panelWidth_mm / 2;
         
         const meshR = mkBoxCenteredLocal(
