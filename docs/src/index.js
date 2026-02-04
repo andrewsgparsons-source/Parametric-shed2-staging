@@ -517,6 +517,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallsVariantEl = $("wallsVariant");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
+    var roofCoveringStyleEl = $("roofCoveringStyle");
 
     var addDoorBtnEl = $("addDoorBtn");
     var removeAllDoorsBtnEl = $("removeAllDoorsBtn");
@@ -2042,7 +2043,9 @@ if (getWallsEnabled(state)) {
           var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
           var _roofStructOn = rp.structure !== false;
           var _roofOsbOn = rp.osb !== false;
-          var _roofCoverOn = rp.covering !== false;
+          // Hide felt covering when slate tiles are selected (tiles have their own layers)
+          var _isSlate = state && state.roof && state.roof.covering === "slate";
+          var _roofCoverOn = rp.covering !== false && !_isSlate;
           var _roofInsOn = rp.insulation !== false;
           var _roofPlyOn = rp.ply !== false;
 
@@ -2172,7 +2175,9 @@ if (getWallsEnabled(state)) {
         var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
         var _roofStructOn = rp.structure !== false;
         var _roofOsbOn = rp.osb !== false;
-        var _roofCoverOn = rp.covering !== false;
+        // Hide felt covering when slate tiles are selected (tiles have their own layers)
+        var _isSlate = state && state.roof && state.roof.covering === "slate";
+        var _roofCoverOn = rp.covering !== false && !_isSlate;
         var _roofInsOn = rp.insulation !== false;
         var _roofPlyOn = rp.ply !== false;
 
@@ -3697,6 +3702,7 @@ if (state && state.overhang) {
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
+        if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
 
         if (wallHeightEl) {
           if (isPent) {
@@ -4500,6 +4506,7 @@ function parseOverhangInput(val) {
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
+    if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { store.setState({ roof: { covering: roofCoveringStyleEl.value } }); });
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });

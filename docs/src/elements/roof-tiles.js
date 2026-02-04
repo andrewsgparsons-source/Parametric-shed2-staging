@@ -155,27 +155,37 @@ function createPlane(name, width_mm, depth_mm, position_mm, rotation, material, 
 
 /**
  * Builds membrane layer for a roof slope
- * Creates a thin box (like the felt covering) that follows the slope
+ * Creates a thin box that sits on the OSB, following the slope angle
+ * Positioned in LOCAL coordinates, parented to roofRoot
  * @param {Object} slope - Slope definition { width_mm, length_mm, position_mm, rotation, name }
  * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} roofRoot - Parent transform node
  * @param {string} prefix - Mesh name prefix
  */
-function buildMembrane(slope, scene, prefix) {
+function buildMembrane(slope, scene, roofRoot, prefix) {
   const mat = getMembraneMaterial(scene);
   
-  // Create a thin box (length down slope, width along ridge)
+  // Membrane dimensions:
+  // - length_mm = down the slope (becomes tilted X after rotation)
+  // - width_mm = along the ridge (Z direction)
+  
   const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}membrane-${slope.name}`, {
-    width: slope.length_mm / 1000,    // Down the slope (X after rotation)
+    width: slope.length_mm / 1000,    // Down the slope
     height: MEMBRANE_SPECS.thickness_mm / 1000,
-    depth: slope.width_mm / 1000,     // Along the ridge (Z)
+    depth: slope.width_mm / 1000,     // Along the ridge
   }, scene);
   
+  // Parent to roofRoot so we use LOCAL coordinates
+  mesh.parent = roofRoot;
+  
+  // Position in LOCAL coordinates (relative to roofRoot)
   mesh.position = new BABYLON.Vector3(
     slope.position_mm.x / 1000,
     slope.position_mm.y / 1000,
     slope.position_mm.z / 1000
   );
   
+  // Rotate to follow roof slope (around Z axis for apex)
   mesh.rotation = new BABYLON.Vector3(
     slope.rotation.x,
     slope.rotation.y,
@@ -185,59 +195,137 @@ function buildMembrane(slope, scene, prefix) {
   mesh.material = mat;
   mesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: slope.name };
   
+  console.log(`[ROOF-TILES] Membrane ${slope.name} (LOCAL):`, {
+    pos: slope.position_mm,
+    rot: slope.rotation,
+    length: slope.length_mm,
+    width: slope.width_mm
+  });
+  
   return mesh;
 }
 
 /**
  * Builds tile battens for a roof slope
- * Battens run horizontally (parallel to ridge/eaves), spaced up the slope
+ * Battens run horizontally (parallel to ridge/eaves), spaced down the slope from ridge
+ * Positioned in LOCAL coordinates, parented to roofRoot
  * @param {Object} slope - Slope definition
  * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} roofRoot - Parent transform node
+ * @param {Object} roofData - Additional roof data { memberD_mm, osbOutOffset_mm, OSB_THK_MM }
  * @param {string} prefix - Mesh name prefix
  */
-function buildBattens(slope, scene, prefix) {
+function buildBattens(slope, scene, roofRoot, roofData, prefix) {
   const mat = getBattenMaterial(scene);
   const battens = [];
   
   // Calculate number of battens based on slope length
-  const numBattens = Math.floor(slope.length_mm / BATTEN_SPECS.spacing_mm);
+  // Start first batten one spacing from RIDGE, end before eaves
+  const numBattens = Math.floor((slope.length_mm - BATTEN_SPECS.spacing_mm) / BATTEN_SPECS.spacing_mm);
+  if (numBattens < 1) return battens;
   
-  const sinT = Math.sin(slope.slopeAngle);
-  const cosT = Math.cos(slope.slopeAngle);
+  const slopeAng = slope.slopeAngle;
+  const sinT = Math.sin(slopeAng);
+  const cosT = Math.cos(slopeAng);
   
-  // Starting position (from eaves, going up the slope)
-  for (let i = 0; i < numBattens; i++) {
-    const distanceUp_mm = (i + 0.5) * BATTEN_SPECS.spacing_mm;
+  // Battens sit on top of membrane, which sits on OSB
+  // battenBottomOffset = osbOutOffset + OSB_THK + membrane_thk
+  // battenCenterOffset = battenBottomOffset + batten_height/2
+  const { memberD_mm, osbOutOffset_mm, OSB_THK_MM } = roofData;
+  const battenCenterOffset_mm = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm + BATTEN_SPECS.height_mm / 2;
+  
+  // Slope normal (outward from roof surface)
+  const normalX = slope.normal.x;
+  const normalY = slope.normal.y;
+  
+  // Add RIDGE BATTEN at the very top (close to the ridge line)
+  // This supports the top row of tiles and ridge tiles
+  {
+    const RIDGE_MARGIN_MM = 25;  // Small margin from ridge
+    const s_mm = RIDGE_MARGIN_MM;
+    const run_mm = s_mm * cosT;
+    const drop_mm = s_mm * sinT;
     
-    // Calculate position along the slope surface
-    // distanceUp_mm is measured along the slope, need to convert to X/Y offsets
-    const runOffset_mm = distanceUp_mm * cosT;  // Horizontal distance from eaves
-    const riseOffset_mm = distanceUp_mm * sinT; // Vertical rise
+    // LOCAL Y at roof surface near ridge
+    const ySurf_mm = memberD_mm + (slope.rise_mm - drop_mm);
     
-    // For left slope: X decreases as we go up (toward ridge), Y increases
-    // For right slope: X increases as we go up, Y increases
-    const xOffset = (slope.name === "left") ? -runOffset_mm : runOffset_mm;
+    // LOCAL X at roof surface
+    let xSurf_mm;
+    if (slope.name === "left") {
+      xSurf_mm = slope.halfSpan_mm - run_mm;
+    } else {
+      xSurf_mm = slope.halfSpan_mm + run_mm;
+    }
     
-    // Batten position (start from eaves edge and go up)
-    // Eaves edge is at slope.position - half length offset
-    const battenX = slope.position_mm.x + xOffset - (slope.name === "left" ? -1 : 1) * (slope.length_mm / 2 * cosT);
-    const battenY = slope.position_mm.y + riseOffset_mm - (slope.length_mm / 2 * sinT) + BATTEN_SPECS.height_mm;
-    const battenZ = slope.position_mm.z;
+    // Offset from surface along normal to get batten center
+    const localX_mm = xSurf_mm + normalX * battenCenterOffset_mm;
+    const localY_mm = ySurf_mm + normalY * battenCenterOffset_mm;
+    const localZ_mm = slope.position_mm.z;
     
-    // Batten dimensions: width along Z (ridge direction), thin in X, height in Y
-    const batten = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${slope.name}-${i}`, {
-      width: BATTEN_SPECS.width_mm / 1000,   // Thin (50mm) - perpendicular to ridge
-      height: BATTEN_SPECS.height_mm / 1000, // Height (25mm)
-      depth: slope.width_mm / 1000,          // Length along ridge (full roof depth)
+    const ridgeBatten = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${slope.name}-ridge`, {
+      width: BATTEN_SPECS.width_mm / 1000,
+      height: BATTEN_SPECS.height_mm / 1000,
+      depth: slope.width_mm / 1000,
     }, scene);
     
+    ridgeBatten.parent = roofRoot;
+    ridgeBatten.position = new BABYLON.Vector3(
+      localX_mm / 1000,
+      localY_mm / 1000,
+      localZ_mm / 1000
+    );
+    ridgeBatten.rotation = new BABYLON.Vector3(0, 0, slope.rotation.z);
+    ridgeBatten.material = mat;
+    ridgeBatten.metadata = { dynamic: true, roofTiles: true, layer: "battens", slope: slope.name, index: "ridge" };
+    
+    battens.push(ridgeBatten);
+  }
+  
+  // For each regular batten, calculate its LOCAL position
+  for (let i = 0; i < numBattens; i++) {
+    // Distance from RIDGE, measured along the slope surface
+    const distFromRidge_mm = (i + 1) * BATTEN_SPECS.spacing_mm;
+    
+    // Position along slope: s=0 at ridge, s=rafterLen at eaves
+    // Battens start from ridge (top) going down
+    const s_mm = distFromRidge_mm;
+    const run_mm = s_mm * cosT;
+    const drop_mm = s_mm * sinT;
+    
+    // LOCAL Y at roof surface at this position
+    const ySurf_mm = memberD_mm + (slope.rise_mm - drop_mm);
+    
+    // LOCAL X at roof surface
+    let xSurf_mm;
+    if (slope.name === "left") {
+      xSurf_mm = slope.halfSpan_mm - run_mm;
+    } else {
+      xSurf_mm = slope.halfSpan_mm + run_mm;
+    }
+    
+    // Offset from surface along normal to get batten center
+    const localX_mm = xSurf_mm + normalX * battenCenterOffset_mm;
+    const localY_mm = ySurf_mm + normalY * battenCenterOffset_mm;
+    const localZ_mm = slope.position_mm.z;  // Same Z center as membrane
+    
+    // Create batten: long along Z (ridge), thin cross-slope, short height
+    const batten = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${slope.name}-${i}`, {
+      width: BATTEN_SPECS.width_mm / 1000,   // 50mm (cross-slope direction after rotation)
+      height: BATTEN_SPECS.height_mm / 1000, // 25mm (perpendicular to slope)
+      depth: slope.width_mm / 1000,          // Full length along ridge (Z)
+    }, scene);
+    
+    // Parent to roofRoot
+    batten.parent = roofRoot;
+    
+    // Position in LOCAL coordinates
     batten.position = new BABYLON.Vector3(
-      battenX / 1000,
-      battenY / 1000,
-      battenZ / 1000
+      localX_mm / 1000,
+      localY_mm / 1000,
+      localZ_mm / 1000
     );
     
-    // Rotate to follow slope angle (around Z axis)
+    // Rotate to follow slope angle
     batten.rotation = new BABYLON.Vector3(0, 0, slope.rotation.z);
     
     batten.material = mat;
@@ -246,7 +334,130 @@ function buildBattens(slope, scene, prefix) {
     battens.push(batten);
   }
   
+  // Add EAVES BATTEN at the very bottom edge (adjacent to fascia)
+  // This supports the first/bottom row of tiles
+  {
+    // Eaves batten position: at the outer edge of the slope (s = rafterLen - small offset)
+    // Position it close to the eaves edge, leaving just a small margin
+    const EAVES_MARGIN_MM = 25;  // Small margin from absolute edge
+    const s_mm = slope.length_mm - EAVES_MARGIN_MM;
+    const run_mm = s_mm * cosT;
+    const drop_mm = s_mm * sinT;
+    
+    // LOCAL Y at roof surface at eaves
+    const ySurf_mm = memberD_mm + (slope.rise_mm - drop_mm);
+    
+    // LOCAL X at roof surface
+    let xSurf_mm;
+    if (slope.name === "left") {
+      xSurf_mm = slope.halfSpan_mm - run_mm;
+    } else {
+      xSurf_mm = slope.halfSpan_mm + run_mm;
+    }
+    
+    // Offset from surface along normal to get batten center
+    const localX_mm = xSurf_mm + normalX * battenCenterOffset_mm;
+    const localY_mm = ySurf_mm + normalY * battenCenterOffset_mm;
+    const localZ_mm = slope.position_mm.z;
+    
+    const eavesBatten = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${slope.name}-eaves`, {
+      width: BATTEN_SPECS.width_mm / 1000,
+      height: BATTEN_SPECS.height_mm / 1000,
+      depth: slope.width_mm / 1000,
+    }, scene);
+    
+    eavesBatten.parent = roofRoot;
+    eavesBatten.position = new BABYLON.Vector3(
+      localX_mm / 1000,
+      localY_mm / 1000,
+      localZ_mm / 1000
+    );
+    eavesBatten.rotation = new BABYLON.Vector3(0, 0, slope.rotation.z);
+    eavesBatten.material = mat;
+    eavesBatten.metadata = { dynamic: true, roofTiles: true, layer: "battens", slope: slope.name, index: "eaves" };
+    
+    battens.push(eavesBatten);
+  }
+  
+  console.log(`[ROOF-TILES] Battens ${slope.name}: ${battens.length} created (incl. eaves batten)`);
+  
   return battens;
+}
+
+/**
+ * Builds slate tile surface for a roof slope
+ * Creates a thin slab that sits on top of the battens, representing the finished tiles
+ * Positioned in LOCAL coordinates, parented to roofRoot
+ * @param {Object} slope - Slope definition
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} roofRoot - Parent transform node
+ * @param {Object} roofData - Additional roof data
+ * @param {string} prefix - Mesh name prefix
+ */
+function buildTileSurface(slope, scene, roofRoot, roofData, prefix) {
+  const mat = getSlateMaterial(scene);
+  
+  // Tile surface sits on top of battens
+  // Stack: OSB -> membrane -> battens -> tiles
+  const { memberD_mm, osbOutOffset_mm, OSB_THK_MM } = roofData;
+  
+  // Tile surface offset: battens (25mm tall) + half tile thickness
+  const TILE_THK_MM = TILE_SPECS.thickness_mm;  // 5mm
+  const tileSurfaceOffset_mm = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm + BATTEN_SPECS.height_mm + TILE_THK_MM / 2;
+  
+  const slopeAng = slope.slopeAngle;
+  const sinT = Math.sin(slopeAng);
+  const cosT = Math.cos(slopeAng);
+  
+  // Mid-slope sample point
+  const sMid_mm = slope.length_mm / 2;
+  const runMid_mm = sMid_mm * cosT;
+  const dropMid_mm = sMid_mm * sinT;
+  
+  // LOCAL Y at roof surface mid-slope
+  const ySurf_mm = memberD_mm + (slope.rise_mm - dropMid_mm);
+  
+  // LOCAL X at roof surface
+  let xSurf_mm;
+  if (slope.name === "left") {
+    xSurf_mm = slope.halfSpan_mm - runMid_mm;
+  } else {
+    xSurf_mm = slope.halfSpan_mm + runMid_mm;
+  }
+  
+  // Offset from surface along normal to get tile center
+  const normalX = slope.normal.x;
+  const normalY = slope.normal.y;
+  const localX_mm = xSurf_mm + normalX * tileSurfaceOffset_mm;
+  const localY_mm = ySurf_mm + normalY * tileSurfaceOffset_mm;
+  const localZ_mm = slope.position_mm.z;
+  
+  // Create tile surface: same dimensions as membrane but sitting higher
+  const tileSurface = BABYLON.MeshBuilder.CreateBox(`${prefix}tiles-${slope.name}`, {
+    width: slope.length_mm / 1000,    // Down the slope
+    height: TILE_THK_MM / 1000,       // 5mm thick
+    depth: slope.width_mm / 1000,     // Along the ridge
+  }, scene);
+  
+  // Parent to roofRoot
+  tileSurface.parent = roofRoot;
+  
+  // Position in LOCAL coordinates
+  tileSurface.position = new BABYLON.Vector3(
+    localX_mm / 1000,
+    localY_mm / 1000,
+    localZ_mm / 1000
+  );
+  
+  // Rotate to follow slope angle
+  tileSurface.rotation = new BABYLON.Vector3(0, 0, slope.rotation.z);
+  
+  tileSurface.material = mat;
+  tileSurface.metadata = { dynamic: true, roofTiles: true, layer: "tiles", slope: slope.name };
+  
+  console.log(`[ROOF-TILES] Tile surface ${slope.name} (LOCAL): offset ${tileSurfaceOffset_mm.toFixed(1)}mm from OSB`);
+  
+  return tileSurface;
 }
 
 // ============================================================================
@@ -255,97 +466,108 @@ function buildBattens(slope, scene, prefix) {
 
 /**
  * Extracts slope information from an apex roof
- * Returns array of slope objects with position, rotation, and dimensions
+ * Returns array of slope objects with LOCAL position (relative to roofRoot), rotation, and dimensions
+ * Matches roof.js covering positioning exactly
  */
-function getApexSlopes(state) {
+function getApexSlopes(state, scene) {
   const dims = getDims(state);
-  if (!dims) return [];
+  if (!dims) return { slopes: [], roofRoot: null };
   
-  // Roof dimensions
-  const roofW_mm = dims.roofW_mm;
-  const roofD_mm = dims.roofD_mm;
+  // Find the existing roofRoot transform node
+  const roofRoot = scene.getTransformNodeByName("roof-root");
+  if (!roofRoot) {
+    console.warn("[ROOF-TILES] No roof-root found in scene");
+    return { slopes: [], roofRoot: null };
+  }
+  
+  // Roof dimensions (same as roof.js)
+  const A_mm = dims.roofW_mm;  // Total width including overhangs
+  const B_mm = dims.roofD_mm;  // Total depth including overhangs (ridge length)
   
   // Get apex heights
   const apex = state?.roof?.apex || {};
   const eavesH_mm = apex.heightToEaves_mm || apex.eavesHeight_mm || 1850;
   const crestH_mm = apex.heightToCrest_mm || apex.crestHeight_mm || eavesH_mm + 400;
   
-  // WALL_RISE is the floor stack height (grid + frame + OSB + plate = 168mm)
-  const WALL_RISE_MM = 168;
-  
-  // Roof root Y position (where the roof sits on the walls)
-  // This matches the calculation in roof.js: roofRootY = eavesH_mm - WALL_RISE_MM
-  const roofRootY_mm = eavesH_mm - WALL_RISE_MM;
-  
-  // Calculate geometry
-  const halfSpan_mm = roofW_mm / 2;
-  const rise_mm = Math.max(crestH_mm - eavesH_mm, 100);  // Minimum 100mm rise
+  // Calculate geometry (matching roof.js exactly)
+  const halfSpan_mm = A_mm / 2;
+  const rise_mm = Math.max(crestH_mm - eavesH_mm, 100);
   const rafterLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
   const slopeAng = Math.atan2(rise_mm, halfSpan_mm);
   
   const sinT = Math.sin(slopeAng);
   const cosT = Math.cos(slopeAng);
   
-  // OSB sits on rafters (50mm deep for apex trusses)
-  const memberD_mm = 50;
+  // OSB positioning constants (must match roof.js exactly)
+  const memberD_mm = 50;         // Rafter depth
   const OSB_THK_MM = 18;
   const OSB_CLEAR_MM = 1;
+  const osbOutOffset_mm = memberD_mm + OSB_CLEAR_MM;
   
   // Membrane sits ON TOP of OSB
-  const membraneOffset_mm = memberD_mm + OSB_CLEAR_MM + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm / 2;
+  const membraneOffset_mm = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm / 2;
   
-  // Calculate mid-slope surface positions (in roof-local coordinates)
+  // Mid-slope sample point (LOCAL coordinates relative to roofRoot)
+  // This matches roof.js covering positioning exactly
   const sMid_mm = rafterLen_mm / 2;
   const runMid_mm = sMid_mm * cosT;
   const dropMid_mm = sMid_mm * sinT;
   
-  // Y position at mid-slope (roof-local) + offset to world coordinates
-  const ySurfMid_local_mm = memberD_mm + (rise_mm - dropMid_mm);
-  const ySurfMid_world_mm = roofRootY_mm + ySurfMid_local_mm;
+  // LOCAL Y at roof surface mid-slope (relative to roofRoot Y=0 at tie beam level)
+  const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
   
-  // Left slope (X goes from 0 to halfSpan)
-  const leftNormalX = -sinT;
-  const leftNormalY = cosT;
+  // Left slope: surface at X = halfSpan - runMid, offset outward along normal (-sinT, cosT)
   const leftSurfX_mm = halfSpan_mm - runMid_mm;
-  const leftCx = leftSurfX_mm + leftNormalX * membraneOffset_mm;
-  const leftCy = ySurfMid_world_mm + leftNormalY * membraneOffset_mm;
+  const leftCx = leftSurfX_mm + (-sinT) * membraneOffset_mm;
+  const leftCy = ySurfMid_mm + cosT * membraneOffset_mm;
   
-  // Right slope (X goes from halfSpan to roofW)
-  const rightNormalX = sinT;
-  const rightNormalY = cosT;
+  // Right slope: surface at X = halfSpan + runMid, offset outward along normal (sinT, cosT)
   const rightSurfX_mm = halfSpan_mm + runMid_mm;
-  const rightCx = rightSurfX_mm + rightNormalX * membraneOffset_mm;
-  const rightCy = ySurfMid_world_mm + rightNormalY * membraneOffset_mm;
+  const rightCx = rightSurfX_mm + sinT * membraneOffset_mm;
+  const rightCy = ySurfMid_mm + cosT * membraneOffset_mm;
   
-  // Z center (ridge runs along Z axis)
-  const cz_mm = roofD_mm / 2;
+  // Z center (same as roof.js covering: B_mm / 2)
+  const cz_mm = B_mm / 2;
   
-  console.log("[ROOF-TILES] Apex slope calc:", {
-    eavesH_mm, roofRootY_mm, rise_mm, rafterLen_mm,
+  console.log("[ROOF-TILES] Apex slope calc (LOCAL coords):", {
+    A_mm, B_mm, rise_mm, rafterLen_mm,
     slopeAng: (slopeAng * 180 / Math.PI).toFixed(1) + "°",
-    leftCy, rightCy
+    membraneOffset_mm,
+    leftCx: leftCx.toFixed(1), leftCy: leftCy.toFixed(1),
+    rightCx: rightCx.toFixed(1), rightCy: rightCy.toFixed(1),
+    cz_mm
   });
   
-  return [
-    {
-      name: "left",
-      width_mm: roofD_mm,           // Along ridge (Z direction when rotated)
-      length_mm: rafterLen_mm,      // Down the slope
-      position_mm: { x: leftCx, y: leftCy, z: cz_mm },
-      rotation: { x: 0, y: 0, z: slopeAng },
-      slopeAngle: slopeAng,
-      normal: { x: leftNormalX, y: leftNormalY },
-    },
-    {
-      name: "right", 
-      width_mm: roofD_mm,
-      length_mm: rafterLen_mm,
-      position_mm: { x: rightCx, y: rightCy, z: cz_mm },
-      rotation: { x: 0, y: 0, z: -slopeAng },
-      slopeAngle: slopeAng,
-      normal: { x: rightNormalX, y: rightNormalY },
-    },
-  ];
+  return {
+    slopes: [
+      {
+        name: "left",
+        width_mm: B_mm,             // Along ridge (Z direction)
+        length_mm: rafterLen_mm,    // Down the slope
+        position_mm: { x: leftCx, y: leftCy, z: cz_mm },
+        rotation: { x: 0, y: 0, z: slopeAng },
+        slopeAngle: slopeAng,
+        normal: { x: -sinT, y: cosT },
+        halfSpan_mm,
+        rise_mm,
+      },
+      {
+        name: "right", 
+        width_mm: B_mm,
+        length_mm: rafterLen_mm,
+        position_mm: { x: rightCx, y: rightCy, z: cz_mm },
+        rotation: { x: 0, y: 0, z: -slopeAng },
+        slopeAngle: slopeAng,
+        normal: { x: sinT, y: cosT },
+        halfSpan_mm,
+        rise_mm,
+      },
+    ],
+    roofRoot,
+    memberD_mm,
+    osbOutOffset_mm,
+    OSB_THK_MM,
+  };
 }
 
 /**
@@ -402,18 +624,27 @@ function getHippedSlopes(state) {
  * 
  * @param {Object} state - Building state
  * @param {Object} ctx - Babylon context { scene, materials }
- * @param {Object} roofData - Data from roof builder (dimensions, positions, etc.)
+ * @param {Object} roofDataArg - Data from roof builder (unused now - we get from scene)
  * @param {Object} options - Build options
  * @param {boolean} options.membrane - Show membrane layer
  * @param {boolean} options.battens - Show batten layer
  * @param {boolean} options.tiles - Show tile layer
  * @param {boolean} options.hipTiles - Show hip tile geometry
  */
-export function buildTileLayers(state, ctx, roofData, options = {}) {
+export function buildTileLayers(state, ctx, roofDataArg, options = {}) {
   const { scene } = ctx;
   if (!scene) return;
   
   const prefix = "roof-tiles-";
+  
+  // Check roof covering type - only build tile layers for slate
+  const covering = state?.roof?.covering || "felt";
+  if (covering !== "slate") {
+    // Not slate - dispose any existing tile meshes and return
+    disposeTileMeshes(scene, prefix);
+    console.log(`[ROOF-TILES] Covering is "${covering}" - tile layers not needed`);
+    return { membrane: [], battens: [], tiles: [], hipTiles: [] };
+  }
   
   // Default options - all layers visible
   const opts = {
@@ -429,21 +660,28 @@ export function buildTileLayers(state, ctx, roofData, options = {}) {
   
   // Get slopes based on roof type
   const roofStyle = state?.roof?.style || "apex";
-  let slopes = [];
+  let slopeData = { slopes: [], roofRoot: null };
   
   switch (roofStyle) {
     case "apex":
-      slopes = getApexSlopes(state);
+      slopeData = getApexSlopes(state, scene);
       break;
     case "pent":
-      slopes = getPentSlopes(state);
+      slopeData.slopes = getPentSlopes(state);
       break;
     case "hipped":
-      slopes = getHippedSlopes(state);
+      slopeData.slopes = getHippedSlopes(state);
       break;
   }
   
-  console.log(`[ROOF-TILES] Building for ${roofStyle} roof, ${slopes.length} slopes`);
+  const { slopes, roofRoot, memberD_mm, osbOutOffset_mm, OSB_THK_MM } = slopeData;
+  
+  if (!roofRoot) {
+    console.warn("[ROOF-TILES] No roofRoot - cannot build tile layers");
+    return { membrane: [], battens: [], tiles: [], hipTiles: [] };
+  }
+  
+  console.log(`[ROOF-TILES] Building for ${roofStyle} roof, ${slopes.length} slopes, parenting to roofRoot`);
   
   // Build each layer
   const meshes = {
@@ -453,16 +691,22 @@ export function buildTileLayers(state, ctx, roofData, options = {}) {
     hipTiles: [],
   };
   
+  const roofData = { memberD_mm, osbOutOffset_mm, OSB_THK_MM };
+  
   for (const slope of slopes) {
     if (opts.membrane) {
-      meshes.membrane.push(buildMembrane(slope, scene, prefix));
+      meshes.membrane.push(buildMembrane(slope, scene, roofRoot, prefix));
     }
     
     if (opts.battens) {
-      meshes.battens.push(...buildBattens(slope, scene, prefix));
+      meshes.battens.push(...buildBattens(slope, scene, roofRoot, roofData, prefix));
     }
     
-    // TODO: Add tile surface and hip tiles
+    if (opts.tiles) {
+      meshes.tiles.push(buildTileSurface(slope, scene, roofRoot, roofData, prefix));
+    }
+    
+    // TODO: Add hip tiles for hipped roofs
   }
   
   return meshes;
