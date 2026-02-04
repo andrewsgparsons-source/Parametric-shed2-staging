@@ -39,6 +39,7 @@
  */
 
 import { CONFIG, resolveDims } from "../params.js";
+import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js";
 
 /**
  * Builds the 3D roof geometry for the current building state.
@@ -145,6 +146,12 @@ export function build3D(state, ctx, sectionContext) {
     try {
       buildApex(state, ctx, meshPrefix, sectionPos, sectionId);
       console.log("[ROOF] Apex roof build COMPLETE");
+      // Build tile layers if enabled (default to enabled for testing)
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
     } catch (e) {
       console.error("[ROOF] Apex roof build FAILED:", e);
     }
