@@ -3820,8 +3820,8 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     const hipSinT = Math.sin(hipSlopeAng);
     const hipCosT = Math.cos(hipSlopeAng);
     
-    // OSB sits on top of rafters
-    const osbOffset_mm = memberD_mm + 1;
+    // OSB sits on top of rafters (at rafter top surface)
+    const osbOffset_mm = memberD_mm;
     
     // ============================================
     // RECTANGLES: 2 saddle sections (main slopes)
@@ -3830,8 +3830,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     if (ridgeLen_mm > 0) {
       // Left saddle rectangle
       {
-        // Extend past ridge to close gap (100mm overlap)
-        const slopeLen_mm = commonRafterLen_mm + 100;
+        const slopeLen_mm = commonRafterLen_mm;
         const panelWidth_mm = ridgeLen_mm;
         
         // Center of the slope
@@ -3843,10 +3842,9 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // X position (left slope goes from halfSpan toward 0)
         const xSurf_mm = halfSpan_mm - runMid_mm;
         
-        // Offset perpendicular to slope surface + shift toward ridge to close gap
-        const ridgeShift_mm = 200; // Shift center toward ridge (big shift)
-        const cx = xSurf_mm + (-sinT) * (osbThk / 2) + ridgeShift_mm * cosT;
-        const cy = ySurf_mm + cosT * (osbThk / 2) + ridgeShift_mm * sinT;
+        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
+        const cx = xSurf_mm + (-sinT) * (osbThk / 2);
+        const cy = ySurf_mm + cosT * (osbThk / 2);
         const cz = ridgeStartZ_mm + panelWidth_mm / 2;
         
         const meshL = mkBoxCenteredLocal(
@@ -3871,8 +3869,7 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
       
       // Right saddle rectangle
       {
-        // Extend past ridge to close gap (100mm overlap)
-        const slopeLen_mm = commonRafterLen_mm + 100;
+        const slopeLen_mm = commonRafterLen_mm;
         const panelWidth_mm = ridgeLen_mm;
         
         const sMid_mm = slopeLen_mm / 2;
@@ -3883,10 +3880,9 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
         // X position (right slope goes from halfSpan toward A_mm)
         const xSurf_mm = halfSpan_mm + runMid_mm;
         
-        // Offset perpendicular to slope surface + shift toward ridge to close gap
-        const ridgeShift_mm = 200; // Shift center toward ridge (big shift)
-        const cx = xSurf_mm + sinT * (osbThk / 2) - ridgeShift_mm * cosT;
-        const cy = ySurf_mm + cosT * (osbThk / 2) + ridgeShift_mm * sinT;
+        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
+        const cx = xSurf_mm + sinT * (osbThk / 2);
+        const cy = ySurf_mm + cosT * (osbThk / 2);
         const cz = ridgeStartZ_mm + panelWidth_mm / 2;
         
         const meshR = mkBoxCenteredLocal(
@@ -3962,7 +3958,9 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     // Front hip end (at Z = 0 to ridgeStartZ_mm)
     // Back hip end (at Z = ridgeEndZ_mm to B_mm)
     
-    const osbY = osbOffset_mm + osbThk / 2; // Base Y for OSB on rafters at eaves
+    // Base Y for OSB - should sit ON TOP of rafters at eaves level
+    // Using just memberD_mm to sit right on the rafters (not offset above)
+    const osbY = memberD_mm;
     
     // FRONT HIP END - 4 triangles
     {
