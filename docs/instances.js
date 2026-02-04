@@ -672,6 +672,48 @@ export function getBuiltInPresets() {
           "depth_mm": 50
         }
       }
+    },
+    {
+      id: "preset.hipped_garage",
+      name: "Hipped Garage 3.4m × 5m",
+      category: "Garage",
+      description: "Large hipped roof garage with 2.4m double mortise & tenon doors.",
+      state: {
+        "w": 3400,
+        "d": 5000,
+        "dimMode": "frame",
+        "roof": {
+          "style": "hipped",
+          "hipped": {
+            "heightToEaves_mm": 2500,
+            "heightToCrest_mm": 3600
+          }
+        },
+        "overhang": {
+          "uniform_mm": 150
+        },
+        "walls": {
+          "variant": "basic",
+          "openings": [
+            {
+              "id": "door1",
+              "wall": "front",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 500,
+              "width_mm": 2400,
+              "height_mm": 2100,
+              "style": "double-mortise-tenon",
+              "handleSide": "left",
+              "isOpen": false
+            }
+          ]
+        },
+        "frame": {
+          "thickness_mm": 50,
+          "depth_mm": 100
+        }
+      }
     }
   ];
 }

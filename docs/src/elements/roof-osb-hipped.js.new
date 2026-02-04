@@ -1,0 +1,329 @@
+  // === OSB SHEATHING - Individual 8×4 Sheets ===
+  if (roofParts.osb) {
+    const SHEET_LEN_MM = 2440;  // 8 feet - along slope
+    const SHEET_WID_MM = 1220;  // 4 feet - perpendicular to slope
+    const osbThk = 18;
+    
+    const sinT = Math.sin(commonSlopeAng);
+    const cosT = Math.cos(commonSlopeAng);
+    
+    // OSB sits on top of rafters
+    const osbOutOffset_mm = memberD_mm + 1;
+    
+    // Helper: Create a single OSB sheet on a slope
+    // slopePos_mm = position along slope from eaves (0 = eaves)
+    // zPos_mm = position along Z axis (center of sheet)
+    // sheetLen_mm, sheetWid_mm = actual dimensions (may be trimmed)
+    // side = "L" or "R" for left/right main slope
+    function createMainSlopeSheet(name, slopePos_mm, zPos_mm, sheetLen_mm, sheetWid_mm, side) {
+      // Calculate center position along slope
+      const sMid_mm = slopePos_mm + sheetLen_mm / 2;
+      
+      // Convert slope position to X,Y coordinates
+      const runMid_mm = sMid_mm * cosT;  // Horizontal run from eaves
+      const dropMid_mm = sMid_mm * sinT; // Drop from crest
+      
+      // Y position (accounting for slope)
+      const ySurf_mm = memberD_mm + (rise_mm - dropMid_mm);
+      
+      // X position depends on which side
+      let xSurf_mm, normalX;
+      if (side === "L") {
+        // Left slope: X goes from halfSpan toward 0
+        xSurf_mm = halfSpan_mm - runMid_mm;
+        normalX = -sinT;
+      } else {
+        // Right slope: X goes from halfSpan toward A_mm
+        xSurf_mm = halfSpan_mm + runMid_mm;
+        normalX = sinT;
+      }
+      
+      // Offset outward (perpendicular to slope surface)
+      const cx = xSurf_mm + normalX * (osbOutOffset_mm + osbThk / 2);
+      const cy = ySurf_mm + cosT * (osbOutOffset_mm + osbThk / 2);
+      
+      const mesh = mkBoxCenteredLocal(
+        name,
+        sheetLen_mm,
+        osbThk,
+        sheetWid_mm,
+        cx,
+        cy,
+        zPos_mm,
+        roofRoot,
+        osbMat,
+        { roof: "hipped", part: "osb", side: side, sheet: true }
+      );
+      
+      // Rotate to match slope
+      mesh.rotation = new BABYLON.Vector3(0, 0, side === "L" ? commonSlopeAng : -commonSlopeAng);
+      
+      // Edge rendering
+      if (mesh.enableEdgesRendering) {
+        mesh.enableEdgesRendering();
+        mesh.edgesWidth = 2;
+        mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+      }
+      
+      return mesh;
+    }
+    
+    // Main slopes - tile with 8×4 sheets in half-bond pattern
+    if (ridgeLen_mm > 0) {
+      const slopeLen_mm = commonRafterLen_mm;
+      const slopeWidth_mm = ridgeLen_mm;
+      
+      // Number of rows along the slope
+      const numRows = Math.ceil(slopeLen_mm / SHEET_LEN_MM);
+      // Number of sheets across the width
+      const numCols = Math.ceil(slopeWidth_mm / SHEET_WID_MM);
+      
+      // Create sheets for both main slopes (L and R)
+      for (const side of ["L", "R"]) {
+        let sheetIdx = 0;
+        
+        for (let row = 0; row < numRows; row++) {
+          // Half-bond: odd rows offset by half sheet width
+          const stagger = (row % 2 === 1) ? SHEET_WID_MM / 2 : 0;
+          
+          // Calculate actual columns needed for this row (accounting for stagger)
+          const rowStartZ = ridgeStartZ_mm - stagger;
+          const effectiveWidth = slopeWidth_mm + stagger;
+          const rowCols = Math.ceil(effectiveWidth / SHEET_WID_MM);
+          
+          for (let col = 0; col < rowCols; col++) {
+            // Position along slope (from eaves)
+            const slopePos = row * SHEET_LEN_MM;
+            // Remaining length to ridge
+            const remainingLen = slopeLen_mm - slopePos;
+            // Actual sheet length (trim at ridge)
+            const actualLen = Math.min(SHEET_LEN_MM, remainingLen);
+            
+            if (actualLen <= 0) continue;
+            
+            // Z position (center of sheet)
+            const zStart = ridgeStartZ_mm + col * SHEET_WID_MM - stagger;
+            // Remaining width
+            const remainingWid = (ridgeStartZ_mm + slopeWidth_mm) - zStart;
+            // Actual sheet width (trim at edges)
+            let actualWid = Math.min(SHEET_WID_MM, remainingWid);
+            
+            // Skip if sheet would be entirely outside the slope area
+            if (zStart + actualWid < ridgeStartZ_mm) continue;
+            if (zStart > ridgeStartZ_mm + slopeWidth_mm) continue;
+            
+            // Trim at start if needed (for staggered rows)
+            let zCenter = zStart + actualWid / 2;
+            if (zStart < ridgeStartZ_mm) {
+              const trim = ridgeStartZ_mm - zStart;
+              actualWid -= trim;
+              zCenter = ridgeStartZ_mm + actualWid / 2;
+            }
+            
+            // Trim at end
+            if (zStart + SHEET_WID_MM > ridgeStartZ_mm + slopeWidth_mm) {
+              actualWid = (ridgeStartZ_mm + slopeWidth_mm) - Math.max(zStart, ridgeStartZ_mm);
+              zCenter = Math.max(zStart, ridgeStartZ_mm) + actualWid / 2;
+            }
+            
+            if (actualWid <= 50) continue; // Skip tiny slivers
+            
+            createMainSlopeSheet(
+              `${meshPrefix}roof-hipped-osb-${side}-${sheetIdx}`,
+              slopePos,
+              zCenter,
+              actualLen,
+              actualWid,
+              side
+            );
+            sheetIdx++;
+          }
+        }
+      }
+    }
+    
+    // Hip end triangular panels (front and back)
+    // These are triangular slopes at each end of the building
+    // For now, approximate with rectangular panels that cover the triangle
+    {
+      const hipSinT = Math.sin(hipSlopeAng);
+      const hipCosT = Math.cos(hipSlopeAng);
+      const hipSlopeLen_mm = hipRafterLen_mm;
+      
+      // Front hip end (at Z=0)
+      {
+        // Width at eaves = A_mm (full building width)
+        // Width at ridge = 0 (point)
+        // For ridgeLen > 0: width at ridge = very small (meets ridge ends)
+        // Slope runs from each eaves corner toward ridge
+        
+        // Simplified: Create panels for left and right halves of front hip
+        // Each half is a triangle from corner to ridge center
+        const halfWidth_mm = halfSpan_mm;
+        
+        // Number of rows along hip slope
+        const numRows = Math.ceil(hipSlopeLen_mm / SHEET_LEN_MM);
+        
+        for (const half of ["FL", "FR"]) {
+          let sheetIdx = 0;
+          
+          for (let row = 0; row < numRows; row++) {
+            const slopePos = row * SHEET_LEN_MM;
+            const remainingLen = hipSlopeLen_mm - slopePos;
+            const actualLen = Math.min(SHEET_LEN_MM, remainingLen);
+            
+            if (actualLen <= 0) continue;
+            
+            // Width narrows as we go up the slope (triangle)
+            const progressUp = (slopePos + actualLen / 2) / hipSlopeLen_mm;
+            const widthAtPos = halfWidth_mm * (1 - progressUp);
+            
+            if (widthAtPos <= 50) continue;
+            
+            // Number of sheets across this width
+            const numCols = Math.ceil(widthAtPos / SHEET_WID_MM);
+            const stagger = (row % 2 === 1) ? SHEET_WID_MM / 2 : 0;
+            
+            for (let col = 0; col < numCols; col++) {
+              const xOffset = col * SHEET_WID_MM - stagger;
+              let actualWid = Math.min(SHEET_WID_MM, widthAtPos - xOffset);
+              
+              if (actualWid <= 50) continue;
+              if (xOffset < 0) {
+                actualWid += xOffset;
+                if (actualWid <= 50) continue;
+              }
+              
+              // Position calculation for hip end
+              const sMid_mm = slopePos + actualLen / 2;
+              const runMid_mm = sMid_mm * hipCosT;
+              const dropMid_mm = sMid_mm * hipSinT;
+              const ySurf_mm = memberD_mm + (rise_mm - dropMid_mm);
+              
+              // Hip runs at 45° in plan
+              // Front hip: Z goes from 0 toward ridgeStartZ
+              const zSurf_mm = runMid_mm / Math.SQRT2;
+              
+              // X position for FL (left half) or FR (right half)
+              let xCenter;
+              if (half === "FL") {
+                xCenter = runMid_mm / Math.SQRT2 + Math.max(0, xOffset) + actualWid / 2;
+              } else {
+                xCenter = A_mm - (runMid_mm / Math.SQRT2) - Math.max(0, xOffset) - actualWid / 2;
+              }
+              
+              // Offset perpendicular to surface
+              const cx = xCenter + (half === "FL" ? -hipSinT : hipSinT) * (osbOutOffset_mm + osbThk / 2) / Math.SQRT2;
+              const cy = ySurf_mm + hipCosT * (osbOutOffset_mm + osbThk / 2);
+              const cz = zSurf_mm + (osbOutOffset_mm + osbThk / 2) * hipSinT / Math.SQRT2;
+              
+              const mesh = mkBoxCenteredLocal(
+                `${meshPrefix}roof-hipped-osb-${half}-${sheetIdx}`,
+                actualLen,
+                osbThk,
+                actualWid,
+                cx,
+                cy,
+                cz,
+                roofRoot,
+                osbMat,
+                { roof: "hipped", part: "osb", end: "front", half: half, sheet: true }
+              );
+              
+              // Rotate for hip slope (compound angle)
+              // Hip runs at 45° in plan, with hip slope angle in elevation
+              const yRot = half === "FL" ? -Math.PI / 4 : Math.PI / 4;
+              mesh.rotation = new BABYLON.Vector3(hipSlopeAng, yRot, 0);
+              
+              if (mesh.enableEdgesRendering) {
+                mesh.enableEdgesRendering();
+                mesh.edgesWidth = 2;
+                mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+              }
+              
+              sheetIdx++;
+            }
+          }
+        }
+      }
+      
+      // Back hip end (at Z=B_mm) - mirror of front
+      {
+        const halfWidth_mm = halfSpan_mm;
+        const numRows = Math.ceil(hipSlopeLen_mm / SHEET_LEN_MM);
+        
+        for (const half of ["BL", "BR"]) {
+          let sheetIdx = 0;
+          
+          for (let row = 0; row < numRows; row++) {
+            const slopePos = row * SHEET_LEN_MM;
+            const remainingLen = hipSlopeLen_mm - slopePos;
+            const actualLen = Math.min(SHEET_LEN_MM, remainingLen);
+            
+            if (actualLen <= 0) continue;
+            
+            const progressUp = (slopePos + actualLen / 2) / hipSlopeLen_mm;
+            const widthAtPos = halfWidth_mm * (1 - progressUp);
+            
+            if (widthAtPos <= 50) continue;
+            
+            const numCols = Math.ceil(widthAtPos / SHEET_WID_MM);
+            const stagger = (row % 2 === 1) ? SHEET_WID_MM / 2 : 0;
+            
+            for (let col = 0; col < numCols; col++) {
+              const xOffset = col * SHEET_WID_MM - stagger;
+              let actualWid = Math.min(SHEET_WID_MM, widthAtPos - xOffset);
+              
+              if (actualWid <= 50) continue;
+              if (xOffset < 0) {
+                actualWid += xOffset;
+                if (actualWid <= 50) continue;
+              }
+              
+              const sMid_mm = slopePos + actualLen / 2;
+              const runMid_mm = sMid_mm * hipCosT;
+              const dropMid_mm = sMid_mm * hipSinT;
+              const ySurf_mm = memberD_mm + (rise_mm - dropMid_mm);
+              
+              const zSurf_mm = B_mm - (runMid_mm / Math.SQRT2);
+              
+              let xCenter;
+              if (half === "BL") {
+                xCenter = runMid_mm / Math.SQRT2 + Math.max(0, xOffset) + actualWid / 2;
+              } else {
+                xCenter = A_mm - (runMid_mm / Math.SQRT2) - Math.max(0, xOffset) - actualWid / 2;
+              }
+              
+              const cx = xCenter + (half === "BL" ? -hipSinT : hipSinT) * (osbOutOffset_mm + osbThk / 2) / Math.SQRT2;
+              const cy = ySurf_mm + hipCosT * (osbOutOffset_mm + osbThk / 2);
+              const cz = zSurf_mm - (osbOutOffset_mm + osbThk / 2) * hipSinT / Math.SQRT2;
+              
+              const mesh = mkBoxCenteredLocal(
+                `${meshPrefix}roof-hipped-osb-${half}-${sheetIdx}`,
+                actualLen,
+                osbThk,
+                actualWid,
+                cx,
+                cy,
+                cz,
+                roofRoot,
+                osbMat,
+                { roof: "hipped", part: "osb", end: "back", half: half, sheet: true }
+              );
+              
+              const yRot = half === "BL" ? Math.PI / 4 : -Math.PI / 4;
+              mesh.rotation = new BABYLON.Vector3(-hipSlopeAng, yRot, 0);
+              
+              if (mesh.enableEdgesRendering) {
+                mesh.enableEdgesRendering();
+                mesh.edgesWidth = 2;
+                mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+              }
+              
+              sheetIdx++;
+            }
+          }
+        }
+      }
+    }
+  }

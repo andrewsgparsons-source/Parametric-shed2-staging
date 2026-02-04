@@ -3810,303 +3810,212 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     }
   }
 
-  // === OSB SHEATHING - Proper Hipped Roof Geometry ===
-  // 2 Rectangles (saddle sections) + 8 Triangles (hip end panels)
+  // === OSB SHEATHING ===
+  // 8×4 sheets (2440mm × 1220mm) at 18mm thickness
+  // Main slopes: LANDSCAPE (2440 along slope, 1220 across), staggered joints
+  // Hip ends: PORTRAIT (1220 along slope, 2440 across), trimmed to triangular
   if (roofParts.osb) {
     const osbThk = 18;
-    
+    const SHEET_LONG = 2440;  // 8ft
+    const SHEET_SHORT = 1220; // 4ft
     const sinT = Math.sin(commonSlopeAng);
     const cosT = Math.cos(commonSlopeAng);
-    const hipSinT = Math.sin(hipSlopeAng);
-    const hipCosT = Math.cos(hipSlopeAng);
     
-    // OSB sits on top of rafters
-    const osbOffset_mm = memberD_mm + 1;
+    // OSB sits directly on top of rafters (no gap)
+    const osbBottomOffset_mm = memberD_mm;
     
-    // ============================================
-    // RECTANGLES: 2 saddle sections (main slopes)
-    // ============================================
-    // These span from front hip to back hip along the ridge
+    // Helper to create and position an OSB panel on main slope
+    // Uses EXACT same positioning formula as original code
+    function createMainSlopePanel(name, panelLen, panelWidth, slopeDistFromEaves, zCenter, isLeftSlope, meta) {
+      // Position along slope from eaves (panel center)
+      const sMid_mm = slopeDistFromEaves + panelLen / 2;
+      const runMid_mm = sMid_mm * cosT;
+      const dropMid_mm = sMid_mm * sinT;
+      
+      // EXACT same formula as original code
+      const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
+      let xSurfMid_mm;
+      if (isLeftSlope) {
+        xSurfMid_mm = halfSpan_mm - runMid_mm;
+      } else {
+        xSurfMid_mm = halfSpan_mm + runMid_mm;
+      }
+      
+      // Perpendicular offset (NO gap: use memberD_mm instead of memberD_mm + 1)
+      const osbOutOffset_mm = memberD_mm;  // Changed from memberD_mm + 1 to remove gap
+      const cx = xSurfMid_mm + (isLeftSlope ? -sinT : sinT) * (osbOutOffset_mm + osbThk / 2);
+      const cy = ySurfMid_mm + cosT * (osbOutOffset_mm + osbThk / 2);
+      
+      const panel = mkBoxCenteredLocal(
+        name,
+        panelLen,
+        osbThk,
+        panelWidth,
+        cx,
+        cy,
+        zCenter,
+        roofRoot,
+        osbMat,
+        meta
+      );
+      panel.rotation = new BABYLON.Vector3(0, 0, isLeftSlope ? commonSlopeAng : -commonSlopeAng);
+      if (panel.enableEdgesRendering) {
+        panel.enableEdgesRendering();
+        panel.edgesWidth = 2;
+        panel.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+      }
+      return panel;
+    }
+    
+    // === MAIN SLOPES (Left and Right) - LANDSCAPE orientation, staggered ===
     if (ridgeLen_mm > 0) {
-      // Left saddle rectangle
-      {
-        const slopeLen_mm = commonRafterLen_mm;
-        const panelWidth_mm = ridgeLen_mm;
+      const slopeLen_mm = commonRafterLen_mm;
+      const slopeWidth_mm = ridgeLen_mm;
+      
+      const rowsNeeded = Math.ceil(slopeLen_mm / SHEET_LONG);
+      const colsNeeded = Math.ceil(slopeWidth_mm / SHEET_SHORT);
+      
+      // Left slope
+      for (let row = 0; row < rowsNeeded; row++) {
+        const staggerOffset = (row % 2 === 1) ? SHEET_SHORT / 2 : 0;
+        const slopeStart = row * SHEET_LONG;
+        let panelLen = Math.min(SHEET_LONG, slopeLen_mm - slopeStart);
+        if (panelLen <= 0) continue;
         
-        // Center of the slope
-        const sMid_mm = slopeLen_mm / 2;
-        const runMid_mm = sMid_mm * cosT;
-        const dropMid_mm = sMid_mm * sinT;
-        const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
-        
-        // X position (left slope goes from halfSpan toward 0)
-        const xSurf_mm = halfSpan_mm - runMid_mm;
-        
-        // Offset perpendicular to slope surface
-        const cx = xSurf_mm + (-sinT) * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
-        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
-        
-        const meshL = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-osb-saddle-L`,
-          slopeLen_mm,
-          osbThk,
-          panelWidth_mm,
-          cx,
-          cy,
-          cz,
-          roofRoot,
-          osbMat,
-          { roof: "hipped", part: "osb", type: "saddle", side: "L" }
-        );
-        meshL.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
-        if (meshL.enableEdgesRendering) {
-          meshL.enableEdgesRendering();
-          meshL.edgesWidth = 2;
-          meshL.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        for (let col = -1; col <= colsNeeded; col++) {
+          let zStart = ridgeStartZ_mm + col * SHEET_SHORT + staggerOffset;
+          let panelWidth = SHEET_SHORT;
+          
+          // Trim at boundaries
+          if (zStart < ridgeStartZ_mm) {
+            panelWidth -= (ridgeStartZ_mm - zStart);
+            zStart = ridgeStartZ_mm;
+          }
+          if (zStart + panelWidth > ridgeEndZ_mm) {
+            panelWidth = ridgeEndZ_mm - zStart;
+          }
+          if (panelWidth <= 50 || zStart >= ridgeEndZ_mm) continue;
+          
+          createMainSlopePanel(
+            `${meshPrefix}roof-hipped-osb-L-${row}-${col}`,
+            panelLen, panelWidth, slopeStart,
+            zStart + panelWidth / 2, true,
+            { roof: "hipped", part: "osb", side: "L", row, col }
+          );
         }
       }
       
-      // Right saddle rectangle
-      {
-        const slopeLen_mm = commonRafterLen_mm;
-        const panelWidth_mm = ridgeLen_mm;
+      // Right slope
+      for (let row = 0; row < rowsNeeded; row++) {
+        const staggerOffset = (row % 2 === 1) ? SHEET_SHORT / 2 : 0;
+        const slopeStart = row * SHEET_LONG;
+        let panelLen = Math.min(SHEET_LONG, slopeLen_mm - slopeStart);
+        if (panelLen <= 0) continue;
         
-        const sMid_mm = slopeLen_mm / 2;
-        const runMid_mm = sMid_mm * cosT;
-        const dropMid_mm = sMid_mm * sinT;
-        const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
-        
-        // X position (right slope goes from halfSpan toward A_mm)
-        const xSurf_mm = halfSpan_mm + runMid_mm;
-        
-        const cx = xSurf_mm + sinT * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
-        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
-        
-        const meshR = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-osb-saddle-R`,
-          slopeLen_mm,
-          osbThk,
-          panelWidth_mm,
-          cx,
-          cy,
-          cz,
-          roofRoot,
-          osbMat,
-          { roof: "hipped", part: "osb", type: "saddle", side: "R" }
-        );
-        meshR.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
-        if (meshR.enableEdgesRendering) {
-          meshR.enableEdgesRendering();
-          meshR.edgesWidth = 2;
-          meshR.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        for (let col = -1; col <= colsNeeded; col++) {
+          let zStart = ridgeStartZ_mm + col * SHEET_SHORT + staggerOffset;
+          let panelWidth = SHEET_SHORT;
+          
+          if (zStart < ridgeStartZ_mm) {
+            panelWidth -= (ridgeStartZ_mm - zStart);
+            zStart = ridgeStartZ_mm;
+          }
+          if (zStart + panelWidth > ridgeEndZ_mm) {
+            panelWidth = ridgeEndZ_mm - zStart;
+          }
+          if (panelWidth <= 50 || zStart >= ridgeEndZ_mm) continue;
+          
+          createMainSlopePanel(
+            `${meshPrefix}roof-hipped-osb-R-${row}-${col}`,
+            panelLen, panelWidth, slopeStart,
+            zStart + panelWidth / 2, false,
+            { roof: "hipped", part: "osb", side: "R", row, col }
+          );
         }
       }
     }
     
-    // ============================================
-    // TRIANGLES: 8 hip end panels (4 per hip end)
-    // ============================================
-    // Each hip end has 4 triangles:
-    // - 2 on the main slope sides (meeting the saddle rectangles)
-    // - Each split by the hip rafter into left/right
-    
-    // Helper to create a triangular OSB panel
-    function createTriangleOSB(name, p1, p2, p3, normal, metadata) {
-      // p1, p2, p3 are Vector3 positions in mm
-      // Create a triangle mesh using vertex data
+    // === HIP ENDS (Front and Back) - PORTRAIT orientation ===
+    // Triangular hip ends - panels taper as they go up
+    {
+      const hipSlopeLen = hipRafterLen_mm;
+      const hipBaseWidth = A_mm; // Full width at eaves
+      const hipSinT = Math.sin(hipSlopeAng);
+      const hipCosT = Math.cos(hipSlopeAng);
       
-      const positions = [
-        p1.x / 1000, p1.y / 1000, p1.z / 1000,
-        p2.x / 1000, p2.y / 1000, p2.z / 1000,
-        p3.x / 1000, p3.y / 1000, p3.z / 1000
-      ];
+      const rowsNeeded = Math.ceil(hipSlopeLen / SHEET_SHORT);
       
-      // Two triangles (front and back faces)
-      const indices = [0, 1, 2, 2, 1, 0];
-      
-      // Normals for both faces
-      const normals = [
-        normal.x, normal.y, normal.z,
-        normal.x, normal.y, normal.z,
-        normal.x, normal.y, normal.z
-      ];
-      
-      const vertexData = new BABYLON.VertexData();
-      vertexData.positions = positions;
-      vertexData.indices = indices;
-      vertexData.normals = normals;
-      
-      const mesh = new BABYLON.Mesh(name, scene);
-      vertexData.applyToMesh(mesh);
-      mesh.material = osbMat;
-      mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, metadata || {});
-      if (roofRoot) mesh.parent = roofRoot;
-      
-      if (mesh.enableEdgesRendering) {
-        mesh.enableEdgesRendering();
-        mesh.edgesWidth = 2;
-        mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+      // Front hip
+      for (let row = 0; row < rowsNeeded; row++) {
+        const slopeStart = row * SHEET_SHORT;
+        let panelLen = Math.min(SHEET_SHORT, hipSlopeLen - slopeStart);
+        if (panelLen <= 0) continue;
+        
+        // Width tapers linearly from base to apex
+        const progressUp = (slopeStart + panelLen / 2) / hipSlopeLen;
+        const widthAtRow = hipBaseWidth * (1 - progressUp);
+        if (widthAtRow <= 100) continue;
+        
+        const midSlopeDist = slopeStart + panelLen / 2;
+        const zPos = midSlopeDist * hipCosT;
+        const yRise = midSlopeDist * hipSinT;
+        
+        const panelF = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-osb-F-${row}`,
+          widthAtRow,
+          osbThk,
+          panelLen,
+          halfSpan_mm,
+          osbBottomOffset_mm + yRise + osbThk / 2,
+          zPos,
+          roofRoot,
+          osbMat,
+          { roof: "hipped", part: "osb", side: "F", row }
+        );
+        panelF.rotation = new BABYLON.Vector3(hipSlopeAng, 0, 0);
+        if (panelF.enableEdgesRendering) {
+          panelF.enableEdgesRendering();
+          panelF.edgesWidth = 2;
+          panelF.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        }
       }
       
-      return mesh;
-    }
-    
-    // Calculate key points for hip triangles
-    // Front hip end (at Z = 0 to ridgeStartZ_mm)
-    // Back hip end (at Z = ridgeEndZ_mm to B_mm)
-    
-    const osbY = osbOffset_mm + osbThk / 2; // Base Y for OSB on rafters at eaves
-    
-    // FRONT HIP END - 4 triangles
-    {
-      // Ridge end point (where front hip meets ridge)
-      const ridgeFrontX = halfSpan_mm;
-      const ridgeFrontY = osbOffset_mm + rise_mm + osbThk / 2;
-      const ridgeFrontZ = ridgeStartZ_mm;
-      
-      // Eaves corners
-      const eavesFL_X = 0;
-      const eavesFL_Y = osbY;
-      const eavesFL_Z = 0;
-      
-      const eavesFR_X = A_mm;
-      const eavesFR_Y = osbY;
-      const eavesFR_Z = 0;
-      
-      // Mid-point of front eaves (where hip rafter meets eaves)
-      const eavesFMid_X = halfSpan_mm;
-      const eavesFMid_Y = osbY;
-      const eavesFMid_Z = 0;
-      
-      // Left saddle junction (where left saddle meets front hip)
-      const saddleFLjunc_X = 0;
-      const saddleFLjunc_Y = osbY;
-      const saddleFLjunc_Z = ridgeStartZ_mm;
-      
-      // Right saddle junction
-      const saddleFRjunc_X = A_mm;
-      const saddleFRjunc_Y = osbY;
-      const saddleFRjunc_Z = ridgeStartZ_mm;
-      
-      // Triangle FL-1: Left side of front hip (main slope side)
-      // From: ridge front -> left saddle junction -> left eaves corner
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-FL1`,
-        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
-        new BABYLON.Vector3(saddleFLjunc_X, saddleFLjunc_Y, saddleFLjunc_Z),
-        new BABYLON.Vector3(eavesFL_X, eavesFL_Y, eavesFL_Z),
-        new BABYLON.Vector3(-0.5, 0.5, -0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "FL1" }
-      );
-      
-      // Triangle FL-2: Left side of front hip (hip slope side)
-      // From: ridge front -> left eaves corner -> front mid eaves
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-FL2`,
-        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
-        new BABYLON.Vector3(eavesFL_X, eavesFL_Y, eavesFL_Z),
-        new BABYLON.Vector3(eavesFMid_X, eavesFMid_Y, eavesFMid_Z),
-        new BABYLON.Vector3(0, 0.5, -0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "FL2" }
-      );
-      
-      // Triangle FR-1: Right side of front hip (main slope side)
-      // From: ridge front -> right eaves corner -> right saddle junction
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-FR1`,
-        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
-        new BABYLON.Vector3(eavesFR_X, eavesFR_Y, eavesFR_Z),
-        new BABYLON.Vector3(saddleFRjunc_X, saddleFRjunc_Y, saddleFRjunc_Z),
-        new BABYLON.Vector3(0.5, 0.5, -0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "FR1" }
-      );
-      
-      // Triangle FR-2: Right side of front hip (hip slope side)
-      // From: ridge front -> front mid eaves -> right eaves corner
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-FR2`,
-        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
-        new BABYLON.Vector3(eavesFMid_X, eavesFMid_Y, eavesFMid_Z),
-        new BABYLON.Vector3(eavesFR_X, eavesFR_Y, eavesFR_Z),
-        new BABYLON.Vector3(0, 0.5, -0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "FR2" }
-      );
-    }
-    
-    // BACK HIP END - 4 triangles (mirror of front)
-    {
-      // Ridge end point (where back hip meets ridge)
-      const ridgeBackX = halfSpan_mm;
-      const ridgeBackY = osbOffset_mm + rise_mm + osbThk / 2;
-      const ridgeBackZ = ridgeEndZ_mm;
-      
-      // Eaves corners
-      const eavesBL_X = 0;
-      const eavesBL_Y = osbY;
-      const eavesBL_Z = B_mm;
-      
-      const eavesBR_X = A_mm;
-      const eavesBR_Y = osbY;
-      const eavesBR_Z = B_mm;
-      
-      // Mid-point of back eaves
-      const eavesBMid_X = halfSpan_mm;
-      const eavesBMid_Y = osbY;
-      const eavesBMid_Z = B_mm;
-      
-      // Left saddle junction
-      const saddleBLjunc_X = 0;
-      const saddleBLjunc_Y = osbY;
-      const saddleBLjunc_Z = ridgeEndZ_mm;
-      
-      // Right saddle junction
-      const saddleBRjunc_X = A_mm;
-      const saddleBRjunc_Y = osbY;
-      const saddleBRjunc_Z = ridgeEndZ_mm;
-      
-      // Triangle BL-1: Left side of back hip (main slope side)
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-BL1`,
-        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
-        new BABYLON.Vector3(eavesBL_X, eavesBL_Y, eavesBL_Z),
-        new BABYLON.Vector3(saddleBLjunc_X, saddleBLjunc_Y, saddleBLjunc_Z),
-        new BABYLON.Vector3(-0.5, 0.5, 0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "BL1" }
-      );
-      
-      // Triangle BL-2: Left side of back hip (hip slope side)
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-BL2`,
-        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
-        new BABYLON.Vector3(eavesBMid_X, eavesBMid_Y, eavesBMid_Z),
-        new BABYLON.Vector3(eavesBL_X, eavesBL_Y, eavesBL_Z),
-        new BABYLON.Vector3(0, 0.5, 0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "BL2" }
-      );
-      
-      // Triangle BR-1: Right side of back hip (main slope side)
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-BR1`,
-        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
-        new BABYLON.Vector3(saddleBRjunc_X, saddleBRjunc_Y, saddleBRjunc_Z),
-        new BABYLON.Vector3(eavesBR_X, eavesBR_Y, eavesBR_Z),
-        new BABYLON.Vector3(0.5, 0.5, 0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "BR1" }
-      );
-      
-      // Triangle BR-2: Right side of back hip (hip slope side)
-      createTriangleOSB(
-        `${meshPrefix}roof-hipped-osb-tri-BR2`,
-        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
-        new BABYLON.Vector3(eavesBR_X, eavesBR_Y, eavesBR_Z),
-        new BABYLON.Vector3(eavesBMid_X, eavesBMid_Y, eavesBMid_Z),
-        new BABYLON.Vector3(0, 0.5, 0.5).normalize(),
-        { roof: "hipped", part: "osb", type: "triangle", id: "BR2" }
-      );
+      // Back hip
+      for (let row = 0; row < rowsNeeded; row++) {
+        const slopeStart = row * SHEET_SHORT;
+        let panelLen = Math.min(SHEET_SHORT, hipSlopeLen - slopeStart);
+        if (panelLen <= 0) continue;
+        
+        const progressUp = (slopeStart + panelLen / 2) / hipSlopeLen;
+        const widthAtRow = hipBaseWidth * (1 - progressUp);
+        if (widthAtRow <= 100) continue;
+        
+        const midSlopeDist = slopeStart + panelLen / 2;
+        const zPos = B_mm - midSlopeDist * hipCosT;
+        const yRise = midSlopeDist * hipSinT;
+        
+        const panelB = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-osb-B-${row}`,
+          widthAtRow,
+          osbThk,
+          panelLen,
+          halfSpan_mm,
+          osbBottomOffset_mm + yRise + osbThk / 2,
+          zPos,
+          roofRoot,
+          osbMat,
+          { roof: "hipped", part: "osb", side: "B", row }
+        );
+        panelB.rotation = new BABYLON.Vector3(-hipSlopeAng, 0, 0);
+        if (panelB.enableEdgesRendering) {
+          panelB.enableEdgesRendering();
+          panelB.edgesWidth = 2;
+          panelB.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        }
+      }
     }
   }
+
   // === COVERING (FELT) ===
   if (roofParts.covering) {
     const coveringThk = 2;
