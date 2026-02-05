@@ -76,44 +76,29 @@ function getSlateMaterial(scene, slabLen_mm, slabWidth_mm) {
  * Matches reference: uniform dark slate colour, very subtle groove lines,
  * stagger visible through groove positions (not colour variation).
  *
- * Canvas layout (512×512) — LANDSCAPE orientation:
- *   X axis (U) → along slope:  2 course heights (2 × 143mm = 286mm)
- *   Y axis (V) → along ridge:  2 tile widths    (2 × 305mm = 610mm)
+ * Canvas layout (512×512):
+ *   X axis (U) → along slope: 2 columns = 2 tile rows of 143mm each
+ *   Y axis (V) → along ridge: 2 tile widths = 610mm
  *
- *   Course 0 (x: 0..cH):   [Tile A][Tile B]  tiles run along Y (ridge)
- *   Course 1 (x: cH..2cH): [½B][Tile A][½B]  offset ½ tile in Y
+ *   Course 0 (y=0..courseH):  [Tile][Tile]    tiles stack in X (along slope)
+ *   Course 1 (y=courseH..H): [half][Tile][half]  offset ½ tile in X
  *
- * Courses step along SLOPE (X). Tiles run along RIDGE (Y).
- * Vertical course grooves, horizontal tile joints. Stagger along RIDGE.
+ * Courses separated along RIDGE (Y). Tiles stack along SLOPE (X).
+ * Horizontal tile joints are dominant. Stagger runs HORIZONTALLY.
  */
 function _createSlateTileTexture(scene) {
   const SIZE = 512;
   const tex  = new BABYLON.DynamicTexture("slateTileTex", SIZE, scene, true);
   const ctx  = tex.getContext();
   const W = SIZE, H = SIZE;
-
-  // -----------------------------------------------------------------------
-  // LANDSCAPE layout — tiles run along the building length (Y/V axis).
-  // Courses step up the slope (X/U axis).
-  //
-  //   Canvas X → U → along slope:   2 course heights (2 × 143mm = 286mm)
-  //   Canvas Y → V → along ridge:   2 tile widths    (2 × 305mm = 610mm)
-  //
-  //   Course 0 (x: 0..cH):    tiles at y: [0..tW] [tW..2tW]         joints at y=tW
-  //   Course 1 (x: cH..2cH):  tiles at y: [0..½tW] [½tW..1½tW] ... offset ½ tile in Y
-  //
-  // Course-boundary grooves = VERTICAL lines   (constant X = constant slope pos).
-  // Tile-joint grooves      = HORIZONTAL lines (constant Y = constant ridge pos).
-  // Running bond stagger    = along Y (building length).
-  // -----------------------------------------------------------------------
-
-  const courseH  = W / 2;       // 256px per course in X (along slope)
-  const tileW    = H / 2;       // 256px per tile in Y (along ridge / building length)
+  const tileW    = W / 2;       // 256px per tile in X (along slope)
+  const courseH  = H / 2;       // 256px per course in Y (along ridge)
   const halfTile = tileW / 2;   // 128px = half tile for running bond offset
 
-  const GC = 6;   // course boundary groove width (vertical lines between courses)
-  const GT = 10;  // tile joint groove width (horizontal lines between tiles)
+  const GT = 10;  // tile joint groove (horizontal on roof — prominent)
+  const GC = 6;   // course boundary groove (vertical on roof — thinner)
 
+  // ---- Single uniform tile colour + groove outlines ----
   const tileCol   = "rgb(62, 68, 76)";
   const grooveCol = "rgb(28, 31, 38)";
 
@@ -123,24 +108,70 @@ function _createSlateTileTexture(scene) {
 
   ctx.fillStyle = grooveCol;
 
+  // --- HORIZONTAL tile joints (dominant on roof: constant X, run along V/ridge) ---
+  // Course 0 (y=0..courseH): joint at x=tileW
+  ctx.fillRect(tileW, 0, GT, courseH);
+  // Wrap seam at x=0 / x=W for course 0:
+  ctx.fillRect(0, 0, Math.ceil(GT / 2), courseH);
+  ctx.fillRect(W - Math.floor(GT / 2), 0, Math.floor(GT / 2), courseH);
+
+  // Course 1 (y=courseH..H): joints offset by halfTile in X
+  ctx.fillRect(halfTile, courseH, GT, courseH);
+  ctx.fillRect(halfTile + tileW, courseH, GT, courseH);
+
+  // --- VERTICAL course boundaries (thinner on roof: constant Y, run along U/slope) ---
+  ctx.fillRect(0, courseH, W, GC);
+  // Wrap seam at y=0 / y=H:
+  ctx.fillRect(0, 0, W, Math.ceil(GC / 2));
+  ctx.fillRect(0, H - Math.floor(GC / 2), W, Math.floor(GC / 2));
+
+  tex.update();
+
+  tex.wrapU    = BABYLON.Texture.WRAP_ADDRESSMODE;
+  tex.wrapV    = BABYLON.Texture.WRAP_ADDRESSMODE;
+  tex.hasAlpha = false;
+
+  return tex;
+}
+
+/**
+ * Separate texture for hipped roof — LANDSCAPE orientation.
+ * Tiles run along the building length (Y/V), courses step up slope (X/U).
+ * Running bond stagger along the building length.
+ */
+function _createSlateTileTextureHipped(scene) {
+  const SIZE = 512;
+  const tex  = new BABYLON.DynamicTexture("slateTileTexHipped", SIZE, scene, true);
+  const ctx  = tex.getContext();
+  const W = SIZE, H = SIZE;
+
+  const courseH  = W / 2;       // 256px per course in X (along slope)
+  const tileW    = H / 2;       // 256px per tile in Y (along ridge / building length)
+  const halfTile = tileW / 2;   // 128px = half tile for running bond offset
+
+  const GC = 6;   // course boundary groove width
+  const GT = 10;  // tile joint groove width
+
+  const tileCol   = "rgb(62, 68, 76)";
+  const grooveCol = "rgb(28, 31, 38)";
+
+  ctx.fillStyle = tileCol;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = grooveCol;
+
   // --- VERTICAL course boundaries (constant X, full height) ---
-  // These separate courses as you step up the slope.
-  // Main boundary at x = courseH:
   ctx.fillRect(courseH - Math.floor(GC / 2), 0, GC, H);
-  // Wrap seam at x=0 and x=W:
   ctx.fillRect(0, 0, Math.ceil(GC / 2), H);
   ctx.fillRect(W - Math.floor(GC / 2), 0, Math.floor(GC / 2), H);
 
   // --- HORIZONTAL tile joints (constant Y, within each course) ---
-  // These separate tiles running along the building length.
-
-  // Course 0 (x: 0..courseH): joint at y = tileW
+  // Course 0 (x: 0..courseH):
   ctx.fillRect(0, tileW - Math.floor(GT / 2), courseH, GT);
-  // Wrap seam at y=0 and y=H for course 0:
   ctx.fillRect(0, 0, courseH, Math.ceil(GT / 2));
   ctx.fillRect(0, H - Math.floor(GT / 2), courseH, Math.floor(GT / 2));
 
-  // Course 1 (x: courseH..W): joints offset by halfTile in Y (running bond)
+  // Course 1 (x: courseH..W): offset by halfTile in Y (running bond)
   ctx.fillRect(courseH, halfTile - Math.floor(GT / 2), courseH, GT);
   ctx.fillRect(courseH, halfTile + tileW - Math.floor(GT / 2), courseH, GT);
 
@@ -848,7 +879,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     slateMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
     slateMat.backFaceCulling = false;
 
-    const tex = _createSlateTileTexture(scene);
+    const tex = _createSlateTileTextureHipped(scene);
     tex.uScale = 1;   // UVs encode physical tile counts directly
     tex.vScale = 1;
     slateMat.diffuseTexture = tex;
