@@ -811,16 +811,29 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
 
   // ==================================================================
   // TILE SLABS — same shapes as membrane, sitting on top of battens
+  // Textured with running-bond slate pattern (same as apex style)
   // ==================================================================
   const tilePerpOffset_mm = battenPerpOffset_mm + BATTEN_SPECS.height_mm / 2 + TILE_THK_MM / 2;
 
-  // Simple dark slate material (textured version later)
+  // Slope length for UV mapping
+  const slopeLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
+
+  // UV repeat units (must match apex texture layout)
+  const repeatU_mm = TILE_EXPOSURE_MM * 2;   // 286mm — 2 tile rows along slope
+  const repeatV_mm = TILE_WIDTH_MM * 2;      // 610mm — 2 tile widths along ridge
+
+  // Textured slate material — same running-bond pattern as apex
   let slateMat = scene.getMaterialByName("roofTiles-slate-hipped");
   if (!slateMat) {
     slateMat = new BABYLON.StandardMaterial("roofTiles-slate-hipped", scene);
-    slateMat.diffuseColor  = new BABYLON.Color3(0.25, 0.25, 0.28);
-    slateMat.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+    slateMat.diffuseColor  = new BABYLON.Color3(1, 1, 1);   // Texture handles colour
+    slateMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
     slateMat.backFaceCulling = false;
+
+    const tex = _createSlateTileTexture(scene);
+    tex.uScale = 1;   // UVs encode physical tile counts directly
+    tex.vScale = 1;
+    slateMat.diffuseTexture = tex;
   }
 
   // Helper: build a tile slab from an array of vertex positions (mm)
@@ -850,11 +863,12 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   // ---- LEFT SLOPE tile (trapezoid) ----
   {
     const tOff = { x: (-sinT) * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
+    // UVs: U = slope distance / repeat (eaves=max, ridge=0), V = Z position / repeat
     result.tiles.push(buildTileMesh(`${prefix}tiles-L`, [
-      { x: 0           + tOff.x, y: eavesY + tOff.y, z: 0,              u: 0, v: 0 },
-      { x: 0           + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: 1, v: 0 },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 1, v: 1 },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: 1 },
+      { x: 0           + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
+      { x: 0           + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
+      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
+      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
     ], [0, 1, 2, 0, 2, 3], { x: -sinT, y: cosT, z: 0 }, "L"));
   }
 
@@ -862,20 +876,21 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   {
     const tOff = { x: sinT * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
     result.tiles.push(buildTileMesh(`${prefix}tiles-R`, [
-      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: 0,              u: 0, v: 0 },
-      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: 1, v: 0 },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 1, v: 1 },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: 1 },
+      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
+      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
+      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
+      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
     ], [0, 2, 1, 0, 3, 2], { x: sinT, y: cosT, z: 0 }, "R"));
   }
 
   // ---- FRONT FACE tile (triangle) ----
   {
     const tOff = { y: cosT * tilePerpOffset_mm, z: (-sinT) * tilePerpOffset_mm };
+    // UVs: U = slope distance / repeat (eaves=max, ridge=0), V = X position / repeat
     result.tiles.push(buildTileMesh(`${prefix}tiles-F`, [
-      { x: 0,           y: eavesY + tOff.y, z: 0           + tOff.z, u: 0,   v: 0 },
-      { x: A_mm,        y: eavesY + tOff.y, z: 0           + tOff.z, u: 1,   v: 0 },
-      { x: halfSpan_mm, y: ridgeY + tOff.y, z: ridgeStartZ_mm + tOff.z, u: 0.5, v: 1 },
+      { x: 0,           y: eavesY + tOff.y, z: 0           + tOff.z, u: slopeLen_mm / repeatU_mm, v: 0 },
+      { x: A_mm,        y: eavesY + tOff.y, z: 0           + tOff.z, u: slopeLen_mm / repeatU_mm, v: A_mm / repeatV_mm },
+      { x: halfSpan_mm, y: ridgeY + tOff.y, z: ridgeStartZ_mm + tOff.z, u: 0, v: halfSpan_mm / repeatV_mm },
     ], [0, 2, 1], { x: 0, y: cosT, z: -sinT }, "F"));
   }
 
@@ -883,9 +898,9 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   {
     const tOff = { y: cosT * tilePerpOffset_mm, z: sinT * tilePerpOffset_mm };
     result.tiles.push(buildTileMesh(`${prefix}tiles-B`, [
-      { x: A_mm,        y: eavesY + tOff.y, z: B_mm        + tOff.z, u: 0,   v: 0 },
-      { x: 0,           y: eavesY + tOff.y, z: B_mm        + tOff.z, u: 1,   v: 0 },
-      { x: halfSpan_mm, y: ridgeY + tOff.y, z: ridgeEndZ_mm + tOff.z, u: 0.5, v: 1 },
+      { x: A_mm,        y: eavesY + tOff.y, z: B_mm        + tOff.z, u: slopeLen_mm / repeatU_mm, v: 0 },
+      { x: 0,           y: eavesY + tOff.y, z: B_mm        + tOff.z, u: slopeLen_mm / repeatU_mm, v: A_mm / repeatV_mm },
+      { x: halfSpan_mm, y: ridgeY + tOff.y, z: ridgeEndZ_mm + tOff.z, u: 0, v: halfSpan_mm / repeatV_mm },
     ], [0, 2, 1], { x: 0, y: cosT, z: sinT }, "B"));
   }
 
@@ -1141,7 +1156,7 @@ export function disposeTileMeshes(scene, prefix = "roof-tiles-") {
   for (const m of gone) m.dispose();
 
   // Also dispose cached materials so textures get recreated
-  for (const name of ["roofTiles-ridgeCap", "roofTiles-slate"]) {
+  for (const name of ["roofTiles-ridgeCap", "roofTiles-slate", "roofTiles-slate-hipped"]) {
     const mat = scene.getMaterialByName(name);
     if (mat) { mat.dispose(true, true); }   // forceDisposeEffect, forceDisposeTextures
   }
