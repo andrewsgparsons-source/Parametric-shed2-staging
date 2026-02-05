@@ -815,8 +815,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   // ==================================================================
   const tilePerpOffset_mm = battenPerpOffset_mm + BATTEN_SPECS.height_mm / 2 + TILE_THK_MM / 2;
 
-  // Slope length for UV mapping
-  const slopeLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
+  // slopeLen_mm already declared above (battens section)
 
   // UV repeat units (must match apex texture layout)
   const repeatU_mm = TILE_EXPOSURE_MM * 2;   // 286mm — 2 tile rows along slope
