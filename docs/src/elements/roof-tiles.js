@@ -654,7 +654,74 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       result.tiles.push(mesh);
     }
 
-    console.log(`[ROOF-TILES] Hipped end slopes: 2 slabs (rectangular approx)`);
+    // --- Membrane + battens for hip end faces ---
+    const membraneOffset_hip = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm / 2;
+    const battenCtrOffset_hip = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm + BATTEN_SPECS.height_mm / 2;
+    const membraneMat = getMembraneMaterial(scene);
+    const battenMat   = getBattenMaterial(scene);
+
+    for (const face of ["F", "B"]) {
+      const sign = (face === "F") ? 1 : -1;  // +slopeAng for front, -slopeAng for back
+      const midS = hipFaceLen_mm / 2;
+
+      // Membrane
+      {
+        const run  = midS * cosT;
+        const drop = midS * sinT;
+        const cy = memberD_mm + (rise_mm - drop) + cosT * membraneOffset_hip;
+        const cx = halfSpan_mm;
+        const cz = (face === "F")
+          ? ridgeStartZ_mm - run - sinT * membraneOffset_hip
+          : ridgeEndZ_mm   + run + sinT * membraneOffset_hip;
+
+        const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}membrane-hip-${face}`, {
+          width:  hipFaceWidth_mm / 1000,
+          height: MEMBRANE_SPECS.thickness_mm / 1000,
+          depth:  hipFaceLen_mm / 1000,
+        }, scene);
+        mesh.parent   = roofRoot;
+        mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+        mesh.rotation = new BABYLON.Vector3(sign * slopeAng, 0, 0);
+        mesh.material = membraneMat;
+        mesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: `hip-${face}` };
+        result.membrane.push(mesh);
+      }
+
+      // Battens (spaced along the slope from ridge toward eaves)
+      const RIDGE_MARGIN = 25;
+      const EAVES_MARGIN = 25;
+      const numB = Math.floor((hipFaceLen_mm - BATTEN_SPECS.spacing_mm) / BATTEN_SPECS.spacing_mm);
+
+      function addHipBatten(name, s_mm) {
+        const run_mm  = s_mm * cosT;
+        const drop_mm = s_mm * sinT;
+        const cy = memberD_mm + (rise_mm - drop_mm) + cosT * battenCtrOffset_hip;
+        const cx = halfSpan_mm;
+        const cz = (face === "F")
+          ? ridgeStartZ_mm - run_mm - sinT * battenCtrOffset_hip
+          : ridgeEndZ_mm   + run_mm + sinT * battenCtrOffset_hip;
+
+        const mesh = BABYLON.MeshBuilder.CreateBox(name, {
+          width:  hipFaceWidth_mm / 1000,
+          height: BATTEN_SPECS.height_mm / 1000,
+          depth:  BATTEN_SPECS.width_mm / 1000,
+        }, scene);
+        mesh.parent   = roofRoot;
+        mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+        mesh.rotation = new BABYLON.Vector3(sign * slopeAng, 0, 0);
+        mesh.material = battenMat;
+        mesh.metadata = { dynamic: true, roofTiles: true, layer: "battens", slope: `hip-${face}` };
+        result.battens.push(mesh);
+      }
+
+      addHipBatten(`${prefix}batten-hip-${face}-ridge`, RIDGE_MARGIN);
+      for (let i = 0; i < numB; i++) {
+        addHipBatten(`${prefix}batten-hip-${face}-${i}`, (i + 1) * BATTEN_SPECS.spacing_mm);
+      }
+      addHipBatten(`${prefix}batten-hip-${face}-eaves`, hipFaceLen_mm - EAVES_MARGIN);
+    }
+
+    console.log(`[ROOF-TILES] Hipped end slopes: 2 slabs + membranes + battens`);
   }
 
   // ------------------------------------------------------------------
