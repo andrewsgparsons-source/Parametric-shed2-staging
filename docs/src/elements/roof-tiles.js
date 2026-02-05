@@ -969,26 +969,51 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
 
   /**
    * Place a row of caps along a 3D line (ridge or hip).
-   * @param {string} tag       - Name prefix for meshes
-   * @param {number[]} startPt - [x, y, z] in mm (ridge end)
-   * @param {number[]} endPt   - [x, y, z] in mm (eaves end)
-   * @param {number} wingAngle - Droop angle for each wing (radians)
-   * @param {number} yaw       - Y rotation (plan angle of the line)
-   * @param {number} pitch     - X rotation (slope tilt of the line, positive = downhill)
+   * Uses direct frame computation: forward=line direction, right=horizontal perp,
+   * up=cross(forward, right). Wing droop is then a rotation around the forward axis.
+   *
+   * @param {string} tag        - Name prefix for meshes
+   * @param {number[]} startPt  - [x, y, z] in mm (ridge end)
+   * @param {number[]} endPt    - [x, y, z] in mm (eaves end)
+   * @param {number} wingAngle  - Droop angle for each wing (radians)
    */
-  function placeCapsAlongLine(tag, startPt, endPt, wingAngle, yaw, pitch) {
+  function placeCapsAlongLine(tag, startPt, endPt, wingAngle) {
     const dx = endPt[0] - startPt[0];
     const dy = endPt[1] - startPt[1];
     const dz = endPt[2] - startPt[2];
     const lineLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (lineLen < 50) return;
 
+    // Forward direction along the line (ridge→eaves or ridge start→end)
+    const fwd = new BABYLON.Vector3(dx / lineLen, dy / lineLen, dz / lineLen);
+
+    // Right = perpendicular to line in horizontal plane
+    let right = BABYLON.Vector3.Cross(BABYLON.Axis.Y, fwd);
+    if (right.length() < 0.001) {
+      right = new BABYLON.Vector3(1, 0, 0);  // fallback if line is vertical
+    }
+    right.normalize();
+
+    // Up = perpendicular to both forward and right (roughly upward)
+    const up = BABYLON.Vector3.Cross(fwd, right).normalize();
+
+    // Build alignment quaternion from rotation matrix:
+    //   Original X → right (wing direction)
+    //   Original Y → up (cap surface normal)
+    //   Original Z → fwd (cap depth / line direction)
+    const rotMat = BABYLON.Matrix.FromValues(
+      right.x, up.x, fwd.x, 0,
+      right.y, up.y, fwd.y, 0,
+      right.z, up.z, fwd.z, 0,
+      0,       0,    0,     1
+    );
+    const qAlign = BABYLON.Quaternion.FromRotationMatrix(rotMat);
+
     const numFull    = Math.floor(lineLen / RIDGE_CAP_EXPOSED_MM);
     const remainder  = lineLen - (numFull * RIDGE_CAP_EXPOSED_MM);
     const totalCaps  = remainder > 20 ? numFull + 1 : numFull;
 
-    // Unit direction along the line
-    const ux = dx / lineLen, uy = dy / lineLen, uz = dz / lineLen;
+    const ux = fwd.x, uy = fwd.y, uz = fwd.z;
 
     for (let i = 0; i < totalCaps; i++) {
       const isLast      = (i >= numFull);
@@ -1006,13 +1031,11 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
         const droop = (side === "L") ? wingAngle : -wingAngle;
         const wingMid = RIDGE_CAP_WING_MM / 2;
 
-        // Build rotation quaternion: droop (Z) → pitch (X) → yaw (Y)
+        // Droop around original Z, then align to hip frame
         const qDroop = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, droop);
-        const qPitch = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X, pitch);
-        const qYaw   = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, yaw);
-        const q = qYaw.multiply(qPitch).multiply(qDroop);
+        const q = qAlign.multiply(qDroop);
 
-        // Wing offset: start flat along X, apply same rotation
+        // Wing offset: start at ±wingMid along X, rotate by full quaternion
         const offsetLocal = new BABYLON.Vector3(
           (side === "L") ? -wingMid : wingMid, 0, 0
         );
@@ -1050,9 +1073,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       "ridge",
       [ridgeCapX, ridgeCapY, ridgeStartZ_mm],
       [ridgeCapX, ridgeCapY, ridgeEndZ_mm],
-      slopeAng,   // wing droop = main slope angle (same as apex)
-      0,           // yaw = 0 (ridge runs along Z)
-      0            // pitch = 0 (ridge is horizontal)
+      slopeAng    // wing droop = main slope angle (same as apex)
     );
   }
 
@@ -1072,25 +1093,18 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   const eavesCapY = eavesY + cosT * tileTopOffset_mm;
 
   const hipLines = [
-    { tag: "hip-FL", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [0,    eavesCapY, 0],    yaw: Math.atan2(-halfSpan_mm, -ridgeStartZ_mm) },
-    { tag: "hip-FR", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [A_mm, eavesCapY, 0],    yaw: Math.atan2(halfSpan_mm,  -ridgeStartZ_mm) },
-    { tag: "hip-BL", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [0,    eavesCapY, B_mm], yaw: Math.atan2(-halfSpan_mm, ridgeEndZ_mm > ridgeStartZ_mm ? (B_mm - ridgeEndZ_mm) : halfSpan_mm) },
-    { tag: "hip-BR", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [A_mm, eavesCapY, B_mm], yaw: Math.atan2(halfSpan_mm,  ridgeEndZ_mm > ridgeStartZ_mm ? (B_mm - ridgeEndZ_mm) : halfSpan_mm) },
+    { tag: "hip-FL", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [0,    eavesCapY, 0]    },
+    { tag: "hip-FR", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [A_mm, eavesCapY, 0]    },
+    { tag: "hip-BL", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [0,    eavesCapY, B_mm] },
+    { tag: "hip-BR", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [A_mm, eavesCapY, B_mm] },
   ];
 
   for (const hip of hipLines) {
-    // Compute yaw from actual direction (more robust than precomputed)
-    const dx = hip.end[0] - hip.start[0];
-    const dz = hip.end[2] - hip.start[2];
-    const actualYaw = Math.atan2(dx, dz);
-
     placeCapsAlongLine(
       hip.tag,
       hip.start,
       hip.end,
-      hipWingAngle,
-      actualYaw,
-      -hipSlopeAng   // negative = tilting downward from start to end
+      hipWingAngle
     );
   }
 
