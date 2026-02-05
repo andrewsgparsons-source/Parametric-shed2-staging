@@ -163,6 +163,12 @@ export function build3D(state, ctx, sectionContext) {
     try {
       buildHipped(state, ctx, meshPrefix, sectionPos, sectionId);
       console.log("[ROOF] Hipped roof build COMPLETE");
+      // Build tile layers if enabled
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers (hipped)...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
     } catch (e) {
       console.error("[ROOF] Hipped roof build FAILED:", e);
     }
@@ -2152,8 +2158,15 @@ if (roofParts.osb) {
     const OSB_CLEAR_MM = 1;
     const osbOutOffset_mm = memberD_mm + OSB_CLEAR_MM;
     
-    // Fascia hangs down from top of OSB
-    // Position fascia so its top edge aligns with OSB top surface
+    // Check if slate tiles are used - fascia needs to be raised to cover batten end grain
+    const covering = (state && state.roof && state.roof.covering) ? state.roof.covering : "felt";
+    const isSlate = covering === "slate";
+    // Slate tiles add: membrane (1mm) + battens (25mm) + extra clearance (10mm) = 36mm above OSB
+    const SLATE_BATTEN_HEIGHT_MM = 36;
+    const fasciaExtraHeight_mm = isSlate ? SLATE_BATTEN_HEIGHT_MM : 0;
+    
+    // Fascia hangs down from top of OSB (or top of battens for slate)
+    // Position fascia so its top edge covers the batten end grain
     
     function createSlopeFascia(side) {
       const rotZ = (side === "L") ? slopeAng : -slopeAng;
@@ -2169,8 +2182,9 @@ if (roofParts.osb) {
         const ySurfEaves_mm = memberD_mm;
         const osbTopY_eaves_mm = ySurfEaves_mm + normalY * (osbOutOffset_mm + OSB_THK_MM);
         
-        // Fascia center position
-        const fasciaCenterY_mm = osbTopY_eaves_mm - (FASCIA_DEPTH_MM / 2);
+        // Fascia center position - raised by batten height when slate tiles are used
+        const fasciaTopY_mm = osbTopY_eaves_mm + fasciaExtraHeight_mm;
+        const fasciaCenterY_mm = fasciaTopY_mm - (FASCIA_DEPTH_MM / 2);
         const fasciaCenterX_mm = eavesX_mm + normalX * (osbOutOffset_mm + OSB_THK_MM + FASCIA_THK_MM / 2);
         
         mkBoxCenteredLocal(
@@ -2201,9 +2215,10 @@ if (roofParts.osb) {
           : (halfSpan_mm + runMid_mm);
         
         // Position barge board outside the OSB edge
+        // Raised by batten height when slate tiles are used
         const osbOuterOffset_mm = osbOutOffset_mm + OSB_THK_MM;
         const bargeCenterX_mm = xSurfMid_mm + normalX * osbOuterOffset_mm;
-        const bargeCenterY_mm = ySurfMid_mm + normalY * osbOuterOffset_mm - (FASCIA_DEPTH_MM / 2) * cosT;
+        const bargeCenterY_mm = ySurfMid_mm + normalY * (osbOuterOffset_mm + fasciaExtraHeight_mm) - (FASCIA_DEPTH_MM / 2) * cosT;
         
         // Front barge (z = 0)
         const bargeFront = mkBoxCenteredLocal(

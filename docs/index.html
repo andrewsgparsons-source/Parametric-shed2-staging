@@ -414,7 +414,11 @@
                   <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
                     <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure</label>
                     <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
-                    <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Standard covering toggle (felt/shingles) -->
+                    <label id="vRoofCoveringLabel" class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Slate-specific toggles (hidden by default) -->
+                    <label id="vRoofMembraneBattensLabel" class="check" style="display: none;"><input id="vRoofMembraneBattens" type="checkbox" checked /> Membrane &amp; Battens</label>
+                    <label id="vRoofTilesLabel" class="check" style="display: none;"><input id="vRoofTiles" type="checkbox" checked /> Tiles</label>
                     <label class="check"><input id="vRoofInsulation" type="checkbox" checked /> Insulation</label>
                     <label class="check"><input id="vRoofPly" type="checkbox" checked /> Interior Plywood</label>
                   </div>

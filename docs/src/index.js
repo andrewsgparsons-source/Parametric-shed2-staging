@@ -78,6 +78,28 @@ function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
 function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", String(!!hidden)); }
 
 /**
+ * Toggle roof covering visibility checkboxes based on covering type
+ * Shows standard "Covering" for felt/shingles, or "Tiles" + "Membrane & Battens" for slate
+ */
+function updateRoofCoveringToggles(coveringType) {
+  var coveringLabel = $("vRoofCoveringLabel");
+  var tilesLabel = $("vRoofTilesLabel");
+  var membraneBattensLabel = $("vRoofMembraneBattensLabel");
+  
+  if (coveringType === "slate") {
+    // Slate selected: hide standard covering, show breakdown toggles
+    if (coveringLabel) coveringLabel.style.display = "none";
+    if (tilesLabel) tilesLabel.style.display = "";
+    if (membraneBattensLabel) membraneBattensLabel.style.display = "";
+  } else {
+    // Felt/shingles: show standard covering, hide breakdown toggles
+    if (coveringLabel) coveringLabel.style.display = "";
+    if (tilesLabel) tilesLabel.style.display = "none";
+    if (membraneBattensLabel) membraneBattensLabel.style.display = "none";
+  }
+}
+
+/**
  * Update the Openings (Doors & Windows) BOM tables
  */
 function updateOpeningsBOM(state) {
@@ -1052,6 +1074,92 @@ function applyOpeningsVisibility(scene, on) {
         try { m.isVisible = visible; } catch (e0) {}
         try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
       }
+    }
+
+    // Roof Tiles visibility - controls slate/tile layer on roof (synthetic slate option)
+    function applyRoofTilesVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofTilesVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isTiles = false;
+
+        // roof-tiles.js meshes use roofTiles=true with layer="tiles"
+        if (meta.roofTiles && meta.layer === "tiles") {
+          isTiles = true;
+        }
+
+        // Fallback: name-based matching
+        if (nm.indexOf("roof-tiles") >= 0 || nm.indexOf("roof-slate") >= 0 || nm.indexOf("tile-surface") >= 0) {
+          isTiles = true;
+        }
+        if (meta.roof && (meta.part === "tiles" || meta.part === "slate")) {
+          isTiles = true;
+        }
+
+        // Attachment tiles
+        if (nm.indexOf("att-") === 0 && (nm.indexOf("-tiles") >= 0 || nm.indexOf("-slate") >= 0)) {
+          isTiles = true;
+        }
+        if (meta.attachmentId && (meta.part === "tiles" || meta.part === "slate")) {
+          isTiles = true;
+        }
+
+        if (!isTiles) continue;
+        count++;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+      console.log("[vis] roof tiles meshes affected:", count);
+    }
+
+    // Roof Membrane & Battens visibility - controls breathable membrane and tile battens (synthetic slate option)
+    function applyRoofMembraneBattensVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofMembraneBattensVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isMembraneBattens = false;
+
+        // roof-tiles.js meshes use roofTiles=true with layer="membrane" or "battens"
+        if (meta.roofTiles && (meta.layer === "membrane" || meta.layer === "battens")) {
+          isMembraneBattens = true;
+        }
+
+        // Fallback: name-based matching
+        if (nm.indexOf("membrane-") >= 0 || nm.indexOf("batten-") >= 0 || nm.indexOf("-batten") >= 0) {
+          isMembraneBattens = true;
+        }
+        if (meta.roof && (meta.part === "membrane" || meta.part === "battens" || meta.part === "batten")) {
+          isMembraneBattens = true;
+        }
+
+        // Attachment membrane/battens
+        if (nm.indexOf("att-") === 0 && (nm.indexOf("-membrane") >= 0 || nm.indexOf("-battens") >= 0 || nm.indexOf("-batten") >= 0)) {
+          isMembraneBattens = true;
+        }
+        if (meta.attachmentId && (meta.part === "membrane" || meta.part === "battens" || meta.part === "batten")) {
+          isMembraneBattens = true;
+        }
+
+        if (!isMembraneBattens) continue;
+        count++;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+      console.log("[vis] roof membrane/battens meshes affected:", count);
     }
 
     // Roof Insulation visibility - controls insulation batts between rafters and gable end insulation
@@ -2048,6 +2156,9 @@ if (getWallsEnabled(state)) {
           var _roofCoverOn = rp.covering !== false && !_isSlate;
           var _roofInsOn = rp.insulation !== false;
           var _roofPlyOn = rp.ply !== false;
+          // Slate tile layer visibility (only relevant when covering is slate)
+          var _roofTilesOn = _isSlate && rp.tiles !== false;
+          var _roofMembraneBattensOn = _isSlate && rp.membraneBattens !== false;
 
           applyBaseVisibility(ctx.scene, _baseOn);
           applyWallsVisibility(ctx.scene, _wallsOn);
@@ -2057,6 +2168,11 @@ if (getWallsEnabled(state)) {
           applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
           applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
           applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
+          // Slate tile layers
+          if (_isSlate) {
+            applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn);
+            applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
+          }
           applyCladdingVisibility(ctx.scene, _cladOn);
           applyOpeningsVisibility(ctx.scene, _openOn);
           applyAllAttachmentVisibility(ctx.scene, state);
@@ -2070,6 +2186,11 @@ if (getWallsEnabled(state)) {
             try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
             try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
             try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
+            // Slate tile layers
+            if (_isSlate) {
+              try { applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn); } catch (e0) {}
+              try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
+            }
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
             try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -2180,6 +2301,9 @@ if (getWallsEnabled(state)) {
         var _roofCoverOn = rp.covering !== false && !_isSlate;
         var _roofInsOn = rp.insulation !== false;
         var _roofPlyOn = rp.ply !== false;
+        // Slate tile layer visibility (only relevant when covering is slate)
+        var _roofTilesOn = _isSlate && rp.tiles !== false;
+        var _roofMembraneBattensOn = _isSlate && rp.membraneBattens !== false;
 
         applyBaseVisibility(ctx.scene, _baseOn);
         applyWallsVisibility(ctx.scene, _wallsOn);
@@ -2189,6 +2313,11 @@ if (getWallsEnabled(state)) {
         applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
         applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
         applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
+        // Slate tile layers
+        if (_isSlate) {
+          applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn);
+          applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
+        }
         applyCladdingVisibility(ctx.scene, _cladOn);
         applyOpeningsVisibility(ctx.scene, _openOn);
         applyAllAttachmentVisibility(ctx.scene, state);
@@ -2202,6 +2331,11 @@ if (getWallsEnabled(state)) {
           try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
           try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
           try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
+          // Slate tile layers
+          if (_isSlate) {
+            try { applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn); } catch (e0) {}
+            try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
+          }
           try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -3703,6 +3837,8 @@ if (state && state.overhang) {
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
+        // Update visibility toggle display based on covering type
+        updateRoofCoveringToggles(state?.roof?.covering || "felt");
 
         if (wallHeightEl) {
           if (isPent) {
@@ -4128,6 +4264,33 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       console.log("[vis] roof covering=", on ? "ON" : "OFF");
     });
 
+    // Slate-specific toggles (tiles and membrane/battens)
+    var vRoofTilesEl = $("vRoofTiles");
+    if (vRoofTilesEl) vRoofTilesEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofTilesVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.tiles = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof tiles=", on ? "ON" : "OFF");
+    });
+
+    var vRoofMembraneBattensEl = $("vRoofMembraneBattens");
+    if (vRoofMembraneBattensEl) vRoofMembraneBattensEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofMembraneBattensVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.membraneBattens = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof membraneBattens=", on ? "ON" : "OFF");
+    });
+
     if (vRoofInsulationEl) vRoofInsulationEl.addEventListener("change", function (e) {
       var on = !!(e && e.target && e.target.checked);
       // Apply visibility immediately for responsiveness
@@ -4506,7 +4669,11 @@ function parseOverhangInput(val) {
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
-    if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { store.setState({ roof: { covering: roofCoveringStyleEl.value } }); });
+    if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
+      store.setState({ roof: { covering: roofCoveringStyleEl.value } }); 
+      // Toggle visibility toggles based on covering type
+      updateRoofCoveringToggles(roofCoveringStyleEl.value);
+    });
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });
