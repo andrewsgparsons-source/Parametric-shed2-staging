@@ -376,9 +376,20 @@ function buildBattens(slope, scene, roofRoot, roofData, prefix) {
 // ============================================================================
 
 /**
- * Builds tile layers for a hipped roof.
- * 4 slopes: 2 saddle (rectangular, L/R) + 2 hip ends (triangular, F/B).
- * Ridge caps along main ridge + hip ridges.
+ * Builds tile layers for a hipped roof — CLEAN REWRITE.
+ * Starting with ONE side only: left slope membrane.
+ *
+ * The left slope of a hipped roof is one continuous plane containing:
+ *   - FL1 triangle (front hip portion)
+ *   - Left saddle rectangle (middle)
+ *   - BL1 triangle (back hip portion)
+ *
+ * Combined shape = trapezoid:
+ *   - Narrow edge at ridge (ridgeStartZ → ridgeEndZ)
+ *   - Wide edge at eaves (Z=0 → Z=B_mm)
+ *   - Slope from eaves (X=0) up to ridge (X=halfSpan)
+ *
+ * One flat membrane piece sits on top of the OSB, covering the entire slope.
  */
 function buildHippedTileLayers(state, ctx, scene, prefix) {
   const result = { membrane: [], battens: [], tiles: [], ridgeCaps: [] };
@@ -389,37 +400,34 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   const dims = resolveDims(state);
   const frameW_mm = Math.max(1, Math.floor(Number(dims?.frame?.w_mm ?? state?.w ?? 1)));
   const frameD_mm = Math.max(1, Math.floor(Number(dims?.frame?.d_mm ?? state?.d ?? 1)));
-  const roofW_mm = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
-  const roofD_mm = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? frameD_mm)));
+  const roofW_mm  = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
+  const roofD_mm  = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? frameD_mm)));
 
-  const A_mm = roofW_mm;   // width (X)
-  const B_mm = roofD_mm;   // depth (Z)
+  const A_mm = roofW_mm;          // roof width  (X)
+  const B_mm = roofD_mm;          // roof depth  (Z)
   const halfSpan_mm = A_mm / 2;
 
-  const isSquare = Math.abs(A_mm - B_mm) < 100;
-  const ridgeLen_mm = isSquare ? 0 : Math.max(0, B_mm - A_mm);
+  const isSquare       = Math.abs(A_mm - B_mm) < 100;
+  const ridgeLen_mm    = isSquare ? 0 : Math.max(0, B_mm - A_mm);
   const ridgeStartZ_mm = halfSpan_mm;
   const ridgeEndZ_mm   = B_mm - halfSpan_mm;
 
-  // Rise — use hipped/apex height controls
-  const hipped = state?.roof?.hipped ?? null;
-  const apex   = state?.roof?.apex ?? null;
-  const eavesH_mm = Number(hipped?.heightToEaves_mm || apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850;
-  const crestH_mm = Number(hipped?.heightToCrest_mm || apex?.heightToCrest_mm || apex?.crestHeight_mm) || 2400;
-  const rise_mm = Math.max(100, crestH_mm - eavesH_mm);
+  // Rise
+  const hipped  = state?.roof?.hipped ?? null;
+  const apex    = state?.roof?.apex ?? null;
+  const eavesH  = Number(hipped?.heightToEaves_mm || apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850;
+  const crestH  = Number(hipped?.heightToCrest_mm || apex?.heightToCrest_mm || apex?.crestHeight_mm) || 2400;
+  const rise_mm = Math.max(100, crestH - eavesH);
 
-  // Timber & slope geometry
-  const memberD_mm      = getMemberD(state);
-  const slopeAng        = Math.atan2(rise_mm, halfSpan_mm);
-  const sinT            = Math.sin(slopeAng);
-  const cosT            = Math.cos(slopeAng);
-  const commonRafterLen = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
-  const osbOutOffset_mm = memberD_mm + OSB_CLEAR_MM;
-
-  // Hip geometry
-  const hipPlanLen_mm    = halfSpan_mm * Math.SQRT2;
-  const hipRafterLen_mm  = Math.sqrt(hipPlanLen_mm * hipPlanLen_mm + rise_mm * rise_mm);
-  const hipSlopeAng      = Math.atan2(rise_mm, hipPlanLen_mm);
+  // Slope geometry
+  // In hipped roof.js, memberD_mm = g.depth_mm (75mm for 50x75).
+  // getMemberD() returns thickness (50mm) which is correct for apex but WRONG for hipped.
+  // Match what buildHipped() in roof.js uses: depth_mm (the tall/load-bearing dimension).
+  const g = state?.frame?.gauge ? state.frame.gauge : {};
+  const memberD_mm = Math.max(1, Math.floor(Number(g.depth_mm || 75)));
+  const slopeAng   = Math.atan2(rise_mm, halfSpan_mm);
+  const sinT       = Math.sin(slopeAng);
+  const cosT       = Math.cos(slopeAng);
 
   const roofRoot = scene.getTransformNodeByName("roof-root");
   if (!roofRoot) {
@@ -427,398 +435,383 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     return result;
   }
 
-  // ------------------------------------------------------------------
-  // Tile layer constants (same as apex)
-  // ------------------------------------------------------------------
-  const SLATE_BATTEN_HEIGHT_MM = 36;
-  const tileCentreOffset_mm = osbOutOffset_mm + OSB_THK_MM + SLATE_BATTEN_HEIGHT_MM + (TILE_THK_MM / 2);
-  const sideExt_mm  = FASCIA_THK_MM + OVERHANG_MM;
-  const eavesExt_mm = FASCIA_THK_MM + OVERHANG_MM;
-  const tanT = sinT / cosT;
-  const ridgeExt_mm = Math.ceil(tanT * tileCentreOffset_mm);
+  const membraneMat = getMembraneMaterial(scene);
 
   // ------------------------------------------------------------------
-  // Phase 1: SADDLE SLOPES (L/R rectangles) — tiles, membrane, battens
+  // LEFT SLOPE — one trapezoidal membrane piece
   // ------------------------------------------------------------------
-  if (ridgeLen_mm > 0) {
-    // On a hipped roof, the main slope tiles extend the full building depth
-    // (not just the ridge section). The hip ridge covers the junction.
-    const saddleWidth_mm = B_mm + 2 * sideExt_mm;
-    const membraneOffset_mm = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm / 2;
+  // Perpendicular offset from rafter top surface to membrane centre:
+  //   OSB (18mm) + clear gap (2mm) + half membrane (0.5mm) = 20.5mm
+  //   The extra gap ensures the membrane is clearly visible above the OSB boxes.
+  const CLEAR_GAP_MM = 2;
+  const perpOffset_mm = OSB_THK_MM + CLEAR_GAP_MM + MEMBRANE_SPECS.thickness_mm / 2;
 
-    // Build slope descriptors for saddle sections
-    function makeSaddleSlopeDescriptor(side) {
-      const normalX = (side === "L") ? -sinT : sinT;
-      const normalY = cosT;
-      const rotZ    = (side === "L") ? slopeAng : -slopeAng;
-      const name    = (side === "L") ? "left" : "right";
+  // Left slope outward normal: (-sinT, cosT, 0)
+  const offX = (-sinT) * perpOffset_mm;
+  const offY = cosT * perpOffset_mm;
 
-      const sMid = commonRafterLen / 2;
-      const run  = sMid * cosT;
-      const drop = sMid * sinT;
-      const ySurf = memberD_mm + (rise_mm - drop);
-      const xSurf = (side === "L") ? (halfSpan_mm - run) : (halfSpan_mm + run);
+  // 4 corners of the trapezoid (in roof-root local coords, mm)
+  // Eaves level (rafter top Y = memberD_mm), ridge level (rafter top Y = memberD_mm + rise)
+  // Then offset perpendicular to slope surface to sit on top of OSB.
 
-      return {
-        name,
-        width_mm:  saddleWidth_mm,
-        length_mm: commonRafterLen,
-        position_mm: {
-          x: xSurf + normalX * membraneOffset_mm,
-          y: ySurf + normalY * membraneOffset_mm,
-          z: B_mm / 2,  // center of full building depth
-        },
-        rotation: { x: 0, y: 0, z: rotZ },
-        slopeAngle: slopeAng,
-        normal: { x: normalX, y: normalY },
-        halfSpan_mm,
-        rise_mm,
-        memberD_mm,
-      };
-    }
+  const eavesY = memberD_mm;
+  const ridgeY = memberD_mm + rise_mm;
 
-    const slopeL = makeSaddleSlopeDescriptor("L");
-    const slopeR = makeSaddleSlopeDescriptor("R");
-    const roofData = { memberD_mm, osbOutOffset_mm, OSB_THK_MM };
+  const v0x = 0           + offX;   // front eaves
+  const v0y = eavesY      + offY;
+  const v0z = 0;
 
-    for (const slope of [slopeL, slopeR]) {
-      result.membrane.push(buildMembrane(slope, scene, roofRoot, prefix));
-      result.battens.push(...buildBattens(slope, scene, roofRoot, roofData, prefix));
-    }
+  const v1x = 0           + offX;   // back eaves
+  const v1y = eavesY      + offY;
+  const v1z = B_mm;
 
-    // Tile slabs for saddle slopes
-    const slabLen_mm       = commonRafterLen + eavesExt_mm + ridgeExt_mm;
-    const slabWidth_mm     = saddleWidth_mm;  // no side extensions (hip junctions, not bargeboards)
-    const sLabMid_mm       = (commonRafterLen + eavesExt_mm - ridgeExt_mm) / 2;
-    const slateMat         = getSlateMaterial(scene, slabLen_mm, slabWidth_mm);
+  const v2x = halfSpan_mm + offX;   // ridge back
+  const v2y = ridgeY      + offY;
+  const v2z = ridgeEndZ_mm;
 
-    for (const side of ["L", "R"]) {
-      const normalX = (side === "L") ? -sinT :  sinT;
-      const normalY = cosT;
-      const rotZ    = (side === "L") ? slopeAng : -slopeAng;
+  const v3x = halfSpan_mm + offX;   // ridge front
+  const v3y = ridgeY      + offY;
+  const v3z = ridgeStartZ_mm;
 
-      const run  = sLabMid_mm * cosT;
-      const drop = sLabMid_mm * sinT;
-      const ySurf = memberD_mm + (rise_mm - drop);
-      const xSurf = (side === "L") ? (halfSpan_mm - run) : (halfSpan_mm + run);
+  // Vertex positions (metres)
+  const positions = [
+    v0x / 1000, v0y / 1000, v0z / 1000,   // 0: front eaves
+    v1x / 1000, v1y / 1000, v1z / 1000,   // 1: back eaves
+    v2x / 1000, v2y / 1000, v2z / 1000,   // 2: ridge back
+    v3x / 1000, v3y / 1000, v3z / 1000,   // 3: ridge front
+  ];
 
-      const cx = xSurf + normalX * tileCentreOffset_mm;
-      const cy = ySurf + normalY * tileCentreOffset_mm;
-      const cz = B_mm / 2;  // center of full building depth
+  // Two triangles — winding gives outward normal (-sinT, cosT, 0)
+  const indices = [
+    0, 1, 2,   // front-eaves → back-eaves → ridge-back
+    0, 2, 3,   // front-eaves → ridge-back → ridge-front
+  ];
 
-      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}tiles-saddle-${side}`, {
-        width:  slabLen_mm       / 1000,
-        height: TILE_THK_MM      / 1000,
-        depth:  saddleWidth_mm   / 1000,
-      }, scene);
+  // Slope outward normal (same for all vertices — single flat plane)
+  const nx = -sinT, ny = cosT, nz = 0;
+  const normals = [
+    nx, ny, nz,
+    nx, ny, nz,
+    nx, ny, nz,
+    nx, ny, nz,
+  ];
 
-      mesh.parent   = roofRoot;
-      mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-      mesh.rotation = new BABYLON.Vector3(0, 0, rotZ);
-      mesh.material = slateMat;
-      mesh.metadata = { dynamic: true, roofTiles: true, layer: "tiles", side };
+  // Simple UVs (not textured yet — just for completeness)
+  const uvs = [0, 0,  1, 0,  1, 1,  0, 1];
 
-      result.tiles.push(mesh);
-    }
+  const vertexData = new BABYLON.VertexData();
+  vertexData.positions = positions;
+  vertexData.indices   = indices;
+  vertexData.normals   = normals;
+  vertexData.uvs       = uvs;
 
-    console.log(`[ROOF-TILES] Hipped saddle slopes: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} slabs`);
+  const mesh = new BABYLON.Mesh(`${prefix}membrane-L`, scene);
+  vertexData.applyToMesh(mesh);
+  mesh.material = membraneMat;
+  mesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "L" };
+  mesh.parent   = roofRoot;
+
+  if (mesh.enableEdgesRendering) {
+    mesh.enableEdgesRendering();
+    mesh.edgesWidth = 2;
+    mesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
   }
 
-  // ------------------------------------------------------------------
-  // Phase 2: MAIN RIDGE CAPS (same approach as apex, shorter length)
-  // ------------------------------------------------------------------
-  if (ridgeLen_mm > 0) {
-    const RIDGE_CAP_WING_MM     = 127;
-    const RIDGE_CAP_THK_MM      = 6;
-    const RIDGE_CAP_EXPOSED_MM  = 382;
-    const CAP_GAP_MM            = 4;
-
-    const mainRidgeY_mm = memberD_mm + rise_mm
-      + sinT * ridgeExt_mm
-      + cosT * (tileCentreOffset_mm + TILE_THK_MM / 2)
-      + RIDGE_CAP_THK_MM / 2;
-    const mainRidgeX_mm = halfSpan_mm;
-
-    const mainRidgeLen_mm = ridgeLen_mm;  // only covers the actual ridge section
-    const ridgeCapMat     = getRidgeCapMaterial(scene);
-
-    const numFullCaps  = Math.floor(mainRidgeLen_mm / RIDGE_CAP_EXPOSED_MM);
-    const remainder_mm = mainRidgeLen_mm - (numFullCaps * RIDGE_CAP_EXPOSED_MM);
-    const totalCaps    = remainder_mm > 20 ? numFullCaps + 1 : numFullCaps;
-    const capStartZ_mm = ridgeStartZ_mm;
-
-    for (let i = 0; i < totalCaps; i++) {
-      const isLast       = (i >= numFullCaps);
-      const rawDepth_mm  = isLast ? remainder_mm : RIDGE_CAP_EXPOSED_MM;
-      const capDepth_mm  = rawDepth_mm - CAP_GAP_MM;
-      if (capDepth_mm < 10) continue;
-
-      const capCenZ_mm = capStartZ_mm + (i * RIDGE_CAP_EXPOSED_MM) + rawDepth_mm / 2;
-
-      for (const side of ["L", "R"]) {
-        const sAngle   = (side === "L") ? slopeAng : -slopeAng;
-        const wingMid  = RIDGE_CAP_WING_MM / 2;
-        const runDown  = wingMid * cosT;
-        const dropDown = wingMid * sinT;
-
-        const wx = mainRidgeX_mm + ((side === "L") ? -runDown : runDown);
-        const wy = mainRidgeY_mm - dropDown;
-
-        const mesh = BABYLON.MeshBuilder.CreateBox(
-          `${prefix}ridgecap-main-${i}-${side}`, {
-            width:  RIDGE_CAP_WING_MM / 1000,
-            height: RIDGE_CAP_THK_MM  / 1000,
-            depth:  capDepth_mm       / 1000,
-          }, scene
-        );
-
-        mesh.parent   = roofRoot;
-        mesh.position = new BABYLON.Vector3(wx / 1000, wy / 1000, capCenZ_mm / 1000);
-        mesh.rotation = new BABYLON.Vector3(0, 0, sAngle);
-        mesh.material = ridgeCapMat;
-        mesh.metadata = { dynamic: true, roofTiles: true, layer: "ridgeCaps", type: "main" };
-
-        result.ridgeCaps.push(mesh);
-      }
-    }
-
-    console.log(`[ROOF-TILES] Hipped main ridge: ${result.ridgeCaps.length} cap pieces`);
-  }
+  result.membrane.push(mesh);
 
   // ------------------------------------------------------------------
-  // Phase 3: HIP END SLOPES (front & back triangular faces)
-  // For now, use rectangular slabs rotated to the hip slope angle.
-  // The hip ridge caps will cover the junction lines.
+  // FRONT FACE — one triangular membrane piece
   // ------------------------------------------------------------------
+  // The front hip face is a triangle:
+  //   - Base at eaves (Z=0), from X=0 to X=A_mm
+  //   - Apex at ridge start (X=halfSpan, Z=ridgeStartZ)
+  // Slope direction is along Z (front→back), same angle as saddle slopes.
+  // Outward normal: (0, cosT, -sinT)
   {
-    // The front/back hip slopes face in the Z direction (not X like saddles).
-    // Slope angle from eaves center to ridge = commonSlopeAng (same pitch).
-    // The slope runs along Z from eaves (Z=0 or Z=B_mm) toward the ridge.
-    // Width along eaves = A_mm (the building width).
-    const hipFaceWidth_mm = A_mm;
-    const hipFaceRun_mm   = halfSpan_mm;  // horizontal run from eaves to ridge in Z
-    const hipFaceLen_mm   = Math.sqrt(hipFaceRun_mm * hipFaceRun_mm + rise_mm * rise_mm);
+    const fOffX = 0;
+    const fOffY = cosT * perpOffset_mm;
+    const fOffZ = (-sinT) * perpOffset_mm;
 
-    // Tile slab for hip end faces
-    // Extend generously — rectangular slab needs to overshoot the triangle
-    const hipSlabLen_mm   = hipFaceLen_mm + eavesExt_mm * 2 + ridgeExt_mm * 2;
-    const hipSlabWidth_mm = hipFaceWidth_mm + 4 * sideExt_mm;
-    const hipSlabMid_mm   = (hipFaceLen_mm + eavesExt_mm - ridgeExt_mm) / 2;
+    // 3 vertices of the front triangle
+    const fv0x = 0           + fOffX;   // left eaves corner
+    const fv0y = eavesY      + fOffY;
+    const fv0z = 0           + fOffZ;
 
-    const hipSlateMat = getSlateMaterial(scene, hipSlabLen_mm, hipSlabWidth_mm);
+    const fv1x = A_mm        + fOffX;   // right eaves corner
+    const fv1y = eavesY      + fOffY;
+    const fv1z = 0           + fOffZ;
 
-    // Front hip face: slope from Z=0 up to ridgeStartZ, centered on X=halfSpan
-    // Rotation around X axis (slope faces forward/Z-negative)
-    {
-      const run  = hipSlabMid_mm * cosT;
-      const drop = hipSlabMid_mm * sinT;
-      const cy   = memberD_mm + (rise_mm - drop) + cosT * tileCentreOffset_mm;
-      const cx   = halfSpan_mm;
-      const cz   = ridgeStartZ_mm - run - sinT * tileCentreOffset_mm;
+    const fv2x = halfSpan_mm + fOffX;   // ridge point (apex of triangle)
+    const fv2y = ridgeY      + fOffY;
+    const fv2z = ridgeStartZ_mm + fOffZ;
 
-      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}tiles-hip-F`, {
-        width:  hipSlabWidth_mm / 1000,
-        height: TILE_THK_MM    / 1000,
-        depth:  hipSlabLen_mm  / 1000,
-      }, scene);
-
-      mesh.parent   = roofRoot;
-      mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-      mesh.rotation = new BABYLON.Vector3(slopeAng, 0, 0);
-      mesh.material = hipSlateMat;
-      mesh.metadata = { dynamic: true, roofTiles: true, layer: "tiles", side: "F" };
-
-      result.tiles.push(mesh);
-    }
-
-    // Back hip face: slope from Z=B_mm down to ridgeEndZ
-    {
-      const run  = hipSlabMid_mm * cosT;
-      const drop = hipSlabMid_mm * sinT;
-      const cy   = memberD_mm + (rise_mm - drop) + cosT * tileCentreOffset_mm;
-      const cx   = halfSpan_mm;
-      const cz   = ridgeEndZ_mm + run + sinT * tileCentreOffset_mm;
-
-      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}tiles-hip-B`, {
-        width:  hipSlabWidth_mm / 1000,
-        height: TILE_THK_MM    / 1000,
-        depth:  hipSlabLen_mm  / 1000,
-      }, scene);
-
-      mesh.parent   = roofRoot;
-      mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-      mesh.rotation = new BABYLON.Vector3(-slopeAng, 0, 0);
-      mesh.material = hipSlateMat;
-      mesh.metadata = { dynamic: true, roofTiles: true, layer: "tiles", side: "B" };
-
-      result.tiles.push(mesh);
-    }
-
-    // --- Membrane + battens for hip end faces ---
-    const membraneOffset_hip = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm / 2;
-    const battenCtrOffset_hip = osbOutOffset_mm + OSB_THK_MM + MEMBRANE_SPECS.thickness_mm + BATTEN_SPECS.height_mm / 2;
-    const membraneMat = getMembraneMaterial(scene);
-    const battenMat   = getBattenMaterial(scene);
-
-    for (const face of ["F", "B"]) {
-      const sign = (face === "F") ? 1 : -1;  // +slopeAng for front, -slopeAng for back
-      const midS = hipFaceLen_mm / 2;
-
-      // Membrane
-      {
-        const run  = midS * cosT;
-        const drop = midS * sinT;
-        const cy = memberD_mm + (rise_mm - drop) + cosT * membraneOffset_hip;
-        const cx = halfSpan_mm;
-        const cz = (face === "F")
-          ? ridgeStartZ_mm - run - sinT * membraneOffset_hip
-          : ridgeEndZ_mm   + run + sinT * membraneOffset_hip;
-
-        const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}membrane-hip-${face}`, {
-          width:  hipFaceWidth_mm / 1000,
-          height: MEMBRANE_SPECS.thickness_mm / 1000,
-          depth:  hipFaceLen_mm / 1000,
-        }, scene);
-        mesh.parent   = roofRoot;
-        mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-        mesh.rotation = new BABYLON.Vector3(sign * slopeAng, 0, 0);
-        mesh.material = membraneMat;
-        mesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: `hip-${face}` };
-        result.membrane.push(mesh);
-      }
-
-      // Battens (spaced along the slope from ridge toward eaves)
-      const RIDGE_MARGIN = 25;
-      const EAVES_MARGIN = 25;
-      const numB = Math.floor((hipFaceLen_mm - BATTEN_SPECS.spacing_mm) / BATTEN_SPECS.spacing_mm);
-
-      function addHipBatten(name, s_mm) {
-        const run_mm  = s_mm * cosT;
-        const drop_mm = s_mm * sinT;
-        const cy = memberD_mm + (rise_mm - drop_mm) + cosT * battenCtrOffset_hip;
-        const cx = halfSpan_mm;
-        const cz = (face === "F")
-          ? ridgeStartZ_mm - run_mm - sinT * battenCtrOffset_hip
-          : ridgeEndZ_mm   + run_mm + sinT * battenCtrOffset_hip;
-
-        const mesh = BABYLON.MeshBuilder.CreateBox(name, {
-          width:  hipFaceWidth_mm / 1000,
-          height: BATTEN_SPECS.height_mm / 1000,
-          depth:  BATTEN_SPECS.width_mm / 1000,
-        }, scene);
-        mesh.parent   = roofRoot;
-        mesh.position = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-        mesh.rotation = new BABYLON.Vector3(sign * slopeAng, 0, 0);
-        mesh.material = battenMat;
-        mesh.metadata = { dynamic: true, roofTiles: true, layer: "battens", slope: `hip-${face}` };
-        result.battens.push(mesh);
-      }
-
-      addHipBatten(`${prefix}batten-hip-${face}-ridge`, RIDGE_MARGIN);
-      for (let i = 0; i < numB; i++) {
-        addHipBatten(`${prefix}batten-hip-${face}-${i}`, (i + 1) * BATTEN_SPECS.spacing_mm);
-      }
-      addHipBatten(`${prefix}batten-hip-${face}-eaves`, hipFaceLen_mm - EAVES_MARGIN);
-    }
-
-    console.log(`[ROOF-TILES] Hipped end slopes: 2 slabs + membranes + battens`);
-  }
-
-  // ------------------------------------------------------------------
-  // Phase 4: HIP RIDGE CAPS (4 diagonal ridges from corners to ridge ends)
-  // ------------------------------------------------------------------
-  {
-    const RIDGE_CAP_WING_MM     = 127;
-    const RIDGE_CAP_THK_MM      = 6;
-    const RIDGE_CAP_EXPOSED_MM  = 382;
-    const CAP_GAP_MM            = 4;
-
-    const ridgeCapMat = getRidgeCapMaterial(scene);
-
-    // Hip ridge Y at the top (ridge end) — same as main ridge
-    const hipTopY_mm = memberD_mm + rise_mm
-      + sinT * ridgeExt_mm
-      + cosT * (tileCentreOffset_mm + TILE_THK_MM / 2)
-      + RIDGE_CAP_THK_MM / 2;
-
-    // Hip ridge Y at the bottom (eaves corner) — at tile surface at eaves
-    const hipBotY_mm = memberD_mm
-      + cosT * (tileCentreOffset_mm + TILE_THK_MM / 2)
-      + RIDGE_CAP_THK_MM / 2;
-
-    // 4 hip ridges: FL, FR, BL, BR
-    const hipDefs = [
-      { name: "FL", cornerX: 0,    cornerZ: 0,    ridgeX: halfSpan_mm, ridgeZ: ridgeStartZ_mm },
-      { name: "FR", cornerX: A_mm, cornerZ: 0,    ridgeX: halfSpan_mm, ridgeZ: ridgeStartZ_mm },
-      { name: "BL", cornerX: 0,    cornerZ: B_mm, ridgeX: halfSpan_mm, ridgeZ: ridgeEndZ_mm   },
-      { name: "BR", cornerX: A_mm, cornerZ: B_mm, ridgeX: halfSpan_mm, ridgeZ: ridgeEndZ_mm   },
+    const fPositions = [
+      fv0x / 1000, fv0y / 1000, fv0z / 1000,   // 0: left eaves
+      fv1x / 1000, fv1y / 1000, fv1z / 1000,   // 1: right eaves
+      fv2x / 1000, fv2y / 1000, fv2z / 1000,   // 2: ridge apex
     ];
 
-    for (const hip of hipDefs) {
-      // Direction vector from corner to ridge end
-      const dx = hip.ridgeX - hip.cornerX;
-      const dz = hip.ridgeZ - hip.cornerZ;
-      const planLen = Math.sqrt(dx * dx + dz * dz);  // = halfSpan * sqrt(2)
-      const hipLen  = Math.sqrt(planLen * planLen + rise_mm * rise_mm);
+    // Single triangle — winding for outward normal (0, cosT, -sinT)
+    const fIndices = [0, 2, 1];
 
-      // Angle in XZ plane from corner to ridge
-      const planAngle = Math.atan2(dz, dx);
+    const fnx = 0, fny = cosT, fnz = -sinT;
+    const fNormals = [fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz];
+    const fUvs = [0, 0, 1, 0, 0.5, 1];
 
-      // Number of caps along this hip ridge
-      const numFull  = Math.floor(hipLen / RIDGE_CAP_EXPOSED_MM);
-      const remain   = hipLen - (numFull * RIDGE_CAP_EXPOSED_MM);
-      const total    = remain > 20 ? numFull + 1 : numFull;
+    const fVertexData = new BABYLON.VertexData();
+    fVertexData.positions = fPositions;
+    fVertexData.indices   = fIndices;
+    fVertexData.normals   = fNormals;
+    fVertexData.uvs       = fUvs;
 
-      for (let i = 0; i < total; i++) {
-        const isLast      = (i >= numFull);
-        const rawDepth_mm = isLast ? remain : RIDGE_CAP_EXPOSED_MM;
-        const capDepth_mm = rawDepth_mm - CAP_GAP_MM;
-        if (capDepth_mm < 10) continue;
+    const fMesh = new BABYLON.Mesh(`${prefix}membrane-F`, scene);
+    fVertexData.applyToMesh(fMesh);
+    fMesh.material = membraneMat;
+    fMesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "F" };
+    fMesh.parent   = roofRoot;
 
-        // Distance along hip ridge to cap centre
-        const s_mm = (i * RIDGE_CAP_EXPOSED_MM) + rawDepth_mm / 2;
-        const frac = s_mm / hipLen;  // 0 at corner, 1 at ridge end
-
-        // Interpolate position
-        const cx_mm = hip.cornerX + frac * (hip.ridgeX - hip.cornerX);
-        const cy_mm = hipBotY_mm  + frac * (hipTopY_mm - hipBotY_mm);
-        const cz_mm = hip.cornerZ + frac * (hip.ridgeZ - hip.cornerZ);
-
-        // Each cap has two wings (left/right of the hip ridge)
-        // Wings slope down perpendicular to the hip ridge direction.
-        // For simplicity, use a single flat box per cap rotated to the hip slope.
-        const mesh = BABYLON.MeshBuilder.CreateBox(
-          `${prefix}ridgecap-hip-${hip.name}-${i}`, {
-            width:  (RIDGE_CAP_WING_MM * 2) / 1000,  // full width across both wings
-            height: RIDGE_CAP_THK_MM / 1000,
-            depth:  capDepth_mm / 1000,
-          }, scene
-        );
-
-        mesh.parent = roofRoot;
-        mesh.position = new BABYLON.Vector3(cx_mm / 1000, cy_mm / 1000, cz_mm / 1000);
-
-        // Align cap along the hip ridge:
-        // 1. Y-rotation aligns box depth (local Z) with hip plan direction
-        // 2. X-rotation tilts up the slope
-        // Order: first Y (plan), then X (tilt) = qX * qY in quaternion math
-        const yRot = -(planAngle - Math.PI / 2);
-        const qY = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, yRot);
-        const qX = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X, hipSlopeAng);
-        mesh.rotationQuaternion = qX.multiply(qY);
-
-        mesh.material = ridgeCapMat;
-        mesh.metadata = { dynamic: true, roofTiles: true, layer: "ridgeCaps", type: "hip", hip: hip.name };
-
-        result.ridgeCaps.push(mesh);
-      }
+    if (fMesh.enableEdgesRendering) {
+      fMesh.enableEdgesRendering();
+      fMesh.edgesWidth = 2;
+      fMesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
     }
 
-    console.log(`[ROOF-TILES] Hipped hip ridges: ${result.ridgeCaps.length - (ridgeLen_mm > 0 ? result.ridgeCaps.filter(m => m.metadata?.type === "main").length : 0)} hip cap pieces`);
+    result.membrane.push(fMesh);
   }
 
-  const totalMeshes = result.membrane.length + result.battens.length + result.tiles.length + result.ridgeCaps.length;
-  console.log(`[ROOF-TILES] Hipped TOTAL: ${totalMeshes} meshes`);
+  // ------------------------------------------------------------------
+  // RIGHT SLOPE — mirror of left slope trapezoid
+  // ------------------------------------------------------------------
+  // Right slope outward normal: (+sinT, cosT, 0)
+  {
+    const rOffX = sinT * perpOffset_mm;
+    const rOffY = cosT * perpOffset_mm;
+
+    const rv0x = A_mm        + rOffX;   // front eaves (right side)
+    const rv0y = eavesY      + rOffY;
+    const rv0z = 0;
+
+    const rv1x = A_mm        + rOffX;   // back eaves
+    const rv1y = eavesY      + rOffY;
+    const rv1z = B_mm;
+
+    const rv2x = halfSpan_mm + rOffX;   // ridge back
+    const rv2y = ridgeY      + rOffY;
+    const rv2z = ridgeEndZ_mm;
+
+    const rv3x = halfSpan_mm + rOffX;   // ridge front
+    const rv3y = ridgeY      + rOffY;
+    const rv3z = ridgeStartZ_mm;
+
+    const rPositions = [
+      rv0x / 1000, rv0y / 1000, rv0z / 1000,
+      rv1x / 1000, rv1y / 1000, rv1z / 1000,
+      rv2x / 1000, rv2y / 1000, rv2z / 1000,
+      rv3x / 1000, rv3y / 1000, rv3z / 1000,
+    ];
+
+    // Winding for outward normal (+sinT, cosT, 0) — reversed from left
+    const rIndices = [0, 2, 1, 0, 3, 2];
+
+    const rnx = sinT, rny = cosT, rnz = 0;
+    const rNormals = [rnx, rny, rnz, rnx, rny, rnz, rnx, rny, rnz, rnx, rny, rnz];
+    const rUvs = [0, 0, 1, 0, 1, 1, 0, 1];
+
+    const rVertexData = new BABYLON.VertexData();
+    rVertexData.positions = rPositions;
+    rVertexData.indices   = rIndices;
+    rVertexData.normals   = rNormals;
+    rVertexData.uvs       = rUvs;
+
+    const rMesh = new BABYLON.Mesh(`${prefix}membrane-R`, scene);
+    rVertexData.applyToMesh(rMesh);
+    rMesh.material = membraneMat;
+    rMesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "R" };
+    rMesh.parent   = roofRoot;
+
+    if (rMesh.enableEdgesRendering) {
+      rMesh.enableEdgesRendering();
+      rMesh.edgesWidth = 2;
+      rMesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+    }
+
+    result.membrane.push(rMesh);
+  }
+
+  // ------------------------------------------------------------------
+  // BACK FACE — one triangular membrane piece (mirror of front)
+  // ------------------------------------------------------------------
+  // Back face outward normal: (0, cosT, +sinT) — pointing backward
+  {
+    const bOffX = 0;
+    const bOffY = cosT * perpOffset_mm;
+    const bOffZ = sinT * perpOffset_mm;   // positive Z (backward)
+
+    const bv0x = A_mm        + bOffX;   // right eaves corner
+    const bv0y = eavesY      + bOffY;
+    const bv0z = B_mm        + bOffZ;
+
+    const bv1x = 0           + bOffX;   // left eaves corner
+    const bv1y = eavesY      + bOffY;
+    const bv1z = B_mm        + bOffZ;
+
+    const bv2x = halfSpan_mm + bOffX;   // ridge point (apex of triangle)
+    const bv2y = ridgeY      + bOffY;
+    const bv2z = ridgeEndZ_mm + bOffZ;
+
+    const bPositions = [
+      bv0x / 1000, bv0y / 1000, bv0z / 1000,
+      bv1x / 1000, bv1y / 1000, bv1z / 1000,
+      bv2x / 1000, bv2y / 1000, bv2z / 1000,
+    ];
+
+    // Winding for outward normal (0, cosT, +sinT)
+    const bIndices = [0, 2, 1];
+
+    const bnx = 0, bny = cosT, bnz = sinT;
+    const bNormals = [bnx, bny, bnz, bnx, bny, bnz, bnx, bny, bnz];
+    const bUvs = [0, 0, 1, 0, 0.5, 1];
+
+    const bVertexData = new BABYLON.VertexData();
+    bVertexData.positions = bPositions;
+    bVertexData.indices   = bIndices;
+    bVertexData.normals   = bNormals;
+    bVertexData.uvs       = bUvs;
+
+    const bMesh = new BABYLON.Mesh(`${prefix}membrane-B`, scene);
+    bVertexData.applyToMesh(bMesh);
+    bMesh.material = membraneMat;
+    bMesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "B" };
+    bMesh.parent   = roofRoot;
+
+    if (bMesh.enableEdgesRendering) {
+      bMesh.enableEdgesRendering();
+      bMesh.edgesWidth = 2;
+      bMesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+    }
+
+    result.membrane.push(bMesh);
+  }
+
+  // ==================================================================
+  // BATTENS — on all 4 slopes, terminating at hip lines
+  // ==================================================================
+  const battenMat = getBattenMaterial(scene);
+
+  // Batten centre sits on top of membrane:
+  //   membrane centre offset + half membrane + half batten height
+  const battenPerpOffset_mm = perpOffset_mm + MEMBRANE_SPECS.thickness_mm / 2 + BATTEN_SPECS.height_mm / 2;
+
+  const slopeLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
+  const RIDGE_MARGIN_MM = 25;
+  const EAVES_MARGIN_MM = 25;
+  const MIN_BATTEN_LEN  = 40;   // skip anything shorter
+
+  // ---- LEFT & RIGHT saddle slopes ----
+  // Battens run along Z. At slope distance s from ridge:
+  //   run = s * cosT (horizontal from ridge toward eaves)
+  //   xPlan (from left eaves) = halfSpan - run
+  //   Z_front = xPlan   (front hip at 45° in plan)
+  //   Z_back  = B_mm - xPlan
+  //   battenLen = Z_back - Z_front = ridgeLen + 2*run
+  //   centre Z = B_mm / 2  (always centred)
+  for (const side of ["L", "R"]) {
+    const normalX  = (side === "L") ? -sinT : sinT;
+    const rotZ     = (side === "L") ? slopeAng : -slopeAng;
+
+    // Collect slope positions (ridge batten + regular + eaves)
+    const sPositions = [RIDGE_MARGIN_MM];
+    const numBattens = Math.floor((slopeLen_mm - EAVES_MARGIN_MM) / BATTEN_SPECS.spacing_mm);
+    for (let i = 1; i <= numBattens; i++) {
+      const s = i * BATTEN_SPECS.spacing_mm;
+      if (s < slopeLen_mm - EAVES_MARGIN_MM) sPositions.push(s);
+    }
+    sPositions.push(slopeLen_mm - EAVES_MARGIN_MM); // eaves batten
+
+    for (let idx = 0; idx < sPositions.length; idx++) {
+      const s_mm = sPositions[idx];
+      const run  = s_mm * cosT;
+      const drop = s_mm * sinT;
+      const xPlan = halfSpan_mm - run;
+
+      const zFront    = Math.max(0, xPlan);
+      const zBack     = Math.min(B_mm, B_mm - xPlan);
+      const battenLen = zBack - zFront;
+      if (battenLen < MIN_BATTEN_LEN) continue;
+
+      const ySurf = memberD_mm + (rise_mm - drop);
+      const xSurf = (side === "L") ? xPlan : (A_mm - xPlan);
+
+      const cx = xSurf + normalX * battenPerpOffset_mm;
+      const cy = ySurf + cosT   * battenPerpOffset_mm;
+      const cz = (zFront + zBack) / 2;
+
+      const tag = (idx === 0) ? "ridge" : (idx === sPositions.length - 1) ? "eaves" : `${idx}`;
+      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${side}-${tag}`, {
+        width:  BATTEN_SPECS.width_mm  / 1000,
+        height: BATTEN_SPECS.height_mm / 1000,
+        depth:  battenLen / 1000,
+      }, scene);
+      mesh.parent   = roofRoot;
+      mesh.position  = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+      mesh.rotation  = new BABYLON.Vector3(0, 0, rotZ);
+      mesh.material  = battenMat;
+      mesh.metadata  = { dynamic: true, roofTiles: true, layer: "battens", slope: side };
+      result.battens.push(mesh);
+    }
+  }
+
+  // ---- FRONT & BACK triangular faces ----
+  // Battens run along X. At slope distance s from ridge:
+  //   run = s * cosT
+  //   battenLen = 2 * run  (triangle widens linearly from ridge to eaves)
+  //   centre X = halfSpan  (always centred)
+  for (const face of ["F", "B"]) {
+    const normalZ = (face === "F") ? -sinT : sinT;
+    const rotX    = (face === "F") ? -slopeAng : slopeAng;
+
+    const sPositions = [RIDGE_MARGIN_MM];
+    const numBattens = Math.floor((slopeLen_mm - EAVES_MARGIN_MM) / BATTEN_SPECS.spacing_mm);
+    for (let i = 1; i <= numBattens; i++) {
+      const s = i * BATTEN_SPECS.spacing_mm;
+      if (s < slopeLen_mm - EAVES_MARGIN_MM) sPositions.push(s);
+    }
+    sPositions.push(slopeLen_mm - EAVES_MARGIN_MM);
+
+    for (let idx = 0; idx < sPositions.length; idx++) {
+      const s_mm = sPositions[idx];
+      const run  = s_mm * cosT;
+      const drop = s_mm * sinT;
+      const battenLen = 2 * run;
+      if (battenLen < MIN_BATTEN_LEN) continue;
+
+      const ySurf = memberD_mm + (rise_mm - drop);
+      const zRidge = (face === "F") ? ridgeStartZ_mm : ridgeEndZ_mm;
+      const zSurf  = (face === "F") ? (zRidge - run) : (zRidge + run);
+
+      const cx = halfSpan_mm;
+      const cy = ySurf + cosT    * battenPerpOffset_mm;
+      const cz = zSurf + normalZ * battenPerpOffset_mm;
+
+      const tag = (idx === 0) ? "ridge" : (idx === sPositions.length - 1) ? "eaves" : `${idx}`;
+      // Front/back battens run along X → use depth for batten width, width for batten length
+      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${face}-${tag}`, {
+        width:  battenLen / 1000,                     // along X
+        height: BATTEN_SPECS.height_mm / 1000,
+        depth:  BATTEN_SPECS.width_mm  / 1000,        // cross-slope (Z)
+      }, scene);
+      mesh.parent   = roofRoot;
+      mesh.position  = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+      mesh.rotation  = new BABYLON.Vector3(rotX, 0, 0);
+      mesh.material  = battenMat;
+      mesh.metadata  = { dynamic: true, roofTiles: true, layer: "battens", slope: face };
+      result.battens.push(mesh);
+    }
+  }
+
+  console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens — all 4 slopes`);
+  console.log(`[ROOF-TILES]   A=${A_mm} B=${B_mm} rise=${rise_mm} halfSpan=${halfSpan_mm}`);
+  console.log(`[ROOF-TILES]   slopeLen=${slopeLen_mm.toFixed(0)} battenPerpOff=${battenPerpOffset_mm.toFixed(1)}mm`);
   return result;
 }
 
