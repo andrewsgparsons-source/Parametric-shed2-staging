@@ -953,7 +953,148 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     ], [0, 2, 1], { x: 0, y: cosT, z: sinT }, "B"));
   }
 
-  console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} tiles — all 4 slopes`);
+  // ==================================================================
+  // RIDGE CAPS + HIP CAPS — same style as apex ridge caps
+  // ==================================================================
+  const RIDGE_CAP_WING_MM    = 127;   // each wing extends 127mm down slope
+  const RIDGE_CAP_THK_MM     = 6;     // cap thickness
+  const RIDGE_CAP_EXPOSED_MM = 382;   // 457mm cap − 75mm overlap
+  const CAP_GAP_MM           = 4;     // gap between adjacent caps
+
+  // Ridge/hip Y: top of tile surface + half cap thickness
+  const tileTopOffset_mm = tilePerpOffset_mm + TILE_THK_MM / 2;
+  const capHalfThk_mm   = RIDGE_CAP_THK_MM / 2;
+
+  const ridgeCapMat = getRidgeCapMaterial(scene);
+
+  /**
+   * Place a row of caps along a 3D line (ridge or hip).
+   * @param {string} tag       - Name prefix for meshes
+   * @param {number[]} startPt - [x, y, z] in mm (ridge end)
+   * @param {number[]} endPt   - [x, y, z] in mm (eaves end)
+   * @param {number} wingAngle - Droop angle for each wing (radians)
+   * @param {number} yaw       - Y rotation (plan angle of the line)
+   * @param {number} pitch     - X rotation (slope tilt of the line, positive = downhill)
+   */
+  function placeCapsAlongLine(tag, startPt, endPt, wingAngle, yaw, pitch) {
+    const dx = endPt[0] - startPt[0];
+    const dy = endPt[1] - startPt[1];
+    const dz = endPt[2] - startPt[2];
+    const lineLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (lineLen < 50) return;
+
+    const numFull    = Math.floor(lineLen / RIDGE_CAP_EXPOSED_MM);
+    const remainder  = lineLen - (numFull * RIDGE_CAP_EXPOSED_MM);
+    const totalCaps  = remainder > 20 ? numFull + 1 : numFull;
+
+    // Unit direction along the line
+    const ux = dx / lineLen, uy = dy / lineLen, uz = dz / lineLen;
+
+    for (let i = 0; i < totalCaps; i++) {
+      const isLast      = (i >= numFull);
+      const rawDepth_mm = isLast ? remainder : RIDGE_CAP_EXPOSED_MM;
+      const capDepth_mm = rawDepth_mm - CAP_GAP_MM;
+      if (capDepth_mm < 10) continue;
+
+      // Cap center along the line
+      const t_mm = i * RIDGE_CAP_EXPOSED_MM + rawDepth_mm / 2;
+      const cx = startPt[0] + ux * t_mm;
+      const cy = startPt[1] + uy * t_mm;
+      const cz = startPt[2] + uz * t_mm;
+
+      for (const side of ["L", "R"]) {
+        const droop = (side === "L") ? wingAngle : -wingAngle;
+        const wingMid = RIDGE_CAP_WING_MM / 2;
+
+        // Build rotation quaternion: droop (Z) → pitch (X) → yaw (Y)
+        const qDroop = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, droop);
+        const qPitch = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X, pitch);
+        const qYaw   = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, yaw);
+        const q = qYaw.multiply(qPitch).multiply(qDroop);
+
+        // Wing offset: start flat along X, apply same rotation
+        const offsetLocal = new BABYLON.Vector3(
+          (side === "L") ? -wingMid : wingMid, 0, 0
+        );
+        const offsetWorld = offsetLocal.rotateByQuaternionToRef(q, new BABYLON.Vector3());
+
+        const mesh = BABYLON.MeshBuilder.CreateBox(
+          `${prefix}${tag}-${i}-${side}`, {
+            width:  RIDGE_CAP_WING_MM / 1000,
+            height: RIDGE_CAP_THK_MM  / 1000,
+            depth:  capDepth_mm       / 1000,
+          }, scene
+        );
+
+        mesh.parent   = roofRoot;
+        mesh.position = new BABYLON.Vector3(
+          (cx + offsetWorld.x) / 1000,
+          (cy + offsetWorld.y + capHalfThk_mm) / 1000,
+          (cz + offsetWorld.z) / 1000
+        );
+        mesh.rotationQuaternion = q;
+        mesh.material = ridgeCapMat;
+        mesh.metadata = { dynamic: true, roofTiles: true, layer: "ridgeCaps", side };
+        result.ridgeCaps.push(mesh);
+      }
+    }
+  }
+
+  // --- 1. MAIN RIDGE (runs along Z from ridgeStartZ to ridgeEndZ) ---
+  if (ridgeLen_mm > 50) {
+    // Ridge sits at top of tile surface
+    const ridgeCapY = ridgeY + cosT * tileTopOffset_mm + capHalfThk_mm;
+    const ridgeCapX = halfSpan_mm;  // centered
+
+    placeCapsAlongLine(
+      "ridge",
+      [ridgeCapX, ridgeCapY, ridgeStartZ_mm],
+      [ridgeCapX, ridgeCapY, ridgeEndZ_mm],
+      slopeAng,   // wing droop = main slope angle (same as apex)
+      0,           // yaw = 0 (ridge runs along Z)
+      0            // pitch = 0 (ridge is horizontal)
+    );
+  }
+
+  // --- 2. FOUR HIP LINES (from ridge endpoints to eaves corners) ---
+  // Hip plan angle is 45° for standard hipped roof (equal end triangles).
+  // Wing droop angle viewed perpendicular to hip = atan(tan(θ) * sin(45°))
+  const hipWingAngle = Math.atan(Math.tan(slopeAng) / Math.sqrt(2));
+
+  // Hip slope angle (from horizontal)
+  const hipPlanDist = halfSpan_mm * Math.sqrt(2);  // diagonal in plan
+  const hipSlopeAng = Math.atan2(rise_mm, hipPlanDist);
+
+  // Tile surface offset at ridge endpoint (perpendicular to slope, projected to Y)
+  const ridgeCapY = ridgeY + cosT * tileTopOffset_mm;
+
+  // Eaves tile surface Y
+  const eavesCapY = eavesY + cosT * tileTopOffset_mm;
+
+  const hipLines = [
+    { tag: "hip-FL", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [0,    eavesCapY, 0],    yaw: Math.atan2(-halfSpan_mm, -ridgeStartZ_mm) },
+    { tag: "hip-FR", start: [halfSpan_mm, ridgeCapY, ridgeStartZ_mm], end: [A_mm, eavesCapY, 0],    yaw: Math.atan2(halfSpan_mm,  -ridgeStartZ_mm) },
+    { tag: "hip-BL", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [0,    eavesCapY, B_mm], yaw: Math.atan2(-halfSpan_mm, ridgeEndZ_mm > ridgeStartZ_mm ? (B_mm - ridgeEndZ_mm) : halfSpan_mm) },
+    { tag: "hip-BR", start: [halfSpan_mm, ridgeCapY, ridgeEndZ_mm],   end: [A_mm, eavesCapY, B_mm], yaw: Math.atan2(halfSpan_mm,  ridgeEndZ_mm > ridgeStartZ_mm ? (B_mm - ridgeEndZ_mm) : halfSpan_mm) },
+  ];
+
+  for (const hip of hipLines) {
+    // Compute yaw from actual direction (more robust than precomputed)
+    const dx = hip.end[0] - hip.start[0];
+    const dz = hip.end[2] - hip.start[2];
+    const actualYaw = Math.atan2(dx, dz);
+
+    placeCapsAlongLine(
+      hip.tag,
+      hip.start,
+      hip.end,
+      hipWingAngle,
+      actualYaw,
+      -hipSlopeAng   // negative = tilting downward from start to end
+    );
+  }
+
+  console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} tiles, ${result.ridgeCaps.length} ridge/hip caps — all 4 slopes`);
   console.log(`[ROOF-TILES]   tilePerpOff=${tilePerpOffset_mm.toFixed(1)}mm`);
   return result;
 }
