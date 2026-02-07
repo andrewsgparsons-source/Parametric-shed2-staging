@@ -406,8 +406,13 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'sequence-data.json';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Delay revoke to let browser complete the download
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
   setStatus('Exported sequence-data.json', 'success');
 });
 

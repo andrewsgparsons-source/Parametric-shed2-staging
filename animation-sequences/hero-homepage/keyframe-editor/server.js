@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));  // Increased for large sequence data
 app.use(express.static(__dirname));
 
 const CHROME_URL = 'http://172.27.112.1:9222';
@@ -34,9 +34,9 @@ async function getPage() {
       browser = await puppeteer.connect({ browserURL: CHROME_URL, defaultViewport: null });
     }
     const pages = await browser.pages();
-    const page = pages.find(p => p.url().includes('Parametric-shed2-staging'));
+    const page = pages.find(p => p.url().includes('Parametric-shed2-staging') || p.url().includes(':8080'));
     if (!page) {
-      console.log('No Parametric-shed2-staging tab found');
+      console.log('No configurator tab found (looking for Parametric-shed2-staging or :8080)');
     }
     return page;
   } catch (err) {
@@ -218,6 +218,21 @@ app.post('/api/sequence/init', async (req, res) => {
     res.json({ ok: true, sequence });
   } catch (err) {
     res.json({ ok: false, error: err.message });
+  }
+});
+
+// Direct file download (bypasses client-side blob issues)
+app.get('/api/sequence/download', (req, res) => {
+  try {
+    if (fs.existsSync(SEQUENCE_FILE)) {
+      res.setHeader('Content-Disposition', 'attachment; filename=sequence-data.json');
+      res.setHeader('Content-Type', 'application/json');
+      res.sendFile(SEQUENCE_FILE);
+    } else {
+      res.status(404).json({ error: 'No sequence file found. Save first.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
