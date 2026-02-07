@@ -3596,6 +3596,8 @@ if (wInputEl && dInputEl) {
           roofStyleEl.value = style;
           // Keep roof height controls in sync with current roof style
           updateRoofHeightBlocks(style);
+          // Restrict covering options based on roof style (hipped = slate only)
+          updateRoofCoveringOptions(style);
         }
 
 
@@ -3749,6 +3751,40 @@ if (roofApexEavesHeightEl) {
           }
         } catch (eApexSync) {}
 
+        // Sync hipped roof heights from state to UI
+        try {
+          var isHipped = (state && state.roof && state.roof.style === "hipped");
+          var hh = (state && state.roof && state.roof.hipped) ? state.roof.hipped : {};
+          
+          if (roofHippedEavesHeightEl) {
+            roofHippedEavesHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
+            roofHippedEavesHeightEl.min = (unitMode === "imperial") ? "4" : "100";
+            if (isHipped && hh.heightToEaves_mm != null) {
+              roofHippedEavesHeightEl.value = formatDimension(hh.heightToEaves_mm, unitMode);
+            }
+          }
+          
+          if (roofHippedCrestHeightEl) {
+            roofHippedCrestHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
+            roofHippedCrestHeightEl.min = (unitMode === "imperial") ? "4" : "100";
+            if (isHipped && hh.heightToCrest_mm != null) {
+              roofHippedCrestHeightEl.value = formatDimension(hh.heightToCrest_mm, unitMode);
+            }
+          }
+          
+          // Calculate and display hipped pitch angle
+          var roofPitchHippedEl = $("roofPitchHipped");
+          if (roofPitchHippedEl && isHipped && hh.heightToEaves_mm != null && hh.heightToCrest_mm != null) {
+            var R = resolveDims(state);
+            var roofW_mm = (R && R.roof && R.roof.w_mm) ? Math.max(1, Math.floor(Number(R.roof.w_mm))) : 1000;
+            var halfSpan_mm = roofW_mm / 2;
+            var hippedRise_mm = Math.max(0, hh.heightToCrest_mm - hh.heightToEaves_mm);
+            var hippedPitchRad = Math.atan2(hippedRise_mm, halfSpan_mm);
+            var hippedPitchDeg = Math.round(hippedPitchRad * (180 / Math.PI));
+            roofPitchHippedEl.value = String(hippedPitchDeg) + "°";
+          }
+        } catch (eHippedSync) {}
+
 if (state && state.overhang) {
           var ovhUnit = (unitMode === "imperial") ? "(in)" : "(mm)";
           
@@ -3825,6 +3861,10 @@ if (state && state.overhang) {
         if (vRoofInsulationEl) vRoofInsulationEl.checked = rp ? (rp.insulation !== false) : true;
         var vRoofPlyEl = $("vRoofPly");
         if (vRoofPlyEl) vRoofPlyEl.checked = rp ? (rp.ply !== false) : true;
+        var vRoofTilesEl = $("vRoofTiles");
+        if (vRoofTilesEl) vRoofTilesEl.checked = rp ? (rp.tiles !== false) : true;
+        var vRoofMembraneBattensEl = $("vRoofMembraneBattens");
+        if (vRoofMembraneBattensEl) vRoofMembraneBattensEl.checked = rp ? (rp.membraneBattens !== false) : true;
 
         var parts = getWallParts(state);
         if (vWallFrontEl) vWallFrontEl.checked = !!parts.front;
@@ -4004,9 +4044,40 @@ if (state && state.overhang) {
         }
         applyWallHeightUiLock(store.getState());
         updateRoofHeightBlocks(v);
+        updateRoofCoveringOptions(v);
       });
     }
 
+    /**
+     * Restrict roof covering options based on roof style.
+     * Hipped roofs only support Synthetic Slate Tiles.
+     * @param {string} roofStyle - "apex", "pent", or "hipped"
+     */
+    function updateRoofCoveringOptions(roofStyle) {
+      if (!roofCoveringStyleEl) return;
+      
+      var feltOpt = roofCoveringStyleEl.querySelector('option[value="felt"]');
+      var epdmOpt = roofCoveringStyleEl.querySelector('option[value="epdm"]');
+      var slateOpt = roofCoveringStyleEl.querySelector('option[value="slate"]');
+      
+      if (roofStyle === "hipped") {
+        // Hipped: only slate tiles supported
+        if (feltOpt) feltOpt.disabled = true;
+        if (epdmOpt) epdmOpt.disabled = true;
+        if (slateOpt) slateOpt.disabled = false;
+        
+        // Force selection to slate if currently on a disabled option
+        if (roofCoveringStyleEl.value !== "slate") {
+          roofCoveringStyleEl.value = "slate";
+          store.setState({ roof: { covering: "slate" } });
+        }
+      } else {
+        // Apex/Pent: all options available
+        if (feltOpt) feltOpt.disabled = false;
+        if (epdmOpt) epdmOpt.disabled = false;
+        if (slateOpt) slateOpt.disabled = false;
+      }
+    }
 
 function commitPentHeightsFromInputs() {
       if (!roofMinHeightEl || !roofMaxHeightEl) return;
@@ -4608,6 +4679,7 @@ if (unitMode === "imperial") {
       var roofD = Math.max(1, Math.floor(frameD + sumZ));
 
       console.log("[writeActiveDims] Updating store with frameW_mm:", frameW, "frameD_mm:", frameD);
+      
       store.setState({
         dim: { frameW_mm: frameW, frameD_mm: frameD },
         dimInputs: {
@@ -5789,8 +5861,76 @@ function parseOverhangInput(val) {
 
     // ==================== END DIVIDER HANDLERS ====================
 
+    // ==================== RELATIVE OPENING POSITIONING (Card #111) ====================
+    // Track previous dimensions to detect changes and reposition openings proportionally
+    var __prevDimW = null;
+    var __prevDimD = null;
+    var __repositioningInProgress = false;
+
+    function repositionOpeningsOnDimensionChange(s) {
+      if (__repositioningInProgress) return; // Prevent infinite loop
+      
+      var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
+      var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
+      
+      // Initialize previous dimensions on first run
+      if (__prevDimW === null) { __prevDimW = newW; }
+      if (__prevDimD === null) { __prevDimD = newD; }
+      
+      // Check if dimensions changed
+      if (newW === __prevDimW && newD === __prevDimD) return;
+      if (!newW || !newD || !__prevDimW || !__prevDimD) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
+      if (openings.length === 0) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var widthRatio = newW / __prevDimW;
+      var depthRatio = newD / __prevDimD;
+      
+      // Only reposition if ratio is significantly different from 1
+      if (Math.abs(widthRatio - 1) < 0.001 && Math.abs(depthRatio - 1) < 0.001) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var updatedOpenings = openings.map(function(o) {
+        var newO = Object.assign({}, o);
+        // Front/back walls: x position scales with width
+        // Left/right walls: x position scales with depth
+        if (o.wall === 'front' || o.wall === 'back') {
+          if (o.x_mm != null) {
+            newO.x_mm = Math.round(o.x_mm * widthRatio);
+          }
+        } else if (o.wall === 'left' || o.wall === 'right') {
+          if (o.x_mm != null) {
+            newO.x_mm = Math.round(o.x_mm * depthRatio);
+          }
+        }
+        return newO;
+      });
+      
+      console.log("[repositionOpenings] Dimension change detected - widthRatio:", widthRatio.toFixed(3), "depthRatio:", depthRatio.toFixed(3));
+      
+      __prevDimW = newW;
+      __prevDimD = newD;
+      __repositioningInProgress = true;
+      store.setState({ walls: { openings: updatedOpenings } });
+      __repositioningInProgress = false;
+    }
+    // ==================== END RELATIVE OPENING POSITIONING ====================
+
     store.onChange(function (s) {
       console.log("[store.onChange] State changed, dim:", s.dim);
+      repositionOpeningsOnDimensionChange(s);
       var v = syncInvalidOpeningsIntoState() || { doors: { invalidById: {}, invalidIds: [] }, windows: { invalidById: {}, invalidIds: [] } };
       // Add divider validation to v
       v.dividers = validateDividers(s);

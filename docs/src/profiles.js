@@ -519,6 +519,10 @@ export function generateViewerUrl(state) {
     if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
     if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
 
+    // Wall insulation and interior plywood
+    if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
+    if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -533,14 +537,23 @@ export function generateViewerUrl(state) {
       }
     }
 
-    // Roof sub-components
+    // Roof sub-components (include all toggles: structure, osb, covering, tiles, membrane/battens, insulation, ply)
     if (state.vis.roofParts) {
       var rp = state.vis.roofParts;
-      if (rp.structure === false || rp.osb === false || rp.covering === false) {
+      var hasRoofVisChanges = (
+        rp.structure === false || rp.osb === false || rp.covering === false ||
+        rp.tiles === false || rp.membraneBattens === false ||
+        rp.insulation === false || rp.ply === false
+      );
+      if (hasRoofVisChanges) {
         compactVis.roofParts = {};
         if (rp.structure === false) compactVis.roofParts.structure = false;
         if (rp.osb === false) compactVis.roofParts.osb = false;
         if (rp.covering === false) compactVis.roofParts.covering = false;
+        if (rp.tiles === false) compactVis.roofParts.tiles = false;
+        if (rp.membraneBattens === false) compactVis.roofParts.membraneBattens = false;
+        if (rp.insulation === false) compactVis.roofParts.insulation = false;
+        if (rp.ply === false) compactVis.roofParts.ply = false;
         hasVisChanges = true;
       }
     }
@@ -1008,23 +1021,31 @@ export function copyViewerUrlToClipboard(state, onSuccess, onError) {
  * Fallback clipboard copy for older browsers
  */
 function fallbackCopyToClipboard(text, onSuccess, onError) {
+  console.log("[profiles] fallbackCopyToClipboard: attempting execCommand('copy')...");
   var textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.style.position = "fixed";
+  textarea.style.left = "0";
+  textarea.style.top = "0";
   textarea.style.opacity = "0";
   textarea.style.pointerEvents = "none";
   document.body.appendChild(textarea);
+  textarea.focus();
   textarea.select();
 
   try {
     var success = document.execCommand("copy");
+    console.log("[profiles] fallbackCopyToClipboard: execCommand returned:", success);
     document.body.removeChild(textarea);
-    if (success && onSuccess) {
-      onSuccess(text);
-    } else if (!success && onError) {
-      onError(new Error("execCommand copy failed"));
+    if (success) {
+      console.log("[profiles] fallbackCopyToClipboard: SUCCESS - copied", text.length, "chars");
+      if (onSuccess) onSuccess(text);
+    } else {
+      console.log("[profiles] fallbackCopyToClipboard: FAILED - execCommand returned false");
+      if (onError) onError(new Error("execCommand copy failed"));
     }
   } catch (e) {
+    console.log("[profiles] fallbackCopyToClipboard: EXCEPTION:", e);
     document.body.removeChild(textarea);
     if (onError) onError(e);
   }
@@ -1208,6 +1229,10 @@ export function generateProfileUrl(profileName, state) {
     if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
     if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
 
+    // Wall insulation and interior plywood
+    if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
+    if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -1222,17 +1247,17 @@ export function generateProfileUrl(profileName, state) {
       }
     }
 
-    // Roof sub-components
-    if (state.vis.roofParts) {
-      var rp = state.vis.roofParts;
-      if (rp.structure === false || rp.osb === false || rp.covering === false) {
-        compactVis.roofParts = {};
-        if (rp.structure === false) compactVis.roofParts.structure = false;
-        if (rp.osb === false) compactVis.roofParts.osb = false;
-        if (rp.covering === false) compactVis.roofParts.covering = false;
-        hasVisChanges = true;
-      }
-    }
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
+PLACEHOLDER_LINE
 
     // Attachment visibility
     if (state.vis.attachments) {
@@ -1301,16 +1326,24 @@ export function generateProfileUrl(profileName, state) {
  */
 export function copyProfileUrlToClipboard(profileName, state, onSuccess, onError) {
   var url = generateProfileUrl(profileName, state);
+  console.log("[profiles] copyProfileUrlToClipboard: generated URL:", url.substring(0, 100) + "...");
+  console.log("[profiles] copyProfileUrlToClipboard: navigator.clipboard available:", !!navigator.clipboard);
+  console.log("[profiles] copyProfileUrlToClipboard: isSecureContext:", window.isSecureContext);
 
-  if (navigator.clipboard && navigator.clipboard.writeText) {
+  // Clipboard API only works in secure contexts (HTTPS or localhost)
+  if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+    console.log("[profiles] copyProfileUrlToClipboard: trying Clipboard API...");
     navigator.clipboard.writeText(url)
       .then(function() {
+        console.log("[profiles] copyProfileUrlToClipboard: Clipboard API SUCCESS");
         if (onSuccess) onSuccess(url);
       })
       .catch(function(err) {
+        console.log("[profiles] copyProfileUrlToClipboard: Clipboard API FAILED:", err);
         fallbackCopyToClipboard(url, onSuccess, onError);
       });
   } else {
+    console.log("[profiles] copyProfileUrlToClipboard: using fallback (not secure context)");
     fallbackCopyToClipboard(url, onSuccess, onError);
   }
 }

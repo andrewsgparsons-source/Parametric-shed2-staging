@@ -137,7 +137,18 @@ export function build3D(state, ctx, sectionContext) {
 
   if (style === "pent") {
     console.log("[ROOF] Building pent roof");
-    buildPent(state, ctx, meshPrefix, sectionPos, sectionId);
+    try {
+      buildPent(state, ctx, meshPrefix, sectionPos, sectionId);
+      console.log("[ROOF] Pent roof build COMPLETE");
+      // Build tile layers if enabled
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers (pent)...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
+    } catch (e) {
+      console.error("[ROOF] Pent roof build FAILED:", e);
+    }
     return;
   }
 
@@ -997,7 +1008,7 @@ function isPentEnabled(state) {
  *   - minH_mm, maxH_mm: wall heights at low/high edges
  * @private
  */
-function computeRoofData_Pent(state) {
+export function computeRoofData_Pent(state) {
   const dims = resolveDims(state);
 
   const roofW = Math.max(1, Math.floor(Number(dims?.roof?.w_mm)));
@@ -2268,7 +2279,8 @@ if (roofParts.osb) {
       // Diamond center X is at the ridge (halfSpan)
       const diamondCenterX_mm = halfSpan_mm;
       // Diamond center Y - positioned so it covers the barge board joint
-      const diamondCenterY_mm = ridgeY_mm - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 4;
+      // Raised slightly to ensure full coverage of the ridge gap
+      const diamondCenterY_mm = ridgeY_mm - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 2;
       
       // Front diamond (z = 0)
       const diamondFront = BABYLON.MeshBuilder.CreateBox(

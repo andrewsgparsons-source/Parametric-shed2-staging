@@ -21,7 +21,8 @@ import {
   updateProfileSection,
   exportProfilesToJson,
   importProfilesFromJson,
-  copyProfileUrlToClipboard
+  copyProfileUrlToClipboard,
+  copyViewerUrlToClipboard
 } from "./profiles.js";
 
 // Current selected profile in editor

@@ -79,7 +79,7 @@ export const DEFAULTS = {
         enabled: true,
         x_mm: 500,
         width_mm: 800,
-        height_mm: 1900
+        height_mm: 1800
       },
       {
         id: "win1",
