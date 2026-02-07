@@ -1069,6 +1069,9 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     const hipLen = hipVec.length();
     const hipDir = hipVec.normalize();
     
+    console.log(`[ROOF-TILES] Hip cap geometry: start=(${hipStart.x.toFixed(0)}, ${hipStart.y.toFixed(0)}, ${hipStart.z.toFixed(0)}), end=(${hipEnd.x.toFixed(0)}, ${hipEnd.y.toFixed(0)}, ${hipEnd.z.toFixed(0)})`);
+    console.log(`[ROOF-TILES] Hip cap: rise=${rise_mm}mm, slopeAng=${(slopeAng * 180 / Math.PI).toFixed(2)}°, hipDir=(${hipDir.x.toFixed(3)}, ${hipDir.y.toFixed(3)}, ${hipDir.z.toFixed(3)})`)
+    
     // Align local Z (0,0,1) with hipDir using axis-angle rotation
     const localZ = BABYLON.Axis.Z;
     const crossVec = BABYLON.Vector3.Cross(localZ, hipDir);
@@ -1085,8 +1088,21 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       qAlign = BABYLON.Quaternion.RotationAxis(axis, angle);
     }
     
+    // SAFETY CHECK: Ensure local Y (up) transforms to world-up (positive Y) after qAlign
+    // If not, the hip cap will appear flipped/inverted
+    const localY = new BABYLON.Vector3(0, 1, 0);
+    const worldY = localY.rotateByQuaternionToRef(qAlign, new BABYLON.Vector3());
+    if (worldY.y < 0) {
+      // Local Y is pointing downward after rotation — flip 180° around Z axis
+      console.warn(`[ROOF-TILES] Hip cap qAlign produced inverted orientation (worldY.y=${worldY.y.toFixed(3)}), applying 180° correction`);
+      const qFlip = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, Math.PI);
+      qAlign = qAlign.multiply(qFlip);
+    }
+    console.log(`[ROOF-TILES] Hip cap qAlign check: worldY=(${worldY.x.toFixed(3)}, ${worldY.y.toFixed(3)}, ${worldY.z.toFixed(3)})`)
+    
     // Wing droop angle = roof slope angle (HARD CONSTRAINT - FIXED)
-    const wingDroop = slopeAng;
+    // NEGATE so wings droop DOWN (positive rotation about local Z moves wing tip UP after qAlign)
+    const wingDroop = -slopeAng;
     
     // Reference point along hip rafter (midpoint)
     const hipMid = hipStart.add(hipEnd).scale(0.5);
@@ -1095,6 +1111,11 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     const cosT = Math.cos(slopeAng);
     const tanT = Math.tan(slopeAng);
     const roofOffset = tileTopOffset_mm / cosT;
+    
+    // Front roof has different effective pitch (triangular end slope)
+    // Front plane rises from Z=0 to Z=ridgeStartZ over height (ridgeY - eavesY)
+    const rise_mm = ridgeY - eavesY;
+    const frontTanT = rise_mm / ridgeStartZ_mm;
     
     // --- SOLVER: Find (h, twist) so both wing tips contact their roof surfaces ---
     // 
@@ -1133,13 +1154,25 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     function computeErrors(h, twist) {
       const { tipL, tipR } = computeTips(h, twist);
       
-      // Side roof Y at L tip (slope in X direction)
+      // Side roof Y at L tip (slope in X direction) - uses main slope angle
       const sideRoofY = eavesY + tipL.x * tanT + roofOffset;
-      // Front roof Y at R tip (slope in Z direction)
-      const frontRoofY = eavesY + tipR.z * tanT + roofOffset;
+      // Front roof Y at R tip (slope in Z direction) - uses front triangular slope
+      const frontRoofY = eavesY + tipR.z * frontTanT + roofOffset;
       
       const errL = tipL.y - sideRoofY;
       const errR = tipR.y - frontRoofY;
+      
+      // Debug: log first iteration
+      if (h === 0 && twist === 0) {
+        console.log(`[ROOF-TILES] Hip cap solver initial state:`);
+        console.log(`  hipMid=(${hipMid.x.toFixed(0)}, ${hipMid.y.toFixed(0)}, ${hipMid.z.toFixed(0)})`);
+        console.log(`  eavesY=${eavesY.toFixed(0)}, ridgeY=${ridgeY.toFixed(0)}, ridgeStartZ=${ridgeStartZ_mm.toFixed(0)}`);
+        console.log(`  tanT(side)=${tanT.toFixed(4)}, frontTanT=${frontTanT.toFixed(4)}`);
+        console.log(`  tipL=(${tipL.x.toFixed(0)}, ${tipL.y.toFixed(0)}, ${tipL.z.toFixed(0)})`);
+        console.log(`  tipR=(${tipR.x.toFixed(0)}, ${tipR.y.toFixed(0)}, ${tipR.z.toFixed(0)})`);
+        console.log(`  sideRoofY=${sideRoofY.toFixed(0)}, frontRoofY=${frontRoofY.toFixed(0)}`);
+        console.log(`  errL=${errL.toFixed(1)}, errR=${errR.toFixed(1)}`);
+      }
       
       return { errL, errR };
     }
@@ -1185,10 +1218,22 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       h += dh;
       twist += dtwist;
       
+      // CLAMP h to prevent fold axis inverting below roof
+      // The fold must stay above the hip rafter line (at least at roofOffset above the roof surface)
+      const minH = roofOffset - 50; // Allow slight dip below hipMid but not much
+      if (h < minH) {
+        console.warn(`[ROOF-TILES] Hip cap solver: clamping h from ${h.toFixed(1)} to ${minH.toFixed(1)} (preventing inversion)`);
+        h = minH;
+      }
+      
       if (iter === maxIter - 1) {
         console.warn(`[ROOF-TILES] Hip cap solver did not converge. errL=${errL.toFixed(1)}, errR=${errR.toFixed(1)}`);
       }
     }
+    
+    // Log final values for debugging
+    console.log(`[ROOF-TILES] Hip cap solver result: h=${h.toFixed(1)}mm, twist=${(twist * 180 / Math.PI).toFixed(2)}°`);
+    console.log(`[ROOF-TILES]   hipMid.y=${hipMid.y.toFixed(0)}mm, eavesY=${eavesY.toFixed(0)}mm, ridgeY=${ridgeY.toFixed(0)}mm`);
     
     // Final fold position
     const foldPos = new BABYLON.Vector3(hipMid.x, hipMid.y + h, hipMid.z);
