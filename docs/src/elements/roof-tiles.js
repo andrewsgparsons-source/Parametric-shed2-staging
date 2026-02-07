@@ -1058,10 +1058,9 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
 
   // --- 2. SINGLE TEST HIP CAP (front-left) ---
   // V-shape fold axis aligned with hip rafter direction
-  // Wing tips contact roof surfaces, fold stays above
+  // Wing tips contact roof surfaces via (h, twist) solver
   {
     // Front-left hip: from ridge front point to front-left eaves corner
-    // hipStart at ridge, hipEnd at eaves corner
     const hipStart = new BABYLON.Vector3(halfSpan_mm, ridgeY, ridgeStartZ_mm);
     const hipEnd   = new BABYLON.Vector3(0, eavesY, 0);
     
@@ -1077,7 +1076,6 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     
     let qAlign;
     if (crossVec.length() < 0.0001) {
-      // Vectors are parallel or anti-parallel
       qAlign = (dotVal > 0) 
         ? BABYLON.Quaternion.Identity()
         : BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X, Math.PI);
@@ -1087,22 +1085,128 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       qAlign = BABYLON.Quaternion.RotationAxis(axis, angle);
     }
     
-    // Wing droop angle = roof slope angle
+    // Wing droop angle = roof slope angle (HARD CONSTRAINT - FIXED)
     const wingDroop = slopeAng;
     
-    // Centre of hip cap (midpoint of hip line)
-    const center = hipStart.add(hipEnd).scale(0.5);
+    // Reference point along hip rafter (midpoint)
+    const hipMid = hipStart.add(hipEnd).scale(0.5);
     
-    // Offset upward so cap sits on top of tiles
-    // The "up" direction perpendicular to the hip line, pointing away from roof
-    // For a hip, this is roughly vertical but tilted
-    const perpOffset_mm = RIDGE_CAP_WING_MM * Math.sin(wingDroop) + tileTopOffset_mm;
+    // Roof surface constants
+    const cosT = Math.cos(slopeAng);
+    const tanT = Math.tan(slopeAng);
+    const roofOffset = tileTopOffset_mm / cosT;
     
-    // Create two wings (L and R) with V-shape
+    // --- SOLVER: Find (h, twist) so both wing tips contact their roof surfaces ---
+    // 
+    // h = vertical offset of fold from hipMid
+    // twist = rotation about fold axis, tilts the V-shape
+    //
+    // L wing: droop = wingDroop + twist, contacts side roof (slope in X)
+    // R wing: droop = -wingDroop + twist, contacts front roof (slope in Z)
+    
+    function computeTips(h, twist) {
+      // L wing direction
+      const qDroopL = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, wingDroop + twist);
+      const qL = qAlign.multiply(qDroopL);
+      const wingDirL = new BABYLON.Vector3(-1, 0, 0).rotateByQuaternionToRef(qL, new BABYLON.Vector3());
+      
+      // R wing direction  
+      const qDroopR = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, -wingDroop + twist);
+      const qR = qAlign.multiply(qDroopR);
+      const wingDirR = new BABYLON.Vector3(1, 0, 0).rotateByQuaternionToRef(qR, new BABYLON.Vector3());
+      
+      // Tip positions
+      const tipL = {
+        x: hipMid.x + RIDGE_CAP_WING_MM * wingDirL.x,
+        y: hipMid.y + h + RIDGE_CAP_WING_MM * wingDirL.y,
+        z: hipMid.z + RIDGE_CAP_WING_MM * wingDirL.z
+      };
+      const tipR = {
+        x: hipMid.x + RIDGE_CAP_WING_MM * wingDirR.x,
+        y: hipMid.y + h + RIDGE_CAP_WING_MM * wingDirR.y,
+        z: hipMid.z + RIDGE_CAP_WING_MM * wingDirR.z
+      };
+      
+      return { tipL, tipR, wingDirL, wingDirR };
+    }
+    
+    function computeErrors(h, twist) {
+      const { tipL, tipR } = computeTips(h, twist);
+      
+      // Side roof Y at L tip (slope in X direction)
+      const sideRoofY = eavesY + tipL.x * tanT + roofOffset;
+      // Front roof Y at R tip (slope in Z direction)
+      const frontRoofY = eavesY + tipR.z * tanT + roofOffset;
+      
+      const errL = tipL.y - sideRoofY;
+      const errR = tipR.y - frontRoofY;
+      
+      return { errL, errR };
+    }
+    
+    // Newton-Raphson solver for (h, twist)
+    let h = 0;
+    let twist = 0;
+    const eps = 0.001; // For numerical derivatives
+    const tol = 0.1;   // Tolerance in mm
+    const maxIter = 20;
+    
+    for (let iter = 0; iter < maxIter; iter++) {
+      const { errL, errR } = computeErrors(h, twist);
+      
+      // Check convergence
+      if (Math.abs(errL) < tol && Math.abs(errR) < tol) {
+        console.log(`[ROOF-TILES] Hip cap solver converged in ${iter} iterations`);
+        break;
+      }
+      
+      // Compute Jacobian numerically
+      const e0 = computeErrors(h, twist);
+      const eH = computeErrors(h + eps, twist);
+      const eT = computeErrors(h, twist + eps);
+      
+      // J = [ dErrL/dh, dErrL/dtwist ]
+      //     [ dErrR/dh, dErrR/dtwist ]
+      const J11 = (eH.errL - e0.errL) / eps;
+      const J12 = (eT.errL - e0.errL) / eps;
+      const J21 = (eH.errR - e0.errR) / eps;
+      const J22 = (eT.errR - e0.errR) / eps;
+      
+      // Solve J * [dh, dtwist]^T = -[errL, errR]^T
+      const det = J11 * J22 - J12 * J21;
+      if (Math.abs(det) < 1e-10) {
+        console.warn(`[ROOF-TILES] Hip cap solver: singular Jacobian at iter ${iter}`);
+        break;
+      }
+      
+      const dh = (-errL * J22 + errR * J12) / det;
+      const dtwist = (errL * J21 - errR * J11) / det;
+      
+      h += dh;
+      twist += dtwist;
+      
+      if (iter === maxIter - 1) {
+        console.warn(`[ROOF-TILES] Hip cap solver did not converge. errL=${errL.toFixed(1)}, errR=${errR.toFixed(1)}`);
+      }
+    }
+    
+    // Final fold position
+    const foldPos = new BABYLON.Vector3(hipMid.x, hipMid.y + h, hipMid.z);
+    
+    // Get final tip positions for logging
+    const { tipL, tipR, wingDirL, wingDirR } = computeTips(h, twist);
+    const { errL, errR } = computeErrors(h, twist);
+    
+    console.log(`[ROOF-TILES] Hip cap SOLVED:`);
+    console.log(`  h=${h.toFixed(1)}mm, twist=${(twist * 180 / Math.PI).toFixed(2)}°`);
+    console.log(`  foldPos=(${foldPos.x.toFixed(0)}, ${foldPos.y.toFixed(0)}, ${foldPos.z.toFixed(0)})`);
+    console.log(`  L tip: (${tipL.x.toFixed(0)}, ${tipL.y.toFixed(0)}, ${tipL.z.toFixed(0)}), err=${errL.toFixed(1)}mm`);
+    console.log(`  R tip: (${tipR.x.toFixed(0)}, ${tipR.y.toFixed(0)}, ${tipR.z.toFixed(0)}), err=${errR.toFixed(1)}mm`);
+    
+    // Create two wings (L and R) with V-shape, including twist
     for (const side of ["L", "R"]) {
-      // Droop: L wing tilts one way, R wing tilts the other
-      // Droop is rotation around local Z (fold axis) BEFORE alignment
-      const droop = (side === "L") ? -wingDroop : wingDroop;
+      // Droop direction WITH TWIST: L wing +droop+twist, R wing -droop+twist
+      const droop = (side === "L") ? (wingDroop + twist) : (-wingDroop + twist);
       
       // Build combined rotation: first droop in local space, then align to world
       const qDroop = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, droop);
@@ -1123,9 +1227,9 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       
       mesh.parent = roofRoot;
       mesh.position = new BABYLON.Vector3(
-        (center.x + offsetWorld.x) / 1000,
-        (center.y + offsetWorld.y + perpOffset_mm) / 1000,
-        (center.z + offsetWorld.z) / 1000
+        (foldPos.x + offsetWorld.x) / 1000,
+        (foldPos.y + offsetWorld.y) / 1000,
+        (foldPos.z + offsetWorld.z) / 1000
       );
       mesh.rotationQuaternion = q;
       mesh.material = ridgeCapMat;
@@ -1133,7 +1237,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       result.ridgeCaps.push(mesh);
     }
     
-    console.log(`[ROOF-TILES] Hip cap: len=${hipLen.toFixed(0)}mm, droop=${(wingDroop*180/Math.PI).toFixed(1)}°, perpOff=${perpOffset_mm.toFixed(1)}mm`);
+    console.log(`[ROOF-TILES] Hip cap: len=${hipLen.toFixed(0)}mm, droop=${(wingDroop*180/Math.PI).toFixed(1)}°`);
   }
 
   console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} tiles, ${result.ridgeCaps.length} ridge/hip caps — all 4 slopes`);
