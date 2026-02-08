@@ -423,6 +423,196 @@ function buildBattens(slope, scene, roofRoot, roofData, prefix) {
 }
 
 // ============================================================================
+// PENT ROOF TILE LAYERS
+// ============================================================================
+
+/**
+ * Builds tile layers for a pent (lean-to) roof — single slope.
+ *
+ * Pent roof is built flat in local coords (XZ plane), then the roofRoot
+ * transform node is rotated by the pitch quaternion. So we build flat
+ * layers at the correct Y offsets and they inherit the tilt.
+ *
+ * Layers: membrane → battens → tiles (same as apex, but one slope only).
+ */
+function buildPentTileLayers(state, ctx, scene, prefix) {
+  const result = { membrane: [], battens: [], tiles: [] };
+
+  // Import pent roof data computation from roof.js
+  let computeRoofData_Pent;
+  try {
+    // computeRoofData_Pent is exported from roof.js
+    const roofModule = window.__roofModule;
+    computeRoofData_Pent = roofModule?.computeRoofData_Pent;
+  } catch (e) { /* fallback below */ }
+
+  // -- Resolve dimensions --
+  const dims = resolveDims(state);
+  const frameW_mm = Math.max(1, Math.floor(Number(dims?.frame?.w_mm ?? state?.w ?? 3000)));
+  const frameD_mm = Math.max(1, Math.floor(Number(dims?.frame?.d_mm ?? state?.d ?? 4000)));
+  const roofW_mm  = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
+  const roofD_mm  = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? frameD_mm)));
+
+  // Pent: slope along X (width), rafters along Z (depth)
+  const A_mm = roofW_mm;  // slope dimension
+  const B_mm = roofD_mm;  // rafter run
+
+  // Pent heights
+  const pent = state?.roof?.pent ?? {};
+  const apex = state?.roof?.apex ?? {};
+  const minH_mm = Number(pent.minHeight_mm || pent.min_mm || 2100);
+  const maxH_mm = Number(pent.maxHeight_mm || pent.max_mm || 2300);
+  const rise_mm = Math.max(0, maxH_mm - minH_mm);
+
+  // Slope scale (hypotenuse correction — same as roof.js)
+  const run_mm = Math.max(1, frameW_mm);
+  const slopeLen_mm = Math.sqrt(run_mm * run_mm + rise_mm * rise_mm);
+  const slopeScale = run_mm > 0 ? slopeLen_mm / run_mm : 1;
+  const A_phys_mm = Math.max(1, Math.round(A_mm * slopeScale));
+
+  // Rafter dimensions (from timber config)
+  const g = { w: Number(state?.timber?.w ?? 50), d: Number(state?.timber?.d ?? 100) };
+  const rafterD_mm = g.w;  // rafter depth = timber thickness (vertical when flat)
+
+  const memberD_mm      = rafterD_mm;
+  const osbOutOffset_mm = memberD_mm + 1; // OSB_CLEAR_MM = 1
+  const osbTopY_mm      = osbOutOffset_mm + OSB_THK_MM;
+
+  // Find the roof-root transform node
+  const roofRoot = scene.getTransformNodeByName("roof-root");
+  if (!roofRoot) {
+    console.warn("[ROOF-TILES] No roof-root in scene (pent)");
+    return result;
+  }
+
+  // ----------------------------------------------------------------
+  // 1. MEMBRANE — flat plane on top of OSB
+  // ----------------------------------------------------------------
+  const membraneY_mm = osbTopY_mm + MEMBRANE_SPECS.thickness_mm / 2;
+
+  const membraneMesh = BABYLON.MeshBuilder.CreateBox(`${prefix}membrane-pent`, {
+    width:  A_phys_mm / 1000,
+    height: MEMBRANE_SPECS.thickness_mm / 1000,
+    depth:  B_mm / 1000,
+  }, scene);
+
+  membraneMesh.position = new BABYLON.Vector3(
+    (A_phys_mm / 2) / 1000,
+    membraneY_mm / 1000,
+    (B_mm / 2) / 1000,
+  );
+
+  // Membrane material (light blue, same as apex)
+  let membraneMat = scene.getMaterialByName("roofTiles-membrane");
+  if (!membraneMat) {
+    membraneMat = new BABYLON.StandardMaterial("roofTiles-membrane", scene);
+    membraneMat.diffuseColor  = new BABYLON.Color3(0.55, 0.72, 0.85);
+    membraneMat.alpha         = 0.85;
+    membraneMat.backFaceCulling = false;
+  }
+  membraneMesh.material = membraneMat;
+  membraneMesh.parent   = roofRoot;
+  membraneMesh.metadata  = { dynamic: true, roofTiles: true, layer: "membrane" };
+  result.membrane.push(membraneMesh);
+
+  console.log(`[ROOF-TILES] Pent membrane: ${A_phys_mm}×${B_mm}mm at y=${membraneY_mm.toFixed(1)}mm`);
+
+  // ----------------------------------------------------------------
+  // 2. BATTENS — horizontal strips along Z, spaced up the slope (X)
+  // ----------------------------------------------------------------
+  const BATTEN_W_MM = 50;
+  const BATTEN_H_MM = 25;
+  const BATTEN_SPACING_MM = 143;  // Same as apex
+
+  const battenBaseY_mm = osbTopY_mm + MEMBRANE_SPECS.thickness_mm;
+  const battenCentreY_mm = battenBaseY_mm + BATTEN_H_MM / 2;
+
+  let battenMat = scene.getMaterialByName("roofTiles-battenMat");
+  if (!battenMat) {
+    battenMat = new BABYLON.StandardMaterial("roofTiles-battenMat", scene);
+    battenMat.diffuseColor = new BABYLON.Color3(0.55, 0.42, 0.25);
+  }
+
+  // Eaves batten
+  const eavesX_mm = BATTEN_W_MM / 2;
+  // Ridge batten
+  const ridgeX_mm = A_phys_mm - BATTEN_W_MM / 2;
+
+  // Place battens from eaves to ridge
+  const battenPositions = [eavesX_mm]; // Start with eaves batten
+  let bx = eavesX_mm + BATTEN_SPACING_MM;
+  while (bx < ridgeX_mm - BATTEN_SPACING_MM / 2) {
+    battenPositions.push(bx);
+    bx += BATTEN_SPACING_MM;
+  }
+  battenPositions.push(ridgeX_mm); // End with ridge batten
+
+  for (let i = 0; i < battenPositions.length; i++) {
+    const bMesh = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-pent-${i}`, {
+      width:  BATTEN_W_MM / 1000,
+      height: BATTEN_H_MM / 1000,
+      depth:  B_mm / 1000,
+    }, scene);
+
+    bMesh.position = new BABYLON.Vector3(
+      battenPositions[i] / 1000,
+      battenCentreY_mm / 1000,
+      (B_mm / 2) / 1000,
+    );
+
+    bMesh.material = battenMat;
+    bMesh.parent   = roofRoot;
+    bMesh.metadata  = { dynamic: true, roofTiles: true, layer: "battens", index: i };
+    result.battens.push(bMesh);
+  }
+
+  console.log(`[ROOF-TILES] Pent battens: ${battenPositions.length} battens at ${BATTEN_SPACING_MM}mm spacing`);
+
+  // ----------------------------------------------------------------
+  // 3. TILES — slate slab on top of battens
+  // ----------------------------------------------------------------
+  const SLATE_BATTEN_HEIGHT_MM = BATTEN_H_MM + 1; // Top of battens + tiny gap
+  const tileBaseY_mm = battenBaseY_mm + SLATE_BATTEN_HEIGHT_MM;
+  const tileCentreY_mm = tileBaseY_mm + TILE_THK_MM / 2;
+
+  // Extend tiles past edges (same overhang as apex)
+  const sideExt_mm  = FASCIA_THK_MM + OVERHANG_MM;
+  const eavesExt_mm = FASCIA_THK_MM + OVERHANG_MM;
+  const ridgeExt_mm = FASCIA_THK_MM + OVERHANG_MM;
+
+  const tileW_mm = A_phys_mm + eavesExt_mm + ridgeExt_mm;
+  const tileD_mm = B_mm + 2 * sideExt_mm;
+
+  // Use same slate material as apex (running-bond pattern)
+  const slateMat = getSlateMaterial(scene, tileW_mm, tileD_mm);
+
+  const tileMesh = BABYLON.MeshBuilder.CreateBox(`${prefix}tiles-pent`, {
+    width:  tileW_mm / 1000,
+    height: TILE_THK_MM / 1000,
+    depth:  tileD_mm / 1000,
+  }, scene);
+
+  // Centre tile slab over the roof — shifted to account for eaves/ridge extensions
+  const tileCentreX_mm = (A_phys_mm / 2) + (eavesExt_mm - ridgeExt_mm) / 2;
+
+  tileMesh.position = new BABYLON.Vector3(
+    tileCentreX_mm / 1000,
+    tileCentreY_mm / 1000,
+    (B_mm / 2) / 1000,
+  );
+
+  tileMesh.material = slateMat;
+  tileMesh.parent   = roofRoot;
+  tileMesh.metadata  = { dynamic: true, roofTiles: true, layer: "tiles" };
+  result.tiles.push(tileMesh);
+
+  console.log(`[ROOF-TILES] Pent tiles: ${tileW_mm}×${tileD_mm}mm slab at y=${tileCentreY_mm.toFixed(1)}mm`);
+  console.log("[ROOF-TILES] Pent tile layers complete: membrane + " + result.battens.length + " battens + tile slab");
+
+  return result;
+}
+
+// ============================================================================
 // HIPPED ROOF TILE LAYERS
 // ============================================================================
 
@@ -1259,6 +1449,9 @@ export function buildTileLayers(state, ctx, _unused, options = {}) {
   const style = state?.roof?.style || "apex";
   if (style === "hipped") {
     return buildHippedTileLayers(state, ctx, scene, prefix);
+  }
+  if (style === "pent") {
+    return buildPentTileLayers(state, ctx, scene, prefix);
   }
   if (style !== "apex") {
     console.log(`[ROOF-TILES] Style "${style}" not yet supported`);

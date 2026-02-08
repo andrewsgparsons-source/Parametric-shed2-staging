@@ -39,7 +39,7 @@
  */
 
 import { CONFIG, resolveDims } from "../params.js";
-import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js";
+import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=7";
 
 /**
  * Builds the 3D roof geometry for the current building state.

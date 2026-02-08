@@ -60,7 +60,7 @@ import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js";
+import * as Roof from "./elements/roof.js?_v=7";
 import * as Attachments from "./elements/attachments.js";
 import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js";
