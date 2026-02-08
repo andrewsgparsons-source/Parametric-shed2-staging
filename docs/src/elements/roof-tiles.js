@@ -1103,6 +1103,14 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     const wingW = RIDGE_CAP_WING_MM;
     const halfThk = RIDGE_CAP_THK_MM / 2;
     
+    // Compute fold Y and droop (shared between L and R wings)
+    const droopL = wingW * Math.abs(perpXZ.x) * tanT;
+    const droopR = wingW * Math.abs(perpXZ.z) * frontTanT;
+    const nearHipY = (sideRoofY(hipStart.x, hipStart.z) + frontRoofY(hipStart.x, hipStart.z)) / 2;
+    const farHipY  = (sideRoofY(hipEnd.x, hipEnd.z) + frontRoofY(hipEnd.x, hipEnd.z)) / 2;
+    const nearFoldY_saved = nearHipY + halfThk;
+    const farFoldY_saved  = farHipY + halfThk;
+    
     // Build custom quad mesh for each wing
     // Each wing runs the full length of the hip (from hipStart to hipEnd)
     // Vertices: 4 corners - nearFold, farFold (at ridge/eaves ends), nearTip, farTip
@@ -1122,21 +1130,10 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       const nearFold_xz = { x: hipStart.x, z: hipStart.z };
       const farFold_xz  = { x: hipEnd.x,   z: hipEnd.z };
       
-      // Fold Y: sits on top of the hip line (intersection of both roof planes).
-      // Tip Y: slopes DOWN from fold, following the adjacent roof slope.
-      //
-      // The wing drapes DOWN from the fold. The vertical drop over wingW is:
-      //   L wing (side roof): wingW * abs(perpXZ.x) * tanT
-      //   R wing (front roof): wingW * abs(perpXZ.z) * frontTanT
-      const droopL = wingW * Math.abs(perpXZ.x) * tanT;
-      const droopR = wingW * Math.abs(perpXZ.z) * frontTanT;
+      // Use pre-computed fold Y and droop values
       const droop = (side === "L") ? droopL : droopR;
-      
-      // Fold sits at the hip line roof height + halfThk
-      const nearHipY = (sideRoofY(hipStart.x, hipStart.z) + frontRoofY(hipStart.x, hipStart.z)) / 2;
-      const farHipY  = (sideRoofY(hipEnd.x, hipEnd.z) + frontRoofY(hipEnd.x, hipEnd.z)) / 2;
-      const nearFoldY = nearHipY + halfThk;
-      const farFoldY  = farHipY + halfThk;
+      const nearFoldY = nearFoldY_saved;
+      const farFoldY  = farFoldY_saved;
       
       // Tip edge points (offset from fold by wingW in perpendicular direction)
       const nearTip_xz = { 
@@ -1221,6 +1218,48 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     }
     
     console.log(`[ROOF-TILES] Hip cap: len=${hipLen.toFixed(0)}mm (vertex-snapped)`);
+    
+    // --- Shadow lines on hip cap to suggest tile courses ---
+    const shadowSpacing = RIDGE_CAP_EXPOSED_MM / 2; // half-spacing for denser tile lines
+    const numShadows = Math.floor(hipLen / shadowSpacing);
+    const shadowMat = new BABYLON.StandardMaterial(`${prefix}hip-shadow-mat`, scene);
+    shadowMat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+    shadowMat.emissiveColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+    shadowMat.disableLighting = true;
+    shadowMat.alpha = 0.6;
+    
+    console.log(`[ROOF-TILES] Hip shadow: hipLen=${hipLen.toFixed(0)}, spacing=${shadowSpacing}, numShadows=${numShadows}`);
+    for (let i = 1; i <= numShadows; i++) {
+      const t = i * shadowSpacing; // distance along hip from ridge end
+      const frac = t / hipLen;     // fraction along hip line (0=ridge, 1=eaves)
+      
+      // Point on hip line at this fraction (hipDir is already normalized)
+      const ptX = hipStart.x + hipDir.x * t;
+      const ptZ = hipStart.z + hipDir.z * t;
+      const ptFoldY = nearFoldY_saved + (farFoldY_saved - nearFoldY_saved) * frac;
+      
+      // L and R tip points at this fraction (using same droop)
+      const ptLtipX = ptX + wingW * perpXZ.x;
+      const ptLtipZ = ptZ + wingW * perpXZ.z;
+      const ptLtipY = ptFoldY - droopL;
+      
+      const ptRtipX = ptX - wingW * perpXZ.x;
+      const ptRtipZ = ptZ - wingW * perpXZ.z;
+      const ptRtipY = ptFoldY - droopR;
+      
+      // Create line from L tip → fold → R tip
+      const shadowLine = BABYLON.MeshBuilder.CreateLines(`${prefix}hip-shadow-${i}`, {
+        points: [
+          new BABYLON.Vector3(ptLtipX / 1000, ptLtipY / 1000 + 0.002, ptLtipZ / 1000),
+          new BABYLON.Vector3(ptX / 1000, ptFoldY / 1000 + 0.002, ptZ / 1000),
+          new BABYLON.Vector3(ptRtipX / 1000, ptRtipY / 1000 + 0.002, ptRtipZ / 1000),
+        ]
+      }, scene);
+      shadowLine.color = new BABYLON.Color3(0.2, 0.2, 0.22);
+      shadowLine.parent = roofRoot;
+      shadowLine.metadata = { dynamic: true, roofTiles: true, layer: "ridgeCaps" };
+      result.ridgeCaps.push(shadowLine);
+    }
   }
 
   console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} tiles, ${result.ridgeCaps.length} ridge/hip caps — all 4 slopes`);
