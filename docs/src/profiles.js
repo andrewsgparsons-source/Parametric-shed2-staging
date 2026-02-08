@@ -1247,17 +1247,17 @@ export function generateProfileUrl(profileName, state) {
       }
     }
 
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
-PLACEHOLDER_LINE
+    // Roof sub-components
+    if (state.vis.roofParts) {
+      var rp = state.vis.roofParts;
+      if (rp.structure === false || rp.osb === false || rp.covering === false) {
+        compactVis.roofParts = {};
+        if (rp.structure === false) compactVis.roofParts.structure = false;
+        if (rp.osb === false) compactVis.roofParts.osb = false;
+        if (rp.covering === false) compactVis.roofParts.covering = false;
+        hasVisChanges = true;
+      }
+    }
 
     // Attachment visibility
     if (state.vis.attachments) {
