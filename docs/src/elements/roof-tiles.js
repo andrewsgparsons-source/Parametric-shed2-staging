@@ -261,6 +261,7 @@ function getRidgeCapMaterial(scene) {
     mat.diffuseColor  = new BABYLON.Color3(1, 1, 1);   // Texture handles colour
     mat.specularColor = new BABYLON.Color3(0.08, 0.08, 0.1);
     mat.diffuseTexture = _createRidgeCapTexture(scene);
+    mat.backFaceCulling = false;  // render both sides (thin quad)
   }
   return mat;
 }
@@ -442,6 +443,7 @@ function buildBattens(slope, scene, roofRoot, roofData, prefix) {
  * One flat membrane piece sits on top of the OSB, covering the entire slope.
  */
 function buildHippedTileLayers(state, ctx, scene, prefix) {
+  console.log("[ROOF-TILES] buildHippedTileLayers CALLED");
   const result = { membrane: [], battens: [], tiles: [], ridgeCaps: [] };
 
   // ------------------------------------------------------------------
@@ -1056,9 +1058,10 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     );
   }
 
-  // --- 2. SINGLE TEST HIP CAP (front-left) ---
-  // V-shape fold axis aligned with hip rafter direction
-  // Wing tips contact roof surfaces via (h, twist) solver
+  // --- 2. HIP CAPS (front-left) - VERTEX SNAPPING APPROACH ---
+  // Build custom quad meshes with vertices directly placed on roof surfaces
+  // No solver - just compute where vertices need to be and put them there
+  console.log("[ROOF-TILES] About to build hip caps...");
   {
     // Front-left hip: from ridge front point to front-left eaves corner
     const hipStart = new BABYLON.Vector3(halfSpan_mm, ridgeY, ridgeStartZ_mm);
@@ -1069,220 +1072,142 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     const hipLen = hipVec.length();
     const hipDir = hipVec.normalize();
     
-    console.log(`[ROOF-TILES] Hip cap geometry: start=(${hipStart.x.toFixed(0)}, ${hipStart.y.toFixed(0)}, ${hipStart.z.toFixed(0)}), end=(${hipEnd.x.toFixed(0)}, ${hipEnd.y.toFixed(0)}, ${hipEnd.z.toFixed(0)})`);
-    console.log(`[ROOF-TILES] Hip cap: rise=${rise_mm}mm, slopeAng=${(slopeAng * 180 / Math.PI).toFixed(2)}°, hipDir=(${hipDir.x.toFixed(3)}, ${hipDir.y.toFixed(3)}, ${hipDir.z.toFixed(3)})`)
+    // Rise from eaves to ridge
+    const rise_mm = ridgeY - eavesY;
     
-    // Align local Z (0,0,1) with hipDir using axis-angle rotation
-    const localZ = BABYLON.Axis.Z;
-    const crossVec = BABYLON.Vector3.Cross(localZ, hipDir);
-    const dotVal = BABYLON.Vector3.Dot(localZ, hipDir);
+    console.log(`[ROOF-TILES] Hip cap (vertex-snap): start=(${hipStart.x.toFixed(0)}, ${hipStart.y.toFixed(0)}, ${hipStart.z.toFixed(0)}), end=(${hipEnd.x.toFixed(0)}, ${hipEnd.y.toFixed(0)}, ${hipEnd.z.toFixed(0)})`);
     
-    let qAlign;
-    if (crossVec.length() < 0.0001) {
-      qAlign = (dotVal > 0) 
-        ? BABYLON.Quaternion.Identity()
-        : BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X, Math.PI);
-    } else {
-      const axis = crossVec.normalize();
-      const angle = Math.acos(Math.max(-1, Math.min(1, dotVal)));
-      qAlign = BABYLON.Quaternion.RotationAxis(axis, angle);
-    }
-    
-    // SAFETY CHECK: Ensure local Y (up) transforms to world-up (positive Y) after qAlign
-    // If not, the hip cap will appear flipped/inverted
-    const localY = new BABYLON.Vector3(0, 1, 0);
-    const worldY = localY.rotateByQuaternionToRef(qAlign, new BABYLON.Vector3());
-    if (worldY.y < 0) {
-      // Local Y is pointing downward after rotation — flip 180° around Z axis
-      console.warn(`[ROOF-TILES] Hip cap qAlign produced inverted orientation (worldY.y=${worldY.y.toFixed(3)}), applying 180° correction`);
-      const qFlip = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, Math.PI);
-      qAlign = qAlign.multiply(qFlip);
-    }
-    console.log(`[ROOF-TILES] Hip cap qAlign check: worldY=(${worldY.x.toFixed(3)}, ${worldY.y.toFixed(3)}, ${worldY.z.toFixed(3)})`)
-    
-    // Wing droop angle = roof slope angle (HARD CONSTRAINT - FIXED)
-    // NEGATE so wings droop DOWN (positive rotation about local Z moves wing tip UP after qAlign)
-    const wingDroop = -slopeAng;
-    
-    // Reference point along hip rafter (midpoint)
-    const hipMid = hipStart.add(hipEnd).scale(0.5);
-    
-    // Roof surface constants
+    // Roof surface functions - return Y at given (x, z)
     const cosT = Math.cos(slopeAng);
     const tanT = Math.tan(slopeAng);
     const roofOffset = tileTopOffset_mm / cosT;
-    
-    // Front roof has different effective pitch (triangular end slope)
-    // Front plane rises from Z=0 to Z=ridgeStartZ over height (ridgeY - eavesY)
-    const rise_mm = ridgeY - eavesY;
     const frontTanT = rise_mm / ridgeStartZ_mm;
     
-    // --- SOLVER: Find (h, twist) so both wing tips contact their roof surfaces ---
-    // 
-    // h = vertical offset of fold from hipMid
-    // twist = rotation about fold axis, tilts the V-shape
-    //
-    // L wing: droop = wingDroop + twist, contacts side roof (slope in X)
-    // R wing: droop = -wingDroop + twist, contacts front roof (slope in Z)
-    
-    function computeTips(h, twist) {
-      // L wing direction
-      const qDroopL = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, wingDroop + twist);
-      const qL = qAlign.multiply(qDroopL);
-      const wingDirL = new BABYLON.Vector3(-1, 0, 0).rotateByQuaternionToRef(qL, new BABYLON.Vector3());
-      
-      // R wing direction  
-      const qDroopR = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, -wingDroop + twist);
-      const qR = qAlign.multiply(qDroopR);
-      const wingDirR = new BABYLON.Vector3(1, 0, 0).rotateByQuaternionToRef(qR, new BABYLON.Vector3());
-      
-      // Tip positions
-      const tipL = {
-        x: hipMid.x + RIDGE_CAP_WING_MM * wingDirL.x,
-        y: hipMid.y + h + RIDGE_CAP_WING_MM * wingDirL.y,
-        z: hipMid.z + RIDGE_CAP_WING_MM * wingDirL.z
-      };
-      const tipR = {
-        x: hipMid.x + RIDGE_CAP_WING_MM * wingDirR.x,
-        y: hipMid.y + h + RIDGE_CAP_WING_MM * wingDirR.y,
-        z: hipMid.z + RIDGE_CAP_WING_MM * wingDirR.z
-      };
-      
-      return { tipL, tipR, wingDirL, wingDirR };
+    function sideRoofY(x, z) {
+      // Side roof: Y = eavesY + X * tan(slopeAng) + offset
+      return eavesY + x * tanT + roofOffset;
     }
     
-    function computeErrors(h, twist) {
-      const { tipL, tipR } = computeTips(h, twist);
-      
-      // Side roof Y at L tip (slope in X direction) - uses main slope angle
-      const sideRoofY = eavesY + tipL.x * tanT + roofOffset;
-      // Front roof Y at R tip (slope in Z direction) - uses front triangular slope
-      const frontRoofY = eavesY + tipR.z * frontTanT + roofOffset;
-      
-      const errL = tipL.y - sideRoofY;
-      const errR = tipR.y - frontRoofY;
-      
-      // Debug: log first iteration
-      if (h === 0 && twist === 0) {
-        console.log(`[ROOF-TILES] Hip cap solver initial state:`);
-        console.log(`  hipMid=(${hipMid.x.toFixed(0)}, ${hipMid.y.toFixed(0)}, ${hipMid.z.toFixed(0)})`);
-        console.log(`  eavesY=${eavesY.toFixed(0)}, ridgeY=${ridgeY.toFixed(0)}, ridgeStartZ=${ridgeStartZ_mm.toFixed(0)}`);
-        console.log(`  tanT(side)=${tanT.toFixed(4)}, frontTanT=${frontTanT.toFixed(4)}`);
-        console.log(`  tipL=(${tipL.x.toFixed(0)}, ${tipL.y.toFixed(0)}, ${tipL.z.toFixed(0)})`);
-        console.log(`  tipR=(${tipR.x.toFixed(0)}, ${tipR.y.toFixed(0)}, ${tipR.z.toFixed(0)})`);
-        console.log(`  sideRoofY=${sideRoofY.toFixed(0)}, frontRoofY=${frontRoofY.toFixed(0)}`);
-        console.log(`  errL=${errL.toFixed(1)}, errR=${errR.toFixed(1)}`);
-      }
-      
-      return { errL, errR };
+    function frontRoofY(x, z) {
+      // Front roof: Y = eavesY + Z * (rise/ridgeStartZ) + offset
+      return eavesY + z * frontTanT + roofOffset;
     }
     
-    // Newton-Raphson solver for (h, twist)
-    let h = 0;
-    let twist = 0;
-    const eps = 0.001; // For numerical derivatives
-    const tol = 0.1;   // Tolerance in mm
-    const maxIter = 20;
+    // Perpendicular to hip in XZ plane (pointing left/toward side roof)
+    // hipDir is (dx, dy, dz), perpendicular in XZ is (-dz, 0, dx) normalized
+    const perpXZ = new BABYLON.Vector3(-hipDir.z, 0, hipDir.x).normalize();
     
-    for (let iter = 0; iter < maxIter; iter++) {
-      const { errL, errR } = computeErrors(h, twist);
-      
-      // Check convergence
-      if (Math.abs(errL) < tol && Math.abs(errR) < tol) {
-        console.log(`[ROOF-TILES] Hip cap solver converged in ${iter} iterations`);
-        break;
-      }
-      
-      // Compute Jacobian numerically
-      const e0 = computeErrors(h, twist);
-      const eH = computeErrors(h + eps, twist);
-      const eT = computeErrors(h, twist + eps);
-      
-      // J = [ dErrL/dh, dErrL/dtwist ]
-      //     [ dErrR/dh, dErrR/dtwist ]
-      const J11 = (eH.errL - e0.errL) / eps;
-      const J12 = (eT.errL - e0.errL) / eps;
-      const J21 = (eH.errR - e0.errR) / eps;
-      const J22 = (eT.errR - e0.errR) / eps;
-      
-      // Solve J * [dh, dtwist]^T = -[errL, errR]^T
-      const det = J11 * J22 - J12 * J21;
-      if (Math.abs(det) < 1e-10) {
-        console.warn(`[ROOF-TILES] Hip cap solver: singular Jacobian at iter ${iter}`);
-        break;
-      }
-      
-      const dh = (-errL * J22 + errR * J12) / det;
-      const dtwist = (errL * J21 - errR * J11) / det;
-      
-      h += dh;
-      twist += dtwist;
-      
-      // CLAMP h to prevent fold axis inverting below roof
-      // The fold must stay above the hip rafter line (at least at roofOffset above the roof surface)
-      const minH = roofOffset - 50; // Allow slight dip below hipMid but not much
-      if (h < minH) {
-        console.warn(`[ROOF-TILES] Hip cap solver: clamping h from ${h.toFixed(1)} to ${minH.toFixed(1)} (preventing inversion)`);
-        h = minH;
-      }
-      
-      if (iter === maxIter - 1) {
-        console.warn(`[ROOF-TILES] Hip cap solver did not converge. errL=${errL.toFixed(1)}, errR=${errR.toFixed(1)}`);
-      }
-    }
+    console.log(`[ROOF-TILES] Hip cap perpXZ=(${perpXZ.x.toFixed(3)}, ${perpXZ.y.toFixed(3)}, ${perpXZ.z.toFixed(3)})`);
     
-    // Log final values for debugging
-    console.log(`[ROOF-TILES] Hip cap solver result: h=${h.toFixed(1)}mm, twist=${(twist * 180 / Math.PI).toFixed(2)}°`);
-    console.log(`[ROOF-TILES]   hipMid.y=${hipMid.y.toFixed(0)}mm, eavesY=${eavesY.toFixed(0)}mm, ridgeY=${ridgeY.toFixed(0)}mm`);
+    // Wing width
+    const wingW = RIDGE_CAP_WING_MM;
+    const halfThk = RIDGE_CAP_THK_MM / 2;
     
-    // Final fold position
-    const foldPos = new BABYLON.Vector3(hipMid.x, hipMid.y + h, hipMid.z);
+    // Build custom quad mesh for each wing
+    // Each wing runs the full length of the hip (from hipStart to hipEnd)
+    // Vertices: 4 corners - nearFold, farFold (at ridge/eaves ends), nearTip, farTip
     
-    // Get final tip positions for logging
-    const { tipL, tipR, wingDirL, wingDirR } = computeTips(h, twist);
-    const { errL, errR } = computeErrors(h, twist);
-    
-    console.log(`[ROOF-TILES] Hip cap SOLVED:`);
-    console.log(`  h=${h.toFixed(1)}mm, twist=${(twist * 180 / Math.PI).toFixed(2)}°`);
-    console.log(`  foldPos=(${foldPos.x.toFixed(0)}, ${foldPos.y.toFixed(0)}, ${foldPos.z.toFixed(0)})`);
-    console.log(`  L tip: (${tipL.x.toFixed(0)}, ${tipL.y.toFixed(0)}, ${tipL.z.toFixed(0)}), err=${errL.toFixed(1)}mm`);
-    console.log(`  R tip: (${tipR.x.toFixed(0)}, ${tipR.y.toFixed(0)}, ${tipR.z.toFixed(0)}), err=${errR.toFixed(1)}mm`);
-    
-    // Create two wings (L and R) with V-shape, including twist
     for (const side of ["L", "R"]) {
-      // Droop direction WITH TWIST: L wing +droop+twist, R wing -droop+twist
-      const droop = (side === "L") ? (wingDroop + twist) : (-wingDroop + twist);
+      // Direction from fold toward wing tip (L = toward side roof, R = toward front roof)
+      const wingPerp = (side === "L") ? perpXZ : perpXZ.scale(-1);
       
-      // Build combined rotation: first droop in local space, then align to world
-      const qDroop = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z, droop);
-      const q = qAlign.multiply(qDroop);
+      // Which roof surface does this wing contact?
+      const getRoofY = (side === "L") ? sideRoofY : frontRoofY;
       
-      // Wing center offset from fold axis (in local X, transformed to world)
-      const wingMid = RIDGE_CAP_WING_MM / 2;
-      const offsetLocal = new BABYLON.Vector3(
-        (side === "L") ? -wingMid : wingMid, 0, 0
-      );
-      const offsetWorld = offsetLocal.rotateByQuaternionToRef(q, new BABYLON.Vector3());
+      // Calculate 4 corner positions for this wing quad
+      // Near = at hipStart (ridge end), Far = at hipEnd (eaves end)
+      // Fold = on the hip line, Tip = at wing edge (snapped to roof)
       
-      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}hip-cap-${side}`, {
-        width:  RIDGE_CAP_WING_MM / 1000,
-        height: RIDGE_CAP_THK_MM / 1000,
-        depth:  hipLen / 1000,
-      }, scene);
+      // Fold edge points (on the hip line, elevated by roofOffset + halfThk)
+      const nearFold_xz = { x: hipStart.x, z: hipStart.z };
+      const farFold_xz  = { x: hipEnd.x,   z: hipEnd.z };
+      
+      // Fold Y: use the average of both roof surfaces at the fold position
+      // (The fold sits at the intersection of both roof planes)
+      const nearFoldY = (sideRoofY(nearFold_xz.x, nearFold_xz.z) + frontRoofY(nearFold_xz.x, nearFold_xz.z)) / 2 + halfThk;
+      const farFoldY  = (sideRoofY(farFold_xz.x, farFold_xz.z) + frontRoofY(farFold_xz.x, farFold_xz.z)) / 2 + halfThk;
+      
+      // Tip edge points (offset from fold by wingW in perpendicular direction)
+      const nearTip_xz = { 
+        x: hipStart.x + wingW * wingPerp.x, 
+        z: hipStart.z + wingW * wingPerp.z 
+      };
+      const farTip_xz = { 
+        x: hipEnd.x + wingW * wingPerp.x, 
+        z: hipEnd.z + wingW * wingPerp.z 
+      };
+      
+      // Tip Y: SNAPPED to the roof surface at that (x, z) position + halfThk for top surface
+      const nearTipY = getRoofY(nearTip_xz.x, nearTip_xz.z) + halfThk;
+      const farTipY  = getRoofY(farTip_xz.x, farTip_xz.z) + halfThk;
+      
+      console.log(`[ROOF-TILES] Hip cap ${side} wing:`);
+      console.log(`  nearFold=(${nearFold_xz.x.toFixed(0)}, ${nearFoldY.toFixed(0)}, ${nearFold_xz.z.toFixed(0)})`);
+      console.log(`  farFold=(${farFold_xz.x.toFixed(0)}, ${farFoldY.toFixed(0)}, ${farFold_xz.z.toFixed(0)})`);
+      console.log(`  nearTip=(${nearTip_xz.x.toFixed(0)}, ${nearTipY.toFixed(0)}, ${nearTip_xz.z.toFixed(0)})`);
+      console.log(`  farTip=(${farTip_xz.x.toFixed(0)}, ${farTipY.toFixed(0)}, ${farTip_xz.z.toFixed(0)})`);
+      
+      // Build the quad mesh (two triangles)
+      // Vertices in mm, will convert to m for Babylon
+      const positions = [
+        // nearFold (0)
+        nearFold_xz.x / 1000, nearFoldY / 1000, nearFold_xz.z / 1000,
+        // farFold (1)
+        farFold_xz.x / 1000, farFoldY / 1000, farFold_xz.z / 1000,
+        // nearTip (2)
+        nearTip_xz.x / 1000, nearTipY / 1000, nearTip_xz.z / 1000,
+        // farTip (3)
+        farTip_xz.x / 1000, farTipY / 1000, farTip_xz.z / 1000,
+      ];
+      
+      // Indices: two triangles forming the quad
+      // Winding must be CCW when viewed from ABOVE (normal pointing up)
+      // L wing: 0-1-2, 1-3-2 | R wing: 0-2-1, 1-2-3
+      const indices = (side === "L") 
+        ? [0, 1, 2, 1, 3, 2]  // CCW from above for L wing
+        : [0, 2, 1, 1, 2, 3]; // CCW from above for R wing
+      
+      // Normals: compute from the quad plane
+      // Use cross product of two edges
+      const v0 = new BABYLON.Vector3(positions[0], positions[1], positions[2]);
+      const v1 = new BABYLON.Vector3(positions[3], positions[4], positions[5]);
+      const v2 = new BABYLON.Vector3(positions[6], positions[7], positions[8]);
+      const edge1 = v1.subtract(v0);
+      const edge2 = v2.subtract(v0);
+      const normal = BABYLON.Vector3.Cross(edge1, edge2).normalize();
+      if (side === "L") normal.scaleInPlace(-1); // Flip for L wing (matches swapped winding)
+      
+      const normals = [
+        normal.x, normal.y, normal.z,
+        normal.x, normal.y, normal.z,
+        normal.x, normal.y, normal.z,
+        normal.x, normal.y, normal.z,
+      ];
+      
+      // UVs
+      const uvs = [
+        0, 0,  // nearFold
+        1, 0,  // farFold
+        0, 1,  // nearTip
+        1, 1,  // farTip
+      ];
+      
+      // Create custom mesh
+      const mesh = new BABYLON.Mesh(`${prefix}hip-cap-${side}`, scene);
+      const vertexData = new BABYLON.VertexData();
+      vertexData.positions = positions;
+      vertexData.indices = indices;
+      vertexData.normals = normals;
+      vertexData.uvs = uvs;
+      vertexData.applyToMesh(mesh);
       
       mesh.parent = roofRoot;
-      mesh.position = new BABYLON.Vector3(
-        (foldPos.x + offsetWorld.x) / 1000,
-        (foldPos.y + offsetWorld.y) / 1000,
-        (foldPos.z + offsetWorld.z) / 1000
-      );
-      mesh.rotationQuaternion = q;
       mesh.material = ridgeCapMat;
       mesh.metadata = { dynamic: true, roofTiles: true, layer: "ridgeCaps", side };
       result.ridgeCaps.push(mesh);
     }
     
-    console.log(`[ROOF-TILES] Hip cap: len=${hipLen.toFixed(0)}mm, droop=${(wingDroop*180/Math.PI).toFixed(1)}°`);
+    console.log(`[ROOF-TILES] Hip cap: len=${hipLen.toFixed(0)}mm (vertex-snapped)`);
   }
 
   console.log(`[ROOF-TILES] Hipped: ${result.membrane.length} membranes, ${result.battens.length} battens, ${result.tiles.length} tiles, ${result.ridgeCaps.length} ridge/hip caps — all 4 slopes`);
