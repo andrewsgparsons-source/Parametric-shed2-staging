@@ -1122,10 +1122,21 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
       const nearFold_xz = { x: hipStart.x, z: hipStart.z };
       const farFold_xz  = { x: hipEnd.x,   z: hipEnd.z };
       
-      // Fold Y: use the average of both roof surfaces at the fold position
-      // (The fold sits at the intersection of both roof planes)
-      const nearFoldY = (sideRoofY(nearFold_xz.x, nearFold_xz.z) + frontRoofY(nearFold_xz.x, nearFold_xz.z)) / 2 + halfThk;
-      const farFoldY  = (sideRoofY(farFold_xz.x, farFold_xz.z) + frontRoofY(farFold_xz.x, farFold_xz.z)) / 2 + halfThk;
+      // Fold Y: sits on top of the hip line (intersection of both roof planes).
+      // Tip Y: slopes DOWN from fold, following the adjacent roof slope.
+      //
+      // The wing drapes DOWN from the fold. The vertical drop over wingW is:
+      //   L wing (side roof): wingW * abs(perpXZ.x) * tanT
+      //   R wing (front roof): wingW * abs(perpXZ.z) * frontTanT
+      const droopL = wingW * Math.abs(perpXZ.x) * tanT;
+      const droopR = wingW * Math.abs(perpXZ.z) * frontTanT;
+      const droop = (side === "L") ? droopL : droopR;
+      
+      // Fold sits at the hip line roof height + halfThk
+      const nearHipY = (sideRoofY(hipStart.x, hipStart.z) + frontRoofY(hipStart.x, hipStart.z)) / 2;
+      const farHipY  = (sideRoofY(hipEnd.x, hipEnd.z) + frontRoofY(hipEnd.x, hipEnd.z)) / 2;
+      const nearFoldY = nearHipY + halfThk;
+      const farFoldY  = farHipY + halfThk;
       
       // Tip edge points (offset from fold by wingW in perpendicular direction)
       const nearTip_xz = { 
@@ -1137,15 +1148,17 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
         z: hipEnd.z + wingW * wingPerp.z 
       };
       
-      // Tip Y: SNAPPED to the roof surface at that (x, z) position + halfThk for top surface
-      const nearTipY = getRoofY(nearTip_xz.x, nearTip_xz.z) + halfThk;
-      const farTipY  = getRoofY(farTip_xz.x, farTip_xz.z) + halfThk;
+      // Tip Y: fold Y MINUS droop (wing slopes down from fold onto roof surface)
+      const nearTipY = nearFoldY - droop;
+      const farTipY  = farFoldY - droop;
       
       console.log(`[ROOF-TILES] Hip cap ${side} wing:`);
       console.log(`  nearFold=(${nearFold_xz.x.toFixed(0)}, ${nearFoldY.toFixed(0)}, ${nearFold_xz.z.toFixed(0)})`);
       console.log(`  farFold=(${farFold_xz.x.toFixed(0)}, ${farFoldY.toFixed(0)}, ${farFold_xz.z.toFixed(0)})`);
       console.log(`  nearTip=(${nearTip_xz.x.toFixed(0)}, ${nearTipY.toFixed(0)}, ${nearTip_xz.z.toFixed(0)})`);
       console.log(`  farTip=(${farTip_xz.x.toFixed(0)}, ${farTipY.toFixed(0)}, ${farTip_xz.z.toFixed(0)})`);
+      console.log(`  DIAGNOSTIC: nearFoldY=${nearFoldY.toFixed(1)} vs nearTipY=${nearTipY.toFixed(1)} → fold ${nearFoldY > nearTipY ? 'HIGHER (correct)' : 'LOWER (upside down!)'}`);
+      console.log(`  DIAGNOSTIC: farFoldY=${farFoldY.toFixed(1)} vs farTipY=${farTipY.toFixed(1)} → fold ${farFoldY > farTipY ? 'HIGHER (correct)' : 'LOWER (upside down!)'}`);
       
       // Build the quad mesh (two triangles)
       // Vertices in mm, will convert to m for Babylon
