@@ -60,13 +60,13 @@ import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js";
-import * as Attachments from "./elements/attachments.js";
+import * as Roof from "./elements/roof.js?_v=7";
+import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
-import { initInstancesUI } from "./instances.js";
+import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
-import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
+import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
@@ -76,6 +76,28 @@ import { initPanelResize } from "./ui/panel-resize.js";
 function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
 function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", String(!!hidden)); }
+
+/**
+ * Toggle roof covering visibility checkboxes based on covering type
+ * Shows standard "Covering" for felt/shingles, or "Tiles" + "Membrane & Battens" for slate
+ */
+function updateRoofCoveringToggles(coveringType) {
+  var coveringLabel = $("vRoofCoveringLabel");
+  var tilesLabel = $("vRoofTilesLabel");
+  var membraneBattensLabel = $("vRoofMembraneBattensLabel");
+  
+  if (coveringType === "slate") {
+    // Slate selected: hide standard covering, show breakdown toggles
+    if (coveringLabel) coveringLabel.style.display = "none";
+    if (tilesLabel) tilesLabel.style.display = "";
+    if (membraneBattensLabel) membraneBattensLabel.style.display = "";
+  } else {
+    // Felt/shingles: show standard covering, hide breakdown toggles
+    if (coveringLabel) coveringLabel.style.display = "";
+    if (tilesLabel) tilesLabel.style.display = "none";
+    if (membraneBattensLabel) membraneBattensLabel.style.display = "none";
+  }
+}
 
 /**
  * Update the Openings (Doors & Windows) BOM tables
@@ -460,6 +482,12 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var vAttWallLeftEl = $("vAttWallLeft");
     var vAttWallRightEl = $("vAttWallRight");
     var vAttWallOuterEl = $("vAttWallOuter");
+    var vAttRoofStructureEl = $("vAttRoofStructure");
+    var vAttRoofOsbEl = $("vAttRoofOsb");
+    var vAttRoofCoveringEl = $("vAttRoofCovering");
+    var vRoofInsulationEl = $("vRoofInsulation");
+    var vAttRoofInsulationEl = $("vAttRoofInsulation");
+    var vRoofPlyEl = $("vRoofPly");
 
     // Developer panel attachment visibility controls (mirrors the main visibility section)
     var devVAttBaseEl = $("devVAttBase");
@@ -491,6 +519,11 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var roofApexCrestHeightEl =
       $("roofApexCrestHeight");
 
+    // Hipped roof absolute heights (mm)
+    // These map to state.roof.hipped.heightToEaves_mm / heightToCrest_mm
+    var roofHippedEavesHeightEl = $("roofHippedEaveHeight");
+    var roofHippedCrestHeightEl = $("roofHippedCrestHeight");
+
     // Apex roof: truss count + spacing readout (mm only)
     var roofApexTrussCountEl = $("roofApexTrussCount");
     var roofApexTrussSpacingEl = $("roofApexTrussSpacing");
@@ -506,6 +539,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallsVariantEl = $("wallsVariant");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
+    var roofCoveringStyleEl = $("roofCoveringStyle");
 
     var addDoorBtnEl = $("addDoorBtn");
     var removeAllDoorsBtnEl = $("removeAllDoorsBtn");
@@ -555,6 +589,50 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
           try { wallHeightEl.removeAttribute("title"); } catch (e2) {}
         }
       }
+    }
+
+    /**
+     * Hide/show insulation and plywood visibility checkboxes based on variant.
+     * When "basic" variant is selected, these options don't apply and should be hidden.
+     * Also hides the corresponding roof insulation/plywood checkboxes for basic variant.
+     */
+    function updateInsulationControlsForVariant(state) {
+      var variant = (state && state.walls && state.walls.variant) ? String(state.walls.variant) : "insulated";
+      var isInsulated = (variant === "insulated");
+
+      // Helper to show/hide a checkbox and its parent label
+      function toggleCheckboxVisibility(el, show) {
+        if (!el) return;
+        var label = el.closest("label") || el.parentElement;
+        if (label) {
+          label.style.display = show ? "" : "none";
+        }
+      }
+
+      // Base insulation checkbox (vIns)
+      toggleCheckboxVisibility(vInsEl, isInsulated);
+
+      // Wall insulation and plywood checkboxes
+      toggleCheckboxVisibility(vWallInsulationEl, isInsulated);
+      toggleCheckboxVisibility(vWallPlywoodEl, isInsulated);
+
+      // Roof insulation and plywood checkboxes
+      toggleCheckboxVisibility(vRoofInsulationEl, isInsulated);
+      var vRoofPlyEl = $("vRoofPly");
+      toggleCheckboxVisibility(vRoofPlyEl, isInsulated);
+
+      // Also update BOM section visibility in HTML for insulation-related sections
+      var plySection = $("plySection");
+      var wallPirSection = $("wallPirSection");
+      var wallPlySection = $("wallPlySection");
+      var wallPirSection2 = $("wallPirSection2");
+      var wallPlySection2 = $("wallPlySection2");
+
+      if (plySection) plySection.style.display = isInsulated ? "" : "none";
+      if (wallPirSection) wallPirSection.style.display = isInsulated ? "" : "none";
+      if (wallPlySection) wallPlySection.style.display = isInsulated ? "" : "none";
+      if (wallPirSection2) wallPirSection2.style.display = isInsulated ? "" : "none";
+      if (wallPlySection2) wallPlySection2.style.display = isInsulated ? "" : "none";
     }
 
     var asPosInt = function (v, def) {
@@ -998,6 +1076,152 @@ function applyOpeningsVisibility(scene, on) {
       }
     }
 
+    // Roof Tiles visibility - controls slate/tile layer on roof (synthetic slate option)
+    function applyRoofTilesVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofTilesVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isTiles = false;
+
+        // roof-tiles.js meshes use roofTiles=true with layer="tiles"
+        if (meta.roofTiles && meta.layer === "tiles") {
+          isTiles = true;
+        }
+
+        // Fallback: name-based matching
+        if (nm.indexOf("roof-tiles") >= 0 || nm.indexOf("roof-slate") >= 0 || nm.indexOf("tile-surface") >= 0) {
+          isTiles = true;
+        }
+        if (meta.roof && (meta.part === "tiles" || meta.part === "slate")) {
+          isTiles = true;
+        }
+
+        // Attachment tiles
+        if (nm.indexOf("att-") === 0 && (nm.indexOf("-tiles") >= 0 || nm.indexOf("-slate") >= 0)) {
+          isTiles = true;
+        }
+        if (meta.attachmentId && (meta.part === "tiles" || meta.part === "slate")) {
+          isTiles = true;
+        }
+
+        if (!isTiles) continue;
+        count++;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+      console.log("[vis] roof tiles meshes affected:", count);
+    }
+
+    // Roof Membrane & Battens visibility - controls breathable membrane and tile battens (synthetic slate option)
+    function applyRoofMembraneBattensVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofMembraneBattensVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata || {};
+
+        var isMembraneBattens = false;
+
+        // roof-tiles.js meshes use roofTiles=true with layer="membrane" or "battens"
+        if (meta.roofTiles && (meta.layer === "membrane" || meta.layer === "battens")) {
+          isMembraneBattens = true;
+        }
+
+        // Fallback: name-based matching
+        if (nm.indexOf("membrane-") >= 0 || nm.indexOf("batten-") >= 0 || nm.indexOf("-batten") >= 0) {
+          isMembraneBattens = true;
+        }
+        if (meta.roof && (meta.part === "membrane" || meta.part === "battens" || meta.part === "batten")) {
+          isMembraneBattens = true;
+        }
+
+        // Attachment membrane/battens
+        if (nm.indexOf("att-") === 0 && (nm.indexOf("-membrane") >= 0 || nm.indexOf("-battens") >= 0 || nm.indexOf("-batten") >= 0)) {
+          isMembraneBattens = true;
+        }
+        if (meta.attachmentId && (meta.part === "membrane" || meta.part === "battens" || meta.part === "batten")) {
+          isMembraneBattens = true;
+        }
+
+        if (!isMembraneBattens) continue;
+        count++;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+      console.log("[vis] roof membrane/battens meshes affected:", count);
+    }
+
+    // Roof Insulation visibility - controls insulation batts between rafters and gable end insulation
+    function applyRoofInsulationVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofInsulationVisibility:", visible);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var meta = m.metadata || {};
+
+        // Skip attachment meshes - handled separately
+        if (meta.attachmentId) continue;
+
+        var isInsulation = false;
+
+        // Main building roof insulation (batts between rafters)
+        if (meta.roof && meta.part === "insulation") {
+          isInsulation = true;
+        }
+        // Gable end insulation trapezoids
+        if (meta.roof && meta.part === "insulation-gable") {
+          isInsulation = true;
+        }
+
+        if (!isInsulation) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Roof Interior Plywood visibility - controls 12mm plywood lining on interior of roof
+    function applyRoofPlyVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyRoofPlyVisibility:", visible);
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var meta = m.metadata || {};
+
+        // Skip attachment meshes - handled separately
+        if (meta.attachmentId) continue;
+
+        var isPly = false;
+
+        // Main building roof plywood (sloped, horizontal, gable)
+        if (meta.roof && meta.part === "ply") {
+          isPly = true;
+        }
+        // Gable end plywood
+        if (meta.roof && meta.part === "ply-gable") {
+          isPly = true;
+        }
+
+        if (!isPly) continue;
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
     // ==================== ATTACHMENT VISIBILITY FUNCTIONS ====================
 
     /**
@@ -1198,6 +1422,107 @@ function applyOpeningsVisibility(scene, on) {
     }
 
     /**
+     * Apply visibility to attachment roof structure (trusses, rafters, purlins)
+     */
+    function applyAttachmentRoofStructureVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofStructureVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        // Match trusses, rafters, purlins, king posts, etc.
+        var isStructure = (meta.part === "truss" || meta.part === "purlin" || meta.part === "ridge");
+        if (nm.indexOf("-truss-") >= 0 || nm.indexOf("-rafter") >= 0 || 
+            nm.indexOf("-purlin") >= 0 || nm.indexOf("-kingpost") >= 0 ||
+            nm.indexOf("-ridge") >= 0) {
+          isStructure = true;
+        }
+        if (isStructure) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof structure meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment roof OSB/sheathing
+     */
+    function applyAttachmentRoofOsbVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofOsbVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        var isOsb = (meta.part === "osb");
+        if (nm.indexOf("-osb") >= 0) {
+          isOsb = true;
+        }
+        if (isOsb) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof OSB meshes affected:", count);
+    }
+
+    /**
+     * Apply visibility to attachment roof covering
+     */
+    function applyAttachmentRoofCoveringVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofCoveringVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var nm = String(m.name || "");
+        var meta = m.metadata;
+        var isCovering = (meta.part === "covering");
+        if (nm.indexOf("-covering") >= 0) {
+          isCovering = true;
+        }
+        if (isCovering) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof covering meshes affected:", count);
+    }
+
+    // Attachment Roof Insulation visibility
+    function applyAttachmentRoofInsulationVisibility(scene, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      console.log("[vis] applyAttachmentRoofInsulationVisibility:", visible);
+      var count = 0;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m || !m.metadata || !m.metadata.attachmentId) continue;
+        var meta = m.metadata;
+        var isInsulation = (meta.part === "insulation" || meta.part === "insulation-gable");
+        if (isInsulation) {
+          try { m.isVisible = visible; } catch (e) {}
+          try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e) {}
+          count++;
+        }
+      }
+      console.log("[vis] attachment roof insulation meshes affected:", count);
+    }
+
+    /**
      * Get attachment visibility settings from state (with defaults to true)
      */
     function getAttachmentVisibility(state) {
@@ -1214,7 +1539,11 @@ function applyOpeningsVisibility(scene, on) {
         wallBack: attVis.wallBack !== false,
         wallLeft: attVis.wallLeft !== false,
         wallRight: attVis.wallRight !== false,
-        wallOuter: attVis.wallOuter !== false
+        wallOuter: attVis.wallOuter !== false,
+        roofStructure: attVis.roofStructure !== false,
+        roofOsb: attVis.roofOsb !== false,
+        roofCovering: attVis.roofCovering !== false,
+        roofInsulation: attVis.roofInsulation !== false
       };
     }
 
@@ -1243,6 +1572,14 @@ function applyOpeningsVisibility(scene, on) {
         applyAttachmentWallVisibility(scene, "left", av.wallLeft);
         applyAttachmentWallVisibility(scene, "right", av.wallRight);
         applyAttachmentWallVisibility(scene, "outer", av.wallOuter);
+      }
+
+      // Apply roof granular toggles (only if master roof is on)
+      if (av.roof) {
+        applyAttachmentRoofStructureVisibility(scene, av.roofStructure);
+        applyAttachmentRoofOsbVisibility(scene, av.roofOsb);
+        applyAttachmentRoofCoveringVisibility(scene, av.roofCovering);
+        applyAttachmentRoofInsulationVisibility(scene, av.roofInsulation);
       }
     }
 
@@ -1777,8 +2114,8 @@ if (getWallsEnabled(state)) {
         var roofEnabled = getRoofEnabled(state);
         console.log("[RENDER_LEGACY] Roof check:", { roofEnabled, roofStyle, visRoof: state?.vis?.roof });
 
-        // Build roof for supported styles (pent + apex). (No behavior change for pent.)
-        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+        // Build roof for supported styles (pent + apex + hipped). (No behavior change for pent.)
+        if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
           console.log("[RENDER_LEGACY] Building roof...");
           var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
@@ -1814,7 +2151,14 @@ if (getWallsEnabled(state)) {
           var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
           var _roofStructOn = rp.structure !== false;
           var _roofOsbOn = rp.osb !== false;
-          var _roofCoverOn = rp.covering !== false;
+          // Hide felt covering when slate tiles are selected (tiles have their own layers)
+          var _isSlate = state && state.roof && state.roof.covering === "slate";
+          var _roofCoverOn = rp.covering !== false && !_isSlate;
+          var _roofInsOn = rp.insulation !== false;
+          var _roofPlyOn = rp.ply !== false;
+          // Slate tile layer visibility (only relevant when covering is slate)
+          var _roofTilesOn = _isSlate && rp.tiles !== false;
+          var _roofMembraneBattensOn = _isSlate && rp.membraneBattens !== false;
 
           applyBaseVisibility(ctx.scene, _baseOn);
           applyWallsVisibility(ctx.scene, _wallsOn);
@@ -1822,6 +2166,13 @@ if (getWallsEnabled(state)) {
           applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
           applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
           applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
+          applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
+          applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
+          // Slate tile layers
+          if (_isSlate) {
+            applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn);
+            applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
+          }
           applyCladdingVisibility(ctx.scene, _cladOn);
           applyOpeningsVisibility(ctx.scene, _openOn);
           applyAllAttachmentVisibility(ctx.scene, state);
@@ -1833,6 +2184,13 @@ if (getWallsEnabled(state)) {
             try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
             try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
             try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
+            try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
+            try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
+            // Slate tile layers
+            if (_isSlate) {
+              try { applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn); } catch (e0) {}
+              try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
+            }
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
             try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -1888,7 +2246,7 @@ if (getWallsEnabled(state)) {
       var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
       var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
 
-      if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex")) {
+      if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
@@ -1938,7 +2296,14 @@ if (getWallsEnabled(state)) {
         var rp = (state && state.vis && state.vis.roofParts) ? state.vis.roofParts : {};
         var _roofStructOn = rp.structure !== false;
         var _roofOsbOn = rp.osb !== false;
-        var _roofCoverOn = rp.covering !== false;
+        // Hide felt covering when slate tiles are selected (tiles have their own layers)
+        var _isSlate = state && state.roof && state.roof.covering === "slate";
+        var _roofCoverOn = rp.covering !== false && !_isSlate;
+        var _roofInsOn = rp.insulation !== false;
+        var _roofPlyOn = rp.ply !== false;
+        // Slate tile layer visibility (only relevant when covering is slate)
+        var _roofTilesOn = _isSlate && rp.tiles !== false;
+        var _roofMembraneBattensOn = _isSlate && rp.membraneBattens !== false;
 
         applyBaseVisibility(ctx.scene, _baseOn);
         applyWallsVisibility(ctx.scene, _wallsOn);
@@ -1946,6 +2311,13 @@ if (getWallsEnabled(state)) {
         applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn);
         applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn);
         applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn);
+        applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn);
+        applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn);
+        // Slate tile layers
+        if (_isSlate) {
+          applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn);
+          applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
+        }
         applyCladdingVisibility(ctx.scene, _cladOn);
         applyOpeningsVisibility(ctx.scene, _openOn);
         applyAllAttachmentVisibility(ctx.scene, state);
@@ -1957,6 +2329,13 @@ if (getWallsEnabled(state)) {
           try { applyRoofStructureVisibility(ctx.scene, _roofOn && _roofStructOn); } catch (e0) {}
           try { applyRoofOsbVisibility(ctx.scene, _roofOn && _roofOsbOn); } catch (e0) {}
           try { applyRoofCoveringVisibility(ctx.scene, _roofOn && _roofCoverOn); } catch (e0) {}
+          try { applyRoofInsulationVisibility(ctx.scene, _roofOn && _roofInsOn); } catch (e0) {}
+          try { applyRoofPlyVisibility(ctx.scene, _roofOn && _roofPlyOn); } catch (e0) {}
+          // Slate tile layers
+          if (_isSlate) {
+            try { applyRoofTilesVisibility(ctx.scene, _roofOn && _roofTilesOn); } catch (e0) {}
+            try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
+          }
           try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
@@ -1988,8 +2367,15 @@ if (getWallsEnabled(state)) {
         var apexEaves = (state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm)
           ? state.roof.apex.heightToEaves_mm : 1850;
         return Math.max(800, apexEaves);
+      } else if (roofStyle === "hipped") {
+        // For hipped roofs, use hipped settings or fall back to apex settings
+        var hippedEaves = (state.roof && state.roof.hipped && state.roof.hipped.heightToEaves_mm)
+          ? state.roof.hipped.heightToEaves_mm 
+          : (state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm)
+            ? state.roof.apex.heightToEaves_mm : 1850;
+        return Math.max(800, hippedEaves);
       } else {
-        // Hipped or default
+        // Default fallback
         return 2000;
       }
     }
@@ -2055,15 +2441,19 @@ if (getWallsEnabled(state)) {
             if (y < MIN_EDGE_GAP) y = MIN_EDGE_GAP;
           }
           
-          // Clamp width to wall length
-          if (w > wallLen - 2 * MIN_EDGE_GAP) {
-            w = wallLen - 2 * MIN_EDGE_GAP;
+          // Clamp x position first (left edge)
+          if (x < MIN_EDGE_GAP) x = MIN_EDGE_GAP;
+          
+          // Clamp width to available space at current x position
+          // This keeps the left edge fixed and prevents the door from sliding
+          var maxWidthAtX = wallLen - MIN_EDGE_GAP - x;
+          if (w > maxWidthAtX) {
+            w = maxWidthAtX;
           }
           
-          // Clamp x position
-          if (x < MIN_EDGE_GAP) x = MIN_EDGE_GAP;
-          if (x + w > wallLen - MIN_EDGE_GAP) {
-            x = wallLen - MIN_EDGE_GAP - w;
+          // Also apply absolute max width (for very narrow walls)
+          if (w > wallLen - 2 * MIN_EDGE_GAP) {
+            w = wallLen - 2 * MIN_EDGE_GAP;
           }
           
           // Update the opening
@@ -2851,7 +3241,15 @@ function parseOpeningDim(val, defaultMm) {
             patchOpeningById(id, { x_mm: parseOpeningDim(xField.inp.value, Math.floor(Number(door.x_mm ?? 0))) });
           });
           wireCommitOnly(wField.inp, function () {
-            patchOpeningById(id, { width_mm: parseOpeningDim(wField.inp.value, Math.floor(Number(door.width_mm ?? 900))) });
+            var oldWidth = Math.floor(Number(door.width_mm ?? 900));
+            var newWidth = parseOpeningDim(wField.inp.value, oldWidth);
+            var deltaWidth = newWidth - oldWidth;
+            // Expand from centre: shift x left by half the width increase
+            var oldX = Math.floor(Number(door.x_mm ?? 0));
+            var newX = oldX - Math.floor(deltaWidth / 2);
+            // Clamp x to minimum edge gap
+            if (newX < 100) newX = 100;
+            patchOpeningById(id, { width_mm: newWidth, x_mm: newX });
           });
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(door.height_mm ?? 2000))) });
@@ -3042,7 +3440,14 @@ function parseOpeningDim(val, defaultMm) {
             patchOpeningById(id, { y_mm: parseOpeningDim(yField.inp.value, Math.floor(Number(win.y_mm ?? 0))) });
           });
           wireCommitOnly(wField.inp, function () {
-            patchOpeningById(id, { width_mm: parseOpeningDim(wField.inp.value, Math.floor(Number(win.width_mm ?? 900))) });
+            var oldWidth = Math.floor(Number(win.width_mm ?? 900));
+            var newWidth = parseOpeningDim(wField.inp.value, oldWidth);
+            var deltaWidth = newWidth - oldWidth;
+            // Expand from centre: shift x left by half the width increase
+            var oldX = Math.floor(Number(win.x_mm ?? 0));
+            var newX = oldX - Math.floor(deltaWidth / 2);
+            if (newX < 100) newX = 100;
+            patchOpeningById(id, { width_mm: newWidth, x_mm: newX });
           });
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(win.height_mm ?? 600))) });
@@ -3191,6 +3596,8 @@ if (wInputEl && dInputEl) {
           roofStyleEl.value = style;
           // Keep roof height controls in sync with current roof style
           updateRoofHeightBlocks(style);
+          // Restrict covering options based on roof style (hipped = slate only)
+          updateRoofCoveringOptions(style);
         }
 
 
@@ -3213,6 +3620,29 @@ if (wInputEl && dInputEl) {
           }
           if (roofApexTieBeamEl) {
             var tieBeamVal = (state && state.roof && state.roof.apex && state.roof.apex.tieBeam) || "eaves";
+            var variant = (state && state.walls && state.walls.variant) || "basic";
+            var isInsulatedApex = (variant === "insulated" && _roofStyleNow === "apex");
+            console.log('[TIE_BEAM_DEBUG] variant:', variant, 'roofStyle:', _roofStyleNow, 'isInsulatedApex:', isInsulatedApex);
+            
+            // Get the "eaves" option element
+            var eavesOption = roofApexTieBeamEl.querySelector('option[value="eaves"]');
+            if (eavesOption) {
+              if (isInsulatedApex) {
+                // Hide "At Eaves" option for insulated apex builds (requires raised tie beam)
+                eavesOption.style.display = "none";
+                eavesOption.disabled = true;
+                // Force raised tie beam
+                if (tieBeamVal === "eaves") {
+                  tieBeamVal = "raised";
+                  store.setState({ roof: { apex: { tieBeam: "raised" } } });
+                }
+              } else {
+                // Show "At Eaves" option for non-insulated or non-apex builds
+                eavesOption.style.display = "";
+                eavesOption.disabled = false;
+              }
+            }
+            
             roofApexTieBeamEl.value = tieBeamVal;
             if (!roofApexTieBeamEl.classList.contains("profile-disabled")) {
               roofApexTieBeamEl.disabled = (_roofStyleNow !== "apex");
@@ -3321,6 +3751,40 @@ if (roofApexEavesHeightEl) {
           }
         } catch (eApexSync) {}
 
+        // Sync hipped roof heights from state to UI
+        try {
+          var isHipped = (state && state.roof && state.roof.style === "hipped");
+          var hh = (state && state.roof && state.roof.hipped) ? state.roof.hipped : {};
+          
+          if (roofHippedEavesHeightEl) {
+            roofHippedEavesHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
+            roofHippedEavesHeightEl.min = (unitMode === "imperial") ? "4" : "100";
+            if (isHipped && hh.heightToEaves_mm != null) {
+              roofHippedEavesHeightEl.value = formatDimension(hh.heightToEaves_mm, unitMode);
+            }
+          }
+          
+          if (roofHippedCrestHeightEl) {
+            roofHippedCrestHeightEl.step = (unitMode === "imperial") ? "0.5" : "10";
+            roofHippedCrestHeightEl.min = (unitMode === "imperial") ? "4" : "100";
+            if (isHipped && hh.heightToCrest_mm != null) {
+              roofHippedCrestHeightEl.value = formatDimension(hh.heightToCrest_mm, unitMode);
+            }
+          }
+          
+          // Calculate and display hipped pitch angle
+          var roofPitchHippedEl = $("roofPitchHipped");
+          if (roofPitchHippedEl && isHipped && hh.heightToEaves_mm != null && hh.heightToCrest_mm != null) {
+            var R = resolveDims(state);
+            var roofW_mm = (R && R.roof && R.roof.w_mm) ? Math.max(1, Math.floor(Number(R.roof.w_mm))) : 1000;
+            var halfSpan_mm = roofW_mm / 2;
+            var hippedRise_mm = Math.max(0, hh.heightToCrest_mm - hh.heightToEaves_mm);
+            var hippedPitchRad = Math.atan2(hippedRise_mm, halfSpan_mm);
+            var hippedPitchDeg = Math.round(hippedPitchRad * (180 / Math.PI));
+            roofPitchHippedEl.value = String(hippedPitchDeg) + "°";
+          }
+        } catch (eHippedSync) {}
+
 if (state && state.overhang) {
           var ovhUnit = (unitMode === "imperial") ? "(in)" : "(mm)";
           
@@ -3393,6 +3857,14 @@ if (state && state.overhang) {
         if (vRoofOsbEl) vRoofOsbEl.checked = rp ? (rp.osb !== false) : true;
         var vRoofCoveringEl = $("vRoofCovering");
         if (vRoofCoveringEl) vRoofCoveringEl.checked = rp ? (rp.covering !== false) : true;
+        var vRoofInsulationEl = $("vRoofInsulation");
+        if (vRoofInsulationEl) vRoofInsulationEl.checked = rp ? (rp.insulation !== false) : true;
+        var vRoofPlyEl = $("vRoofPly");
+        if (vRoofPlyEl) vRoofPlyEl.checked = rp ? (rp.ply !== false) : true;
+        var vRoofTilesEl = $("vRoofTiles");
+        if (vRoofTilesEl) vRoofTilesEl.checked = rp ? (rp.tiles !== false) : true;
+        var vRoofMembraneBattensEl = $("vRoofMembraneBattens");
+        if (vRoofMembraneBattensEl) vRoofMembraneBattensEl.checked = rp ? (rp.membraneBattens !== false) : true;
 
         var parts = getWallParts(state);
         if (vWallFrontEl) vWallFrontEl.checked = !!parts.front;
@@ -3404,6 +3876,9 @@ if (state && state.overhang) {
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
+        if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
+        // Update visibility toggle display based on covering type
+        updateRoofCoveringToggles(state?.roof?.covering || "felt");
 
         if (wallHeightEl) {
           if (isPent) {
@@ -3443,6 +3918,7 @@ if (state && state.overhang) {
         }
 
         applyWallHeightUiLock(state);
+        updateInsulationControlsForVariant(state);
 
         var dv = validations && validations.doors ? validations.doors : null;
         var wv = validations && validations.windows ? validations.windows : null;
@@ -3494,12 +3970,114 @@ if (state && state.overhang) {
       roofStyleEl.addEventListener("change", function () {
         var v = String(roofStyleEl.value || "apex");
         if (v !== "apex" && v !== "pent" && v !== "hipped") v = "apex";
-        store.setState({ roof: { style: v } });
+        
+        // When switching to hipped, auto-initialize hipped heights from UI inputs or defaults
+        // This ensures state.roof.hipped exists so walls.js can read eaves height
+        if (v === "hipped") {
+          var eavesVal = roofHippedEavesHeightEl ? parseFloat(roofHippedEavesHeightEl.value) : 0;
+          var crestVal = roofHippedCrestHeightEl ? parseFloat(roofHippedCrestHeightEl.value) : 0;
+          // Use defaults if inputs are empty or invalid
+          if (!eavesVal || eavesVal < 800) eavesVal = 2000;
+          if (!crestVal || crestVal < 1000) crestVal = 2400;
+          if (crestVal <= eavesVal) crestVal = eavesVal + 400;
+          
+          // Hipped roof minimum dimensions: 2500mm x 3000mm
+          var HIPPED_MIN_W = 2500;
+          var HIPPED_MIN_D = 3000;
+          var curState = store.getState();
+          var unitMode = getUnitMode(curState);
+          var curW = curState.w || 0;
+          var curD = curState.d || 0;
+          var dimChanged = false;
+          
+          if (curW < HIPPED_MIN_W) {
+            curW = HIPPED_MIN_W;
+            dimChanged = true;
+          }
+          if (curD < HIPPED_MIN_D) {
+            curD = HIPPED_MIN_D;
+            dimChanged = true;
+          }
+          
+          // Hipped roof minimum overhang: 200mm
+          var HIPPED_MIN_OVERHANG = 200;
+          var curOverhang = curState.overhang || {};
+          var curUniformOvh = curOverhang.uniform_mm || 0;
+          var ovhChanged = false;
+          
+          if (curUniformOvh < HIPPED_MIN_OVERHANG) {
+            curUniformOvh = HIPPED_MIN_OVERHANG;
+            ovhChanged = true;
+          }
+          
+          if (dimChanged || ovhChanged) {
+            console.log("[ROOF_STYLE_CHANGE] Hipped roof selected - enforcing minimums: dims=" + curW + "x" + curD + "mm, overhang=" + curUniformOvh + "mm");
+            // Set a flag to prevent writeActiveDims from overwriting our changes
+            window.__skipNextWriteActiveDims = true;
+            // Set everything in one state update - dimensions, overhang, roof style, and heights
+            var stateUpdate = { 
+              roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } 
+            };
+            if (dimChanged) {
+              stateUpdate.w = curW;
+              stateUpdate.d = curD;
+              stateUpdate.dim = { frameW_mm: curW, frameD_mm: curD };
+            }
+            if (ovhChanged) {
+              stateUpdate.overhang = { uniform_mm: curUniformOvh };
+            }
+            store.setState(stateUpdate);
+            // Update UI inputs to match
+            if (dimChanged) {
+              if (wInputEl) wInputEl.value = formatDimension(curW, unitMode);
+              if (dInputEl) dInputEl.value = formatDimension(curD, unitMode);
+            }
+            if (ovhChanged && overUniformEl) {
+              overUniformEl.value = formatDimension(curUniformOvh, unitMode);
+            }
+          } else {
+            console.log("[ROOF_STYLE_CHANGE] Initializing hipped heights: eaves=" + eavesVal + ", crest=" + crestVal);
+            store.setState({ roof: { style: v, hipped: { heightToEaves_mm: eavesVal, heightToCrest_mm: crestVal } } });
+          }
+        } else {
+          store.setState({ roof: { style: v } });
+        }
         applyWallHeightUiLock(store.getState());
         updateRoofHeightBlocks(v);
+        updateRoofCoveringOptions(v);
       });
     }
 
+    /**
+     * Restrict roof covering options based on roof style.
+     * Hipped roofs only support Synthetic Slate Tiles.
+     * @param {string} roofStyle - "apex", "pent", or "hipped"
+     */
+    function updateRoofCoveringOptions(roofStyle) {
+      if (!roofCoveringStyleEl) return;
+      
+      var feltOpt = roofCoveringStyleEl.querySelector('option[value="felt"]');
+      var epdmOpt = roofCoveringStyleEl.querySelector('option[value="epdm"]');
+      var slateOpt = roofCoveringStyleEl.querySelector('option[value="slate"]');
+      
+      if (roofStyle === "hipped") {
+        // Hipped: only slate tiles supported
+        if (feltOpt) feltOpt.disabled = true;
+        if (epdmOpt) epdmOpt.disabled = true;
+        if (slateOpt) slateOpt.disabled = false;
+        
+        // Force selection to slate if currently on a disabled option
+        if (roofCoveringStyleEl.value !== "slate") {
+          roofCoveringStyleEl.value = "slate";
+          store.setState({ roof: { covering: "slate" } });
+        }
+      } else {
+        // Apex/Pent: all options available
+        if (feltOpt) feltOpt.disabled = false;
+        if (epdmOpt) epdmOpt.disabled = false;
+        if (slateOpt) slateOpt.disabled = false;
+      }
+    }
 
 function commitPentHeightsFromInputs() {
       if (!roofMinHeightEl || !roofMaxHeightEl) return;
@@ -3508,7 +4086,7 @@ function commitPentHeightsFromInputs() {
       
       // Pent height constraints: 1000-2400mm for both walls
       var PENT_MIN = 1000;
-      var PENT_MAX = 2400;
+      var PENT_MAX = 2800;
       
       var minVal = parseFloat(roofMinHeightEl.value) || 0;
       var maxVal = parseFloat(roofMaxHeightEl.value) || 0;
@@ -3581,6 +4159,52 @@ function commitApexHeightsFromInputs() {
       store.setState({ roof: { apex: { heightToEaves_mm: eaves, heightToCrest_mm: crest } } });
     }
 
+    // Commit hipped roof heights from UI inputs to state
+    function commitHippedHeightsFromInputs() {
+      if (!roofHippedEavesHeightEl || !roofHippedCrestHeightEl) return;
+
+      var s = store.getState();
+      var roofStyle = (s.roof && s.roof.style) ? s.roof.style : "apex";
+      if (roofStyle !== "hipped") return;
+      
+      // Hipped height constraints: same as apex
+      var HIPPED_EAVE_MIN = 800;
+      var HIPPED_EAVE_MAX = 2800;
+      var HIPPED_CREST_MIN = 1000;
+      var HIPPED_CREST_MAX = 4500;
+      
+      var unitMode = getUnitMode(s);
+      var eavesVal = parseFloat(roofHippedEavesHeightEl.value) || 0;
+      var crestVal = parseFloat(roofHippedCrestHeightEl.value) || 0;
+      
+      if (unitMode === "imperial") {
+        eavesVal = Math.round(eavesVal * 25.4);
+        crestVal = Math.round(crestVal * 25.4);
+      }
+
+      // Clamp to valid ranges
+      var eaves = clamp(Math.floor(eavesVal), HIPPED_EAVE_MIN, HIPPED_EAVE_MAX);
+      var crest = clamp(Math.floor(crestVal), HIPPED_CREST_MIN, HIPPED_CREST_MAX);
+
+      // Ensure crest > eaves (need some pitch)
+      if (crest <= eaves) {
+        crest = eaves + 100;
+        if (crest > HIPPED_CREST_MAX) {
+          crest = HIPPED_CREST_MAX;
+          eaves = crest - 100;
+        }
+      }
+
+      // Reflect clamp immediately in UI
+      try { 
+        roofHippedEavesHeightEl.value = String(eaves);
+        roofHippedCrestHeightEl.value = String(crest); 
+      } catch (e0) {}
+
+      console.log("[HIPPED_HEIGHTS] Committing eaves=" + eaves + ", crest=" + crest);
+      store.setState({ roof: { hipped: { heightToEaves_mm: eaves, heightToCrest_mm: crest } } });
+    }
+
 if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
       if (!isPentRoofStyle(store.getState())) return;
       commitPentHeightsFromInputs();
@@ -3593,6 +4217,10 @@ if (roofMinHeightEl) wireCommitOnly(roofMinHeightEl, function () {
     // Commit-only (blur/Enter) so changes deterministically trigger state->rebuild in the same pathway as other controls.
     if (roofApexEavesHeightEl) wireCommitOnly(roofApexEavesHeightEl, commitApexHeightsFromInputs);
    if (roofApexCrestHeightEl) wireCommitOnly(roofApexCrestHeightEl, commitApexHeightsFromInputs);
+
+    // Wire up hipped height inputs
+    if (roofHippedEavesHeightEl) wireCommitOnly(roofHippedEavesHeightEl, commitHippedHeightsFromInputs);
+    if (roofHippedCrestHeightEl) wireCommitOnly(roofHippedCrestHeightEl, commitHippedHeightsFromInputs);
 
     // Apex trusses (incl. gable ends): user-selected count
     // Apex trusses (incl. gable ends): user-selected count
@@ -3705,6 +4333,57 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       next.covering = on;
       store.setState({ vis: { roofParts: next } });
       console.log("[vis] roof covering=", on ? "ON" : "OFF");
+    });
+
+    // Slate-specific toggles (tiles and membrane/battens)
+    var vRoofTilesEl = $("vRoofTiles");
+    if (vRoofTilesEl) vRoofTilesEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofTilesVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.tiles = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof tiles=", on ? "ON" : "OFF");
+    });
+
+    var vRoofMembraneBattensEl = $("vRoofMembraneBattens");
+    if (vRoofMembraneBattensEl) vRoofMembraneBattensEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofMembraneBattensVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.membraneBattens = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof membraneBattens=", on ? "ON" : "OFF");
+    });
+
+    if (vRoofInsulationEl) vRoofInsulationEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofInsulationVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.insulation = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof insulation=", on ? "ON" : "OFF");
+    });
+
+    if (vRoofPlyEl) vRoofPlyEl.addEventListener("change", function (e) {
+      var on = !!(e && e.target && e.target.checked);
+      // Apply visibility immediately for responsiveness
+      try { applyRoofPlyVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      var s = store.getState();
+      var cur = (s && s.vis && s.vis.roofParts && typeof s.vis.roofParts === "object") ? s.vis.roofParts : null;
+      var next = cur ? Object.assign({}, cur) : {};
+      next.ply = on;
+      store.setState({ vis: { roofParts: next } });
+      console.log("[vis] roof ply=", on ? "ON" : "OFF");
     });
 
     if (vBaseAllEl) vBaseAllEl.addEventListener("change", function(e){
@@ -3826,6 +4505,35 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       console.log("[vis] attachment wall outer=", on ? "ON" : "OFF");
     });
 
+    // Attachment roof granular visibility controls
+    if (vAttRoofStructureEl) vAttRoofStructureEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofStructureVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofStructure: on } } });
+      console.log("[vis] attachment roof structure=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofOsbEl) vAttRoofOsbEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofOsbVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofOsb: on } } });
+      console.log("[vis] attachment roof OSB=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofCoveringEl) vAttRoofCoveringEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofCoveringVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofCovering: on } } });
+      console.log("[vis] attachment roof covering=", on ? "ON" : "OFF");
+    });
+
+    if (vAttRoofInsulationEl) vAttRoofInsulationEl.addEventListener("change", function (e) {
+      var on = !!e.target.checked;
+      try { applyAttachmentRoofInsulationVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
+      store.setState({ vis: { attachments: { roofInsulation: on } } });
+      console.log("[vis] attachment roof insulation=", on ? "ON" : "OFF");
+    });
+
     // Developer panel attachment visibility controls (sync with main controls)
     function syncDevAttToMain(devEl, mainEl) {
       if (devEl && mainEl) {
@@ -3894,6 +4602,12 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     }
 
 function writeActiveDims() {
+      // Skip if flagged (e.g., when hipped roof enforces minimum dimensions)
+      if (window.__skipNextWriteActiveDims) {
+        console.log("[writeActiveDims] Skipping - dimension change already applied by roof style change");
+        window.__skipNextWriteActiveDims = false;
+        return;
+      }
       var s = store.getState();
       var unitMode = getUnitMode(s);
       var w, d;
@@ -3965,6 +4679,7 @@ if (unitMode === "imperial") {
       var roofD = Math.max(1, Math.floor(frameD + sumZ));
 
       console.log("[writeActiveDims] Updating store with frameW_mm:", frameW, "frameD_mm:", frameD);
+      
       store.setState({
         dim: { frameW_mm: frameW, frameD_mm: frameD },
         dimInputs: {
@@ -4026,6 +4741,11 @@ function parseOverhangInput(val) {
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
+    if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
+      store.setState({ roof: { covering: roofCoveringStyleEl.value } }); 
+      // Toggle visibility toggles based on covering type
+      updateRoofCoveringToggles(roofCoveringStyleEl.value);
+    });
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });
@@ -4233,6 +4953,56 @@ function parseOverhangInput(val) {
     }
 
     /**
+     * Get available wall names for an attachment based on which main wall it's attached to.
+     * The wall touching the main building ("inner") is always absent.
+     * @param {string} attachToWall - "left"|"right"|"front"|"back"
+     * @returns {string[]} Available wall names
+     */
+    function getAttachmentWallNames(attachToWall) {
+      if (attachToWall === "left" || attachToWall === "right") {
+        return ["front", "back", "outer"];
+      } else {
+        return ["left", "right", "outer"];
+      }
+    }
+
+    /**
+     * Patch a single opening within an attachment's walls.openings array.
+     * @param {string} attId - Attachment ID
+     * @param {string} openingId - Opening ID within that attachment
+     * @param {object} patch - Fields to merge into the opening
+     */
+    function patchAttachmentOpening(attId, openingId, patch) {
+      var atts = getAttachmentsFromState(store.getState());
+      var updated = atts.map(function(att) {
+        if (att.id !== attId) return att;
+        var openings = Array.isArray(att.walls?.openings) ? att.walls.openings.slice() : [];
+        var patchedOpenings = openings.map(function(o) {
+          if (String(o.id) !== String(openingId)) return o;
+          return Object.assign({}, o, patch);
+        });
+        return deepMerge(att, { walls: { openings: patchedOpenings } });
+      });
+      setAttachments(updated);
+    }
+
+    /**
+     * Remove an opening from an attachment's walls.openings array.
+     * @param {string} attId - Attachment ID
+     * @param {string} openingId - Opening ID to remove
+     */
+    function removeAttachmentOpening(attId, openingId) {
+      var atts = getAttachmentsFromState(store.getState());
+      var updated = atts.map(function(att) {
+        if (att.id !== attId) return att;
+        var openings = Array.isArray(att.walls?.openings) ? att.walls.openings.slice() : [];
+        var filtered = openings.filter(function(o) { return String(o.id) !== String(openingId); });
+        return deepMerge(att, { walls: { openings: filtered } });
+      });
+      setAttachments(updated);
+    }
+
+    /**
      * Calculate the maximum allowed height for an attachment's inner edge
      * based on the main building's fascia bottom position
      */
@@ -4265,9 +5035,30 @@ function parseOverhangInput(val) {
     /**
      * Get max apex crest height for attachment buildings.
      * Must be 5mm below main building eaves.
+     * EXCEPTION: For front/back attachments on apex primary (parallel ridges),
+     * crest can go up to 50mm below the primary's apex.
+     * @param {object} mainState - The main building state
+     * @param {string} [attachWall] - Optional attachment wall ("front"|"back"|"left"|"right")
      */
-    function getMaxApexCrestHeight(mainState) {
+    function getMaxApexCrestHeight(mainState, attachWall) {
       var roofStyle = (mainState.roof && mainState.roof.style) || "apex";
+      
+      // Check if ridges run parallel (apex primary + front/back attachment)
+      var roofRidgesParallel = roofStyle === "apex" && 
+        (attachWall === "front" || attachWall === "back");
+      
+      if (roofRidgesParallel) {
+        // For parallel ridges, can go up to 50mm below primary apex
+        var apex = mainState.roof && mainState.roof.apex;
+        var mainCrest = Number(
+          (apex && apex.heightToCrest_mm) ||
+          (apex && apex.crestHeight_mm) ||
+          2200
+        );
+        return mainCrest - 50;
+      }
+      
+      // Otherwise, use existing eaves-based limit
       var mainEaves;
       if (roofStyle === "apex") {
         var apex = mainState.roof && mainState.roof.apex;
@@ -4289,9 +5080,11 @@ function parseOverhangInput(val) {
     /**
      * Get default apex values for attachment buildings.
      * Returns { crest, eaves } with correct defaults.
+     * @param {object} mainState - The main building state
+     * @param {string} [attachWall] - Optional attachment wall ("front"|"back"|"left"|"right")
      */
-    function getDefaultApexValues(mainState) {
-      var maxCrest = getMaxApexCrestHeight(mainState);
+    function getDefaultApexValues(mainState, attachWall) {
+      var maxCrest = getMaxApexCrestHeight(mainState, attachWall);
       return {
         crest: maxCrest,
         eaves: 1300  // Andrew's preferred default
@@ -4410,6 +5203,285 @@ function parseOverhangInput(val) {
           wallsSection.appendChild(wallsRow);
           body.appendChild(wallsSection);
 
+          // === Openings Section (Doors & Windows) ===
+          var openingsSection = document.createElement("div");
+          openingsSection.className = "att-section";
+          openingsSection.innerHTML = '<div class="att-section-title">Openings</div>';
+
+          // Determine available walls based on attachment orientation
+          var attOpeningWalls = getAttachmentWallNames(attachWall);
+          var attOpenings = Array.isArray(att.walls?.openings) ? att.walls.openings : [];
+
+          // Add Door / Add Window buttons
+          var openingsBtnRow = document.createElement("div");
+          openingsBtnRow.className = "att-row";
+          openingsBtnRow.style.cssText = "gap:8px;margin-bottom:8px;";
+
+          var addAttDoorBtn = document.createElement("button");
+          addAttDoorBtn.type = "button";
+          addAttDoorBtn.className = "att-add-opening-btn";
+          addAttDoorBtn.textContent = "+ Add Door";
+          addAttDoorBtn.addEventListener("click", (function(thisAttId, walls) {
+            return function() {
+              var currentAtts = getAttachmentsFromState(store.getState());
+              var thisAtt = currentAtts.find(function(a) { return a.id === thisAttId; });
+              if (!thisAtt) return;
+              var existingOpenings = Array.isArray(thisAtt.walls?.openings) ? thisAtt.walls.openings : [];
+              var newId = "att-door-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+              var newDoor = {
+                id: newId,
+                wall: walls[0],
+                type: "door",
+                style: "standard",
+                enabled: true,
+                x_mm: 200,
+                width_mm: 800,
+                height_mm: 1900,
+                handleSide: "left",
+                isOpen: false
+              };
+              existingOpenings.push(newDoor);
+              patchAttachmentById(thisAttId, { walls: { openings: existingOpenings } });
+            };
+          })(attId, attOpeningWalls));
+          openingsBtnRow.appendChild(addAttDoorBtn);
+
+          var addAttWindowBtn = document.createElement("button");
+          addAttWindowBtn.type = "button";
+          addAttWindowBtn.className = "att-add-opening-btn";
+          addAttWindowBtn.textContent = "+ Add Window";
+          addAttWindowBtn.addEventListener("click", (function(thisAttId, walls) {
+            return function() {
+              var currentAtts = getAttachmentsFromState(store.getState());
+              var thisAtt = currentAtts.find(function(a) { return a.id === thisAttId; });
+              if (!thisAtt) return;
+              var existingOpenings = Array.isArray(thisAtt.walls?.openings) ? thisAtt.walls.openings : [];
+              var newId = "att-win-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+              var newWindow = {
+                id: newId,
+                wall: walls[0],
+                type: "window",
+                enabled: true,
+                x_mm: 300,
+                y_mm: 1050,
+                width_mm: 600,
+                height_mm: 400
+              };
+              existingOpenings.push(newWindow);
+              patchAttachmentById(thisAttId, { walls: { openings: existingOpenings } });
+            };
+          })(attId, attOpeningWalls));
+          openingsBtnRow.appendChild(addAttWindowBtn);
+
+          openingsSection.appendChild(openingsBtnRow);
+
+          // List existing openings
+          if (attOpenings.length === 0) {
+            var noOpeningsHint = document.createElement("div");
+            noOpeningsHint.className = "att-hint";
+            noOpeningsHint.textContent = "(No doors or windows)";
+            openingsSection.appendChild(noOpeningsHint);
+          } else {
+            var openingsList = document.createElement("div");
+            openingsList.className = "att-openings-list";
+
+            for (var oi = 0; oi < attOpenings.length; oi++) {
+              (function(opening, thisAttId, walls) {
+                var openingId = String(opening.id || "");
+                var isDoor = opening.type === "door";
+                var openingItem = document.createElement("div");
+                openingItem.className = "att-opening-item";
+
+                // Row 1: Type label + Wall + Remove
+                var row1 = document.createElement("div");
+                row1.className = "att-opening-row";
+
+                var typeTag = document.createElement("span");
+                typeTag.className = "att-opening-type " + (isDoor ? "door-tag" : "window-tag");
+                typeTag.textContent = isDoor ? "🚪 Door" : "🪟 Window";
+                row1.appendChild(typeTag);
+
+                var wallLabel = document.createElement("label");
+                wallLabel.className = "att-opening-field";
+                wallLabel.innerHTML = "<span>Wall</span>";
+                var wallSelect = document.createElement("select");
+                for (var wi = 0; wi < walls.length; wi++) {
+                  var opt = document.createElement("option");
+                  opt.value = walls[wi];
+                  opt.textContent = walls[wi].charAt(0).toUpperCase() + walls[wi].slice(1);
+                  if (opening.wall === walls[wi]) opt.selected = true;
+                  wallSelect.appendChild(opt);
+                }
+                wallSelect.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { wall: this.value });
+                  };
+                })(openingId, thisAttId));
+                wallLabel.appendChild(wallSelect);
+                row1.appendChild(wallLabel);
+
+                var removeOpeningBtn = document.createElement("button");
+                removeOpeningBtn.type = "button";
+                removeOpeningBtn.className = "att-opening-remove";
+                removeOpeningBtn.textContent = "✕";
+                removeOpeningBtn.title = "Remove this opening";
+                removeOpeningBtn.addEventListener("click", (function(oId, aId) {
+                  return function() {
+                    removeAttachmentOpening(aId, oId);
+                  };
+                })(openingId, thisAttId));
+                row1.appendChild(removeOpeningBtn);
+
+                openingItem.appendChild(row1);
+
+                // Row 2: Position + Size
+                var row2 = document.createElement("div");
+                row2.className = "att-opening-row";
+
+                var xLabel = document.createElement("label");
+                xLabel.className = "att-opening-field";
+                xLabel.innerHTML = "<span>X pos (mm)</span>";
+                var xInput = document.createElement("input");
+                xInput.type = "number";
+                xInput.value = String(opening.x_mm || 0);
+                xInput.min = "0";
+                xInput.step = "50";
+                xInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { x_mm: parseInt(this.value, 10) || 0 });
+                  };
+                })(openingId, thisAttId));
+                xLabel.appendChild(xInput);
+                row2.appendChild(xLabel);
+
+                var wLabel = document.createElement("label");
+                wLabel.className = "att-opening-field";
+                wLabel.innerHTML = "<span>Width (mm)</span>";
+                var wInput = document.createElement("input");
+                wInput.type = "number";
+                wInput.value = String(opening.width_mm || (isDoor ? 800 : 600));
+                wInput.min = "200";
+                wInput.step = "50";
+                wInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { width_mm: parseInt(this.value, 10) || 600 });
+                  };
+                })(openingId, thisAttId));
+                wLabel.appendChild(wInput);
+                row2.appendChild(wLabel);
+
+                var hLabel = document.createElement("label");
+                hLabel.className = "att-opening-field";
+                hLabel.innerHTML = "<span>Height (mm)</span>";
+                var hInput = document.createElement("input");
+                hInput.type = "number";
+                hInput.value = String(opening.height_mm || (isDoor ? 1900 : 400));
+                hInput.min = "200";
+                hInput.step = "50";
+                hInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { height_mm: parseInt(this.value, 10) || 400 });
+                  };
+                })(openingId, thisAttId));
+                hLabel.appendChild(hInput);
+                row2.appendChild(hLabel);
+
+                openingItem.appendChild(row2);
+
+                // Row 3: Door-specific options (style, hinge, open) or Window-specific (Y position)
+                if (isDoor) {
+                  var row3 = document.createElement("div");
+                  row3.className = "att-opening-row";
+
+                  var doorWidth = Math.floor(Number(opening.width_mm || 800));
+
+                  var styleLabel = document.createElement("label");
+                  styleLabel.className = "att-opening-field";
+                  styleLabel.innerHTML = "<span>Style</span>";
+                  var styleSel = document.createElement("select");
+                  var styleHtml = '<option value="standard">Standard</option>';
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-standard">Double Standard</option>';
+                  }
+                  styleHtml += '<option value="mortise-tenon">Mortise & Tenon</option>';
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-mortise-tenon">Double M&T</option>';
+                  }
+                  if (doorWidth > 1200) {
+                    styleHtml += '<option value="french">French Doors</option>';
+                  }
+                  styleSel.innerHTML = styleHtml;
+                  styleSel.value = String(opening.style || "standard");
+                  styleSel.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { style: this.value });
+                    };
+                  })(openingId, thisAttId));
+                  styleLabel.appendChild(styleSel);
+                  row3.appendChild(styleLabel);
+
+                  var hingeLabel = document.createElement("label");
+                  hingeLabel.className = "att-opening-field";
+                  hingeLabel.innerHTML = "<span>Hinge</span>";
+                  var hingeSel = document.createElement("select");
+                  hingeSel.innerHTML = '<option value="left">Left</option><option value="right">Right</option>';
+                  hingeSel.value = String(opening.handleSide || "left");
+                  hingeSel.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { handleSide: this.value });
+                    };
+                  })(openingId, thisAttId));
+                  hingeLabel.appendChild(hingeSel);
+                  row3.appendChild(hingeLabel);
+
+                  var openLabel = document.createElement("label");
+                  openLabel.className = "att-opening-field att-opening-checkbox";
+                  var openCheck = document.createElement("input");
+                  openCheck.type = "checkbox";
+                  openCheck.checked = !!(opening.isOpen);
+                  openCheck.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { isOpen: this.checked });
+                    };
+                  })(openingId, thisAttId));
+                  openLabel.appendChild(openCheck);
+                  openLabel.appendChild(document.createTextNode(" Open"));
+                  row3.appendChild(openLabel);
+
+                  openingItem.appendChild(row3);
+                } else {
+                  // Window: Y position
+                  var row3w = document.createElement("div");
+                  row3w.className = "att-opening-row";
+
+                  var yLabel = document.createElement("label");
+                  yLabel.className = "att-opening-field";
+                  yLabel.innerHTML = "<span>Y pos (mm)</span>";
+                  var yInput = document.createElement("input");
+                  yInput.type = "number";
+                  yInput.value = String(opening.y_mm || 1050);
+                  yInput.min = "200";
+                  yInput.step = "50";
+                  yInput.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { y_mm: parseInt(this.value, 10) || 1050 });
+                    };
+                  })(openingId, thisAttId));
+                  yLabel.appendChild(yInput);
+                  row3w.appendChild(yLabel);
+
+                  openingItem.appendChild(row3w);
+                }
+
+                openingsList.appendChild(openingItem);
+              })(attOpenings[oi], attId, attOpeningWalls);
+            }
+
+            openingsSection.appendChild(openingsList);
+          }
+
+          body.appendChild(openingsSection);
+
           // === Roof Section ===
           var roofSection = document.createElement("div");
           roofSection.className = "att-section";
@@ -4465,8 +5537,9 @@ function parseOverhangInput(val) {
 
           // Apex roof options
           // Calculate correct defaults based on main building
-          var apexDefaults = getDefaultApexValues(mainState);
-          var maxApexCrest = getMaxApexCrestHeight(mainState);
+          var attachWall = att.attachTo?.wall || "left";
+          var apexDefaults = getDefaultApexValues(mainState, attachWall);
+          var maxApexCrest = getMaxApexCrestHeight(mainState, attachWall);
           var apexEaveVal = att.roof?.apex?.eaveHeight_mm || apexDefaults.eaves;
           var apexCrestVal = att.roof?.apex?.crestHeight_mm || apexDefaults.crest;
           // Ensure crest doesn't exceed max
@@ -4589,8 +5662,11 @@ function parseOverhangInput(val) {
           // When switching to apex, set correct default values
           if (type === "apex") {
             var currentState = store.getState();
-            var apexDefaults = getDefaultApexValues(currentState);
-            var maxCrest = getMaxApexCrestHeight(currentState);
+            var currentAttachments = getAttachmentsFromState(currentState);
+            var thisAtt = currentAttachments.find(function(a) { return a.id === attId; });
+            var thisAttachWall = thisAtt?.attachTo?.wall || "left";
+            var apexDefaults = getDefaultApexValues(currentState, thisAttachWall);
+            var maxCrest = getMaxApexCrestHeight(currentState, thisAttachWall);
 
             // Update UI inputs
             var eaveInput = editor.querySelector(".att-apex-eave");
@@ -4673,7 +5749,10 @@ function parseOverhangInput(val) {
       if (apexCrestInput) {
         apexCrestInput.addEventListener("change", function() {
           var currentState = store.getState();
-          var maxCrest = getMaxApexCrestHeight(currentState);
+          var currentAttachments = getAttachmentsFromState(currentState);
+          var thisAtt = currentAttachments.find(function(a) { return a.id === attId; });
+          var thisAttachWall = thisAtt?.attachTo?.wall || "left";
+          var maxCrest = getMaxApexCrestHeight(currentState, thisAttachWall);
           var crestVal = parseInt(this.value, 10) || 400;
           // Cap crest at max allowed
           if (crestVal > maxCrest) {
@@ -4702,12 +5781,45 @@ function parseOverhangInput(val) {
     // Add attachment button handler
     if (addAttachmentBtnEl) {
       addAttachmentBtnEl.addEventListener("click", function() {
-        var attWall = attachmentWallEl ? attachmentWallEl.value : "left";
+        var currentAtts = getAttachmentsFromState(store.getState());
+        
+        // Wall priority order: right, back, front, left
+        var wallPriority = ["right", "back", "front", "left"];
+        
+        // Find walls that already have attachments
+        var usedWalls = {};
+        for (var i = 0; i < currentAtts.length; i++) {
+          var wall = currentAtts[i].attachTo && currentAtts[i].attachTo.wall;
+          if (wall) usedWalls[wall] = true;
+        }
+        
+        // Find next available wall
+        var nextWall = null;
+        for (var j = 0; j < wallPriority.length; j++) {
+          if (!usedWalls[wallPriority[j]]) {
+            nextWall = wallPriority[j];
+            break;
+          }
+        }
+        
+        // If all walls have attachments, show alert and return
+        if (!nextWall) {
+          alert("All walls already have attachments. Remove an attachment first.");
+          return;
+        }
+        
+        // Use the selected wall from dropdown, but if it's already taken, use next available
+        var selectedWall = attachmentWallEl ? attachmentWallEl.value : "right";
+        var attWall = usedWalls[selectedWall] ? nextWall : selectedWall;
+        
+        // Update dropdown to show next available wall for future additions
+        if (attachmentWallEl) {
+          attachmentWallEl.value = nextWall;
+        }
 
         // Use the new createAttachment function from params.js
         var newAttachment = createAttachment(attWall);
 
-        var currentAtts = getAttachmentsFromState(store.getState());
         currentAtts.push(newAttachment);
         setAttachments(currentAtts);
       });
@@ -4718,6 +5830,46 @@ function parseOverhangInput(val) {
       removeAllAttachmentsBtnEl.addEventListener("click", function() {
         setAttachments([]);
       });
+    }
+
+    // Update attachment wall dropdown to show next available wall
+    function updateAttachmentWallDropdown() {
+      if (!attachmentWallEl) return;
+      
+      var currentAtts = getAttachmentsFromState(store.getState());
+      var wallPriority = ["right", "back", "front", "left"];
+      
+      // Find walls that already have attachments
+      var usedWalls = {};
+      for (var i = 0; i < currentAtts.length; i++) {
+        var wall = currentAtts[i].attachTo && currentAtts[i].attachTo.wall;
+        if (wall) usedWalls[wall] = true;
+      }
+      
+      // Update dropdown options to show availability
+      var options = attachmentWallEl.options;
+      for (var j = 0; j < options.length; j++) {
+        var opt = options[j];
+        var wallName = opt.value;
+        var isUsed = usedWalls[wallName];
+        opt.disabled = isUsed;
+        opt.text = wallName.charAt(0).toUpperCase() + wallName.slice(1) + (isUsed ? " (used)" : "");
+      }
+      
+      // Select next available wall
+      for (var k = 0; k < wallPriority.length; k++) {
+        if (!usedWalls[wallPriority[k]]) {
+          attachmentWallEl.value = wallPriority[k];
+          break;
+        }
+      }
+      
+      // Disable add button if all walls are used
+      if (addAttachmentBtnEl) {
+        var allUsed = wallPriority.every(function(w) { return usedWalls[w]; });
+        addAttachmentBtnEl.disabled = allUsed;
+        addAttachmentBtnEl.textContent = allUsed ? "All walls used" : "+ Add Attachment";
+      }
     }
 
     // Track if we need to re-render after blur
@@ -4731,11 +5883,15 @@ function parseOverhangInput(val) {
         (activeEl.tagName === "INPUT" || activeEl.tagName === "SELECT");
       if (!isEditingAttachment) {
         renderAttachmentsList();
+        updateAttachmentWallDropdown();
         pendingAttachmentRender = false;
       } else {
         pendingAttachmentRender = true;
       }
     });
+    
+    // Initial update of dropdown
+    updateAttachmentWallDropdown();
 
     // Re-render when user finishes editing (on blur from attachment inputs)
     if (attachmentsListEl) {
@@ -5034,8 +6190,76 @@ function parseOverhangInput(val) {
 
     // ==================== END DIVIDER HANDLERS ====================
 
+    // ==================== RELATIVE OPENING POSITIONING (Card #111) ====================
+    // Track previous dimensions to detect changes and reposition openings proportionally
+    var __prevDimW = null;
+    var __prevDimD = null;
+    var __repositioningInProgress = false;
+
+    function repositionOpeningsOnDimensionChange(s) {
+      if (__repositioningInProgress) return; // Prevent infinite loop
+      
+      var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
+      var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
+      
+      // Initialize previous dimensions on first run
+      if (__prevDimW === null) { __prevDimW = newW; }
+      if (__prevDimD === null) { __prevDimD = newD; }
+      
+      // Check if dimensions changed
+      if (newW === __prevDimW && newD === __prevDimD) return;
+      if (!newW || !newD || !__prevDimW || !__prevDimD) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
+      if (openings.length === 0) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var widthRatio = newW / __prevDimW;
+      var depthRatio = newD / __prevDimD;
+      
+      // Only reposition if ratio is significantly different from 1
+      if (Math.abs(widthRatio - 1) < 0.001 && Math.abs(depthRatio - 1) < 0.001) {
+        __prevDimW = newW;
+        __prevDimD = newD;
+        return;
+      }
+      
+      var updatedOpenings = openings.map(function(o) {
+        var newO = Object.assign({}, o);
+        // Front/back walls: x position scales with width
+        // Left/right walls: x position scales with depth
+        if (o.wall === 'front' || o.wall === 'back') {
+          if (o.x_mm != null) {
+            newO.x_mm = Math.round(o.x_mm * widthRatio);
+          }
+        } else if (o.wall === 'left' || o.wall === 'right') {
+          if (o.x_mm != null) {
+            newO.x_mm = Math.round(o.x_mm * depthRatio);
+          }
+        }
+        return newO;
+      });
+      
+      console.log("[repositionOpenings] Dimension change detected - widthRatio:", widthRatio.toFixed(3), "depthRatio:", depthRatio.toFixed(3));
+      
+      __prevDimW = newW;
+      __prevDimD = newD;
+      __repositioningInProgress = true;
+      store.setState({ walls: { openings: updatedOpenings } });
+      __repositioningInProgress = false;
+    }
+    // ==================== END RELATIVE OPENING POSITIONING ====================
+
     store.onChange(function (s) {
       console.log("[store.onChange] State changed, dim:", s.dim);
+      repositionOpeningsOnDimensionChange(s);
       var v = syncInvalidOpeningsIntoState() || { doors: { invalidById: {}, invalidIds: [] }, windows: { invalidById: {}, invalidIds: [] } };
       // Add divider validation to v
       v.dividers = validateDividers(s);
@@ -5118,6 +6342,13 @@ function parseOverhangInput(val) {
         } catch (ePent) {
           console.error("[INIT] commitPentHeightsFromInputs error:", ePent);
         }
+        try {
+          console.log("[INIT] Calling commitHippedHeightsFromInputs...");
+          commitHippedHeightsFromInputs();
+          console.log("[INIT] commitHippedHeightsFromInputs done");
+        } catch (eHipped) {
+          console.error("[INIT] commitHippedHeightsFromInputs error:", eHipped);
+        }
       } else {
         console.log("[INIT] Skipping commitHeights - state loaded from URL parameters");
       }
@@ -5175,6 +6406,7 @@ function parseOverhangInput(val) {
 
       try {
         applyWallHeightUiLock(store.getState());
+        updateInsulationControlsForVariant(store.getState());
       } catch (eWallLock) {
         console.error("[INIT] ERROR in applyWallHeightUiLock:", eWallLock);
       }

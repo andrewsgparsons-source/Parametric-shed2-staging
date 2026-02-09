@@ -1,0 +1,129 @@
+{
+  "name": "Hero Homepage Sequence",
+  "description": "360° camera orbit with morphing shed configurations",
+  "fps": 12,
+  "totalFrames": 360,
+  "duration": "30 seconds",
+  "cameraPath": "orbit-v3-ISSUED.json",
+  "keyframes": [
+    {
+      "frame": 1,
+      "degree": 0,
+      "description": "Start - Default apex shed 1800×2400, full visibility"
+    },
+    {
+      "frame": 45,
+      "degree": 45,
+      "description": "Begin dimension morph, vis OFF: deck"
+    },
+    {
+      "frame": 60,
+      "degree": 60,
+      "description": "Vis OFF: insulation"
+    },
+    {
+      "frame": 75,
+      "degree": 75,
+      "description": "Vis OFF: grids"
+    },
+    {
+      "frame": 91,
+      "degree": 90,
+      "description": "Vis OFF: roof parts (osb, covering), roof switches to pent"
+    },
+    {
+      "frame": 105,
+      "degree": 105,
+      "description": "Vis OFF: openings removed"
+    },
+    {
+      "frame": 136,
+      "degree": 135,
+      "description": "Dimensions reach 4000×4000"
+    },
+    {
+      "frame": 160,
+      "degree": 160,
+      "description": "Cladding OFF"
+    },
+    {
+      "frame": 181,
+      "degree": 180,
+      "description": "Midpoint - Frame only, pent, max size, no cladding"
+    },
+    {
+      "frame": 210,
+      "degree": 210,
+      "description": "Cladding ON"
+    },
+    {
+      "frame": 225,
+      "degree": 225,
+      "description": "Vis ON: openings restored"
+    },
+    {
+      "frame": 240,
+      "degree": 240,
+      "description": "Vis ON: roof parts (osb, covering)"
+    },
+    {
+      "frame": 255,
+      "degree": 255,
+      "description": "Vis ON: grids"
+    },
+    {
+      "frame": 271,
+      "degree": 270,
+      "description": "Vis ON: insulation, roof switches to apex"
+    },
+    {
+      "frame": 280,
+      "degree": 280,
+      "description": "Vis ON: deck - visibility fully restored"
+    },
+    {
+      "frame": 301,
+      "degree": 300,
+      "description": "Dimensions back to 1800×2400"
+    },
+    {
+      "frame": 360,
+      "degree": 359,
+      "description": "End - loops to start"
+    }
+  ],
+  "visibilitySpec": {
+    "baseAlwaysOn": true,
+    "track1_otherVis": {
+      "offSequence": {
+        "45": "deck off",
+        "60": "insulation off",
+        "75": "grids off",
+        "91": "roofParts off",
+        "105": "openings off"
+      },
+      "onSequence": {
+        "225": "openings on",
+        "240": "roofParts on",
+        "255": "grids on",
+        "271": "insulation on",
+        "280": "deck on"
+      }
+    },
+    "track2_cladding": {
+      "off": 160,
+      "on": 210
+    }
+  },
+  "dimensionSpec": {
+    "start": { "w": 1800, "d": 2400 },
+    "peak": { "w": 4000, "d": 4000 },
+    "peakFrame": 136,
+    "returnFrame": 301
+  },
+  "roofSpec": {
+    "apex": "frames 1-90 and 271-360",
+    "pent": "frames 91-270"
+  },
+  "mirrorNote": "Frames 180-360 mirror 0-180 (same shed configs in reverse, only camera differs)"
+}

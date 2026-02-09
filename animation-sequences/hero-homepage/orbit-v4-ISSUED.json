@@ -1,0 +1,62 @@
+{
+  "name": "orbit-v4",
+  "status": "ISSUED",
+  "created": "2026-02-01",
+  "description": "30-second loopable 360° orbit - REVERSED ZOOM (close at start/end, wide at middle)",
+  
+  "duration": {
+    "seconds": 30,
+    "frames": 360,
+    "fps": 12
+  },
+  
+  "startPosition": {
+    "alpha": -2.15,
+    "beta": 1.0,
+    "radius": 5.5,
+    "target": { "x": 1.15, "y": 0.75, "z": 0.80 },
+    "note": "Starts CLOSE (zoomed in)"
+  },
+  
+  "midpointPosition": {
+    "alpha": 0.99,
+    "beta": 1.25,
+    "radius": 8.5,
+    "target": { "x": 1.15, "y": 0.75, "z": 0.80 },
+    "note": "Middle is WIDE (zoomed out)"
+  },
+  
+  "motion": {
+    "alpha": {
+      "start": -2.15,
+      "delta": 6.283185307,
+      "note": "Full 360° (2π) rotation - unchanged from v3"
+    },
+    "radius": {
+      "close": 5.5,
+      "wide": 8.5,
+      "formula": "7.0 - 1.5 * cos(orbitAngle)",
+      "note": "INVERTED from v3: close at start/end, wide at middle"
+    },
+    "beta": {
+      "elevated": 1.0,
+      "eyeLevel": 1.25,
+      "formula": "1.125 - 0.125 * cos(orbitAngle)",
+      "note": "INVERTED from v3: elevated at start/end, eye-level at middle"
+    }
+  },
+  
+  "easing": {
+    "type": "trapezoidal",
+    "phases": {
+      "accelerate": { "start": 0, "end": 0.333, "type": "quadratic-in" },
+      "constant": { "start": 0.333, "end": 0.667, "type": "linear" },
+      "decelerate": { "start": 0.667, "end": 1.0, "type": "quadratic-out" }
+    },
+    "note": "Same easing as v3"
+  },
+  
+  "changelog": {
+    "v3_to_v4": "Inverted radius and beta oscillation - zoom starts close, goes wide at middle, returns close"
+  }
+}

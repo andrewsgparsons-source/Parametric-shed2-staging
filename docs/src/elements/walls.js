@@ -77,13 +77,28 @@ export function build3D(state, ctx, sectionContext) {
   const WALL_RISE_MM = 168; // Floor frame rise (applied externally in index.js)
 
   let height = Math.max(100, Math.floor(state.walls?.height_mm || 2400));
-  if (state && state.roof && String(state.roof.style || "") === "apex") {
+  const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
+  
+  // 🚨 HIPPED WALLS DEBUG - Plain text logs (no %c formatting)
+  console.log(`[WALLS_BUILD_START] roofStyle="${roofStyle}" variant="${variant}"`);
+  console.log(`[WALLS_BUILD_STATE] roof.style=${state?.roof?.style} roof.hipped=`, JSON.stringify(state?.roof?.hipped));
+  
+  if (roofStyle === "apex") {
     const apexH = resolveApexHeightsMm(state);
     if (apexH && Number.isFinite(apexH.eaves_mm)) {
       // Wall frame height = eaves height - external wall rise shift
       const minWallH_mm = Math.max(100, 2 * 50 + 1); // 2 plates (approx) + 1mm
       height = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - WALL_RISE_MM));
       console.log(`[WALLS] Height to Eaves: ${apexH.eaves_mm}mm, WALL_RISE: ${WALL_RISE_MM}mm, Derived wall frame height: ${height}mm`);
+    }
+  } else if (roofStyle === "hipped") {
+    // HIPPED roofs: All four walls stop at eaves height (no gables)
+    const hippedH = resolveHippedHeightsMm(state);
+    console.log(`[WALLS_HIPPED_DEBUG] hippedH=`, hippedH);
+    if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+      const minWallH_mm = Math.max(100, 2 * 50 + 1);
+      height = Math.max(minWallH_mm, Math.floor(hippedH.eaves_mm - WALL_RISE_MM));
+      console.log(`[WALLS-HIPPED] Height to Eaves: ${hippedH.eaves_mm}mm, WALL_RISE: ${WALL_RISE_MM}mm, Derived wall frame height: ${height}mm`);
     }
   }
 
@@ -1218,7 +1233,9 @@ for (let i = 0; i < wins.length; i++) {
 console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
           // Only proceed if we have a roof style that needs clipping
-          if (roofStyle === "pent" || roofStyle === "apex") {
+          console.log('[DEBUG_ROOF_CLIP_CONDITION] roofStyle=', roofStyle, 'checking if pent/apex/hipped matches');
+          if (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped") {
+            console.log('[DEBUG_ROOF_CLIP_ENTERED] Entered roof clip block for roofStyle=', roofStyle);
             const CUT_EXTRA_ROOF = 120;
             const cutDepthRoof = Math.max(1, Math.floor(CLAD_T + 2 * CUT_EXTRA_ROOF));
 
@@ -1435,6 +1452,82 @@ if (apexRoofModel) {
                 try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
               }
               // Note: apex roofs don't need left/right wall trimming as they have constant eaves height
+            }
+
+            // HIPPED roofs: ALL four walls get a horizontal cut at eaves height
+            console.log('[HIPPED_CHECK] roofStyle=', roofStyle, 'cutterCSG=', cutterCSG, 'wallId=', wallId, 'isAlongX=', isAlongX);
+            if (roofStyle === "hipped" && !cutterCSG) {
+              const hippedH = resolveHippedHeightsMm(state);
+              console.log('[HIPPED_DEBUG] resolveHippedHeightsMm returned:', hippedH);
+              if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+                const WALL_RISE_MM_HIPPED = 168;
+                // Cut height is at eaves, accounting for the wall rise shift
+                const cutHeight = Math.floor(hippedH.eaves_mm);
+
+                console.log('[HIPPED_CLAD_CUT]', {
+                  wallId,
+                  panelIndex,
+                  isAlongX,
+                  eavesHeight: hippedH.eaves_mm,
+                  cutHeight
+                });
+
+                if (isAlongX) {
+                  // Front/back walls
+                  const wallOutsideFaceWorldZ = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+                  const cutMinZ_mm = Math.floor(wallOutsideFaceWorldZ - CUT_EXTRA_ROOF);
+                  const cutMaxZ_mm = Math.floor(wallOutsideFaceWorldZ + CLAD_T + CUT_EXTRA_ROOF);
+
+                  const xA0 = origin.x + Math.floor(Number(panelStart || 0));
+                  const xA1 = xA0 + Math.floor(Number(panelLen || 0));
+
+                  const cutterHeight = 20000;
+                  const cutterBox = BABYLON.MeshBuilder.CreateBox(
+                    `cladroofcut-${String(wallId)}-panel-${String(panelIndex)}-hipped`,
+                    {
+                      width: (xA1 - xA0) / 1000,
+                      height: cutterHeight / 1000,
+                      depth: (cutMaxZ_mm - cutMinZ_mm) / 1000
+                    },
+                    scene
+                  );
+                  cutterBox.position = new BABYLON.Vector3(
+                    (xA0 + (xA1 - xA0) / 2) / 1000,
+                    (cutHeight + cutterHeight / 2) / 1000,
+                    (cutMinZ_mm + (cutMaxZ_mm - cutMinZ_mm) / 2) / 1000
+                  );
+
+                  try { cutterCSG = BABYLON.CSG.FromMesh(cutterBox); } catch (e) { cutterCSG = null; }
+                  try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
+                } else {
+                  // Left/right walls
+                  const wallOutsideFaceWorldX = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+                  const cutMinX_mm = Math.floor(wallOutsideFaceWorldX - CUT_EXTRA_ROOF);
+                  const cutMaxX_mm = Math.floor(wallOutsideFaceWorldX + CLAD_T + CUT_EXTRA_ROOF);
+
+                  const zA0 = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + Math.floor(Number(panelStart || 0))));
+                  const zA1 = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + Math.floor(Number(panelStart || 0)) + Math.floor(Number(panelLen || 0))));
+
+                  const cutterHeight = 20000;
+                  const cutterBox = BABYLON.MeshBuilder.CreateBox(
+                    `cladroofcut-${String(wallId)}-panel-${String(panelIndex)}-hipped`,
+                    {
+                      width: (cutMaxX_mm - cutMinX_mm) / 1000,
+                      height: cutterHeight / 1000,
+                      depth: (zA1 - zA0) / 1000
+                    },
+                    scene
+                  );
+                  cutterBox.position = new BABYLON.Vector3(
+                    (cutMinX_mm + (cutMaxX_mm - cutMinX_mm) / 2) / 1000,
+                    (cutHeight + cutterHeight / 2) / 1000,
+                    (zA0 + (zA1 - zA0) / 2) / 1000
+                  );
+
+                  try { cutterCSG = BABYLON.CSG.FromMesh(cutterBox); } catch (e) { cutterCSG = null; }
+                  try { if (cutterBox && !cutterBox.isDisposed()) cutterBox.dispose(false, true); } catch (e) {}
+                }
+              }
             }
 
             if (cutterCSG) {
@@ -1940,12 +2033,22 @@ function scheduleFollowUpFinalisers() {
             
             // Calculate heights like build3D does
             let heightLocal = Math.max(100, Math.floor(s.walls?.height_mm || 2400));
-            if (s && s.roof && String(s.roof.style || "") === "apex") {
+            const roofStyleLocal = s && s.roof ? String(s.roof.style || "") : "";
+            if (roofStyleLocal === "apex") {
               const baseRise_mm = resolveBaseRiseMm(s);
               const apexH = resolveApexHeightsMm(s);
               if (apexH && Number.isFinite(apexH.eaves_mm)) {
                 const minWallH_mm = Math.max(100, 2 * 50 + 1);
                 heightLocal = Math.max(minWallH_mm, Math.floor(apexH.eaves_mm - baseRise_mm));
+              }
+            } else if (roofStyleLocal === "hipped") {
+              // Hipped roof: corner boards must stop at eaves height
+              // Use hardcoded WALL_RISE (168mm) to match main wall height calculation
+              const WALL_RISE_MM = 168;
+              const hippedH = resolveHippedHeightsMm(s);
+              if (hippedH && Number.isFinite(hippedH.eaves_mm)) {
+                const minWallH_mm = Math.max(100, 2 * 50 + 1);
+                heightLocal = Math.max(minWallH_mm, Math.floor(hippedH.eaves_mm - WALL_RISE_MM));
               }
             }
             
@@ -2906,7 +3009,8 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
     buildWallInsulationAndLining(
       state, scene, materials, dims, height, prof, wallThk, plateY,
       flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll,
-      showWallInsulation, showWallPlywood
+      showWallInsulation, showWallPlywood,
+      isPent, minH, maxH
     );
   }
 
@@ -2937,7 +3041,7 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
  * @param {boolean} [showPlywood=true] - Whether to show plywood lining
  * @private
  */
-function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true) {
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true, isPent = false, minH = height, maxH = height) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
   const PLY_THICKNESS = 12; // 12mm plywood internal lining
   const STUD_SPACING = prof.spacing || 400;
@@ -2964,8 +3068,24 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
   }
   
   // Insulation height (between plates)
+  // For pent roofs, height varies per wall and per position along slope walls
+  const frameW = Math.max(1, dims.w);
+  function wallInsHeight(wallId) {
+    if (!isPent) return Math.max(1, height - 2 * plateY);
+    if (wallId === "left") return Math.max(1, minH - 2 * plateY);
+    if (wallId === "right") return Math.max(1, maxH - 2 * plateY);
+    // Front/back: use maxH (tallest side) — individual bays will be trimmed per-position via insHeightAtX
+    return Math.max(1, maxH - 2 * plateY);
+  }
+  // For pent slope walls (front/back), get insulation height at a given X position
+  function insHeightAtX(x_mm) {
+    if (!isPent) return Math.max(1, height - 2 * plateY);
+    const t = frameW > 0 ? Math.max(0, Math.min(1, x_mm / frameW)) : 0;
+    const wallH = Math.floor(minH + (maxH - minH) * t);
+    return Math.max(1, wallH - 2 * plateY);
+  }
   const insHeight = Math.max(1, height - 2 * plateY);
-  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY);
+  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY, 'isPent:', isPent, 'minH:', minH, 'maxH:', maxH);
   
   // Helper: get openings (doors + windows) for a specific wall
   function getOpeningsForWall(wallId) {
@@ -3010,9 +3130,23 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const prefix = meshPrefix + `wall-${wallId}-ins-`;
     const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
     
+    // Pent roof: front/back are slope walls with varying height along X
+    const isSlopeWall = isPent && isAlongX && (wallId === "front" || wallId === "back");
+    // Per-wall insulation height (flat for non-slope walls)
+    const localInsH = wallInsHeight(wallId);
+    
+    // Get the insulation top Y at a given X position along this wall
+    // For slope walls, use per-position height so panels follow the roof slope
+    function getInsTopY(x_mm) {
+      if (isSlopeWall) {
+        return plateY + insHeightAtX(x_mm);
+      }
+      return plateY + localInsH;
+    }
+    
     // Get openings for this wall
     const wallOpenings = getOpeningsForWall(wallId);
-    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length);
+    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length, 'isSlopeWall:', isSlopeWall, 'localInsH:', localInsH);
     
     // Calculate stud positions (same logic as main wall builder)
     const studPositions = [0]; // Start with corner stud
@@ -3040,6 +3174,9 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       }
       return null;
     }
+    
+    // Collect created insulation meshes (for CSG slope trim on pent slope walls)
+    const insMeshes = [];
     
     // Helper to create an insulation panel
     function createInsPanel(name, bayStart, bayEnd, yBottom, yTop) {
@@ -3075,11 +3212,53 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       ins.enableEdgesRendering();
       ins.edgesWidth = 1;
       ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+      insMeshes.push(ins);
       return ins;
     }
     
     // Only build insulation if showInsulation flag is true
     if (showInsulation) {
+      // NEW APPROACH: 
+      // 1. First, create BELOW/ABOVE panels for each opening (spanning across bays)
+      // 2. Then, fill remaining space in each bay with full-height panels
+      
+      const sillThickness = prof.studH || 100;
+      const headerThickness = prof.studH || 100;
+      
+      // Track which horizontal ranges are covered by openings (at different heights)
+      // We'll use this to avoid creating full-height panels that overlap openings
+      
+      // Step 1: Create BELOW and ABOVE panels for each opening (continuous, ignoring bay boundaries)
+      for (let oi = 0; oi < wallOpenings.length; oi++) {
+        const o = wallOpenings[oi];
+        const openingBottomY = plateY + Math.max(0, o.y0 || 0);
+        // Use height at opening midpoint for slope walls
+        const openingMidX = (o.x0 + o.x1) / 2;
+        const localTopY = getInsTopY(openingMidX);
+        const openingTopY = plateY + Math.max(0, o.y1 || (localTopY - plateY));
+        
+        // BELOW panel - spans full opening width (ignoring studs)
+        const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
+        if (insBelowTop > plateY + 50 && o.x1 > o.x0 + 30) {
+          if (createInsPanel(prefix + 'below-' + oi, o.x0, o.x1, plateY, insBelowTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added BELOW panel for opening ${oi}, x=${o.x0}-${o.x1}, height=${insBelowTop - plateY}mm`);
+          }
+        }
+        
+        // ABOVE panel - spans full opening width (ignoring studs)
+        const insAboveBottom = Math.min(localTopY, openingTopY + headerThickness);
+        const insAboveTop = localTopY;
+        if (insAboveTop > insAboveBottom + 50 && o.x1 > o.x0 + 30) {
+          if (createInsPanel(prefix + 'above-' + oi, o.x0, o.x1, insAboveBottom, insAboveTop)) {
+            insCount++;
+            console.log(`[WALL_INS] Added ABOVE panel for opening ${oi}, x=${o.x0}-${o.x1}, height=${insAboveTop - insAboveBottom}mm`);
+          }
+        }
+      }
+      
+      // Step 2: For each bay, fill remaining horizontal space with full-height panels
+      // We need to find gaps between openings and wall edges
       for (let i = 0; i < studPositions.length - 1; i++) {
         const studStart = studPositions[i] + studW; // After this stud
         const studEnd = studPositions[i + 1]; // Before next stud
@@ -3087,44 +3266,63 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         
         if (bayWidth < 10) continue;
         
-        const overlapping = getOverlappingOpening(studStart, studEnd);
+        // Find ALL openings that overlap this bay horizontally
+        const bayOpenings = wallOpenings.filter(o => studStart < o.x1 && studEnd > o.x0);
         
-        if (!overlapping) {
-          // No opening - fill entire bay with insulation
-          if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
+        if (bayOpenings.length === 0) {
+          // No openings - fill entire bay with insulation
+          // For slope walls, use height at bay midpoint
+          const bayMidX = (studStart + studEnd) / 2;
+          const bayTopY = getInsTopY(bayMidX);
+          if (createInsPanel(prefix + i, studStart, studEnd, plateY, bayTopY)) {
             insCount++;
           }
         } else {
-          // Bay overlaps with an opening - add partial insulation below and above
-          const openingBottomY = plateY + Math.max(0, overlapping.y0 || 0);
-          const openingTopY = plateY + Math.max(0, overlapping.y1 || insHeight);
+          // Sort openings by x0 to process left-to-right
+          bayOpenings.sort((a, b) => a.x0 - b.x0);
           
-          // Insulation BELOW the opening (from plate to sill area)
-          // Account for sill thickness (prof.studH)
-          const sillThickness = prof.studH || 100;
-          const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
-          if (insBelowTop > plateY + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-below', studStart, studEnd, plateY, insBelowTop)) {
-              insCount++;
-              console.log(`[WALL_INS] Added insulation BELOW opening in bay ${i}, height=${insBelowTop - plateY}mm`);
+          // Find horizontal gaps in this bay where we can place full-height insulation
+          let currentX = studStart;
+          
+          for (let j = 0; j < bayOpenings.length; j++) {
+            const o = bayOpenings[j];
+            // Clamp opening to bay boundaries
+            const openingStartInBay = Math.max(studStart, o.x0);
+            const openingEndInBay = Math.min(studEnd, o.x1);
+            
+            // Fill gap BEFORE this opening (if any)
+            if (openingStartInBay > currentX + 30) {
+              const gapMidX = (currentX + openingStartInBay) / 2;
+              const gapTopY = getInsTopY(gapMidX);
+              if (createInsPanel(prefix + i + '-gap-' + j, currentX, openingStartInBay, plateY, gapTopY)) {
+                insCount++;
+                console.log(`[WALL_INS] Added full-height panel in bay ${i} before opening, x=${currentX}-${openingStartInBay}`);
+              }
             }
+            
+            // Move current position past this opening
+            currentX = Math.max(currentX, openingEndInBay);
           }
           
-          // Insulation ABOVE the opening (from header to top plate)
-          // Account for header thickness
-          const headerThickness = prof.studH || 100;
-          const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
-          const insAboveTop = plateY + insHeight;
-          if (insAboveTop > insAboveBottom + 50) { // At least 50mm gap to be worth filling
-            if (createInsPanel(prefix + i + '-above', studStart, studEnd, insAboveBottom, insAboveTop)) {
+          // Fill gap AFTER all openings (if any remains in this bay)
+          if (studEnd > currentX + 30) {
+            const gapMidX = (currentX + studEnd) / 2;
+            const gapTopY = getInsTopY(gapMidX);
+            if (createInsPanel(prefix + i + '-gap-end', currentX, studEnd, plateY, gapTopY)) {
               insCount++;
-              console.log(`[WALL_INS] Added insulation ABOVE opening in bay ${i}, height=${insAboveTop - insAboveBottom}mm`);
+              console.log(`[WALL_INS] Added full-height panel in bay ${i} after openings, x=${currentX}-${studEnd}`);
             }
           }
         }
       }
       
       console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
+      
+      // Slope walls: panels are now built at per-position height (via getInsTopY)
+      // so CSG slope trim is no longer needed — each bay's panel follows the roof slope
+      if (isSlopeWall) {
+        console.log('[WALL_INS] Slope wall', wallId, '- panels built at per-position height, no CSG trim needed');
+      }
     }
     
     // Only build plywood if showPlywood flag is true
@@ -3134,7 +3332,11 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     // Lining sits on inside face of wall (inside the stud cavity)
     const plyW = isAlongX ? wallLen : PLY_THICKNESS;
     const plyD = isAlongX ? PLY_THICKNESS : wallLen;
-    const plyH = height; // Full wall height
+    // For pent roofs, use per-wall height; slope walls use maxH then get CSG-trimmed
+    const plyWallH = isPent
+      ? (wallId === "left" ? minH : wallId === "right" ? maxH : maxH)
+      : height;
+    const plyH = plyWallH; // Wall height for this specific wall
     
     // Position on inside face of wall (OUTSIDE the stud volume, on interior side)
     let plyX, plyZ;
@@ -3157,7 +3359,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const ply = BABYLON.MeshBuilder.CreateBox(plyPrefix + "panel", {
       width: plyW * 0.001,
       height: plyH * 0.001,
-      depth: plyD * 0.001
+      depth: plyD * 0.001,
+      updatable: true
     }, scene);
     
     ply.position = new BABYLON.Vector3(
@@ -3168,6 +3371,44 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     ply.material = plyMat;
     ply.parent = shedRoot;
     ply.metadata = { dynamic: true, sectionId: sectionId || null };
+    
+    // For pent slope walls (front/back), adjust box vertices to follow roof slope
+    // instead of CSG trimming (which was producing backwards slopes)
+    let plyMesh = ply; // Track current mesh (may be replaced by CSG result)
+    if (isSlopeWall) {
+      try {
+        const positions = ply.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const halfH_m = (plyH / 2) * 0.001;
+        const halfW_m = (wallLen / 2) * 0.001;
+        
+        // Adjust every "top" vertex (localY > 0) to follow the slope
+        for (let i = 0; i < positions.length; i += 3) {
+          const localY = positions[i + 1];
+          if (localY > 0) {
+            // Determine position along wall from local X
+            const localX = positions[i];
+            const x_mm = (localX + halfW_m) / (2 * halfW_m) * wallLen;
+            // getInsTopY returns the correct top Y in mm (plateY + insulation height)
+            const targetTopY_mm = getInsTopY(x_mm);
+            // Convert from world mm to local coordinates (centered at plyH/2)
+            positions[i + 1] = (targetTopY_mm - plyH / 2) * 0.001;
+          }
+        }
+        
+        ply.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+        // Recompute normals after vertex modification
+        const normals = [];
+        BABYLON.VertexData.ComputeNormals(positions, ply.getIndices(), normals);
+        ply.updateVerticesData(BABYLON.VertexBuffer.NormalKind, normals);
+        ply.refreshBoundingInfo();
+        
+        console.log('[WALL_INS] Adjusted ply vertices to follow pent slope for wall', wallId);
+      } catch (e) {
+        console.warn('[WALL_INS] Pent ply slope vertex adjustment failed for wall', wallId, e);
+      }
+    }
+    
+    // Enable edges AFTER vertex modification so edge buffer matches actual geometry
     ply.enableEdgesRendering();
     ply.edgesWidth = 2;
     ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
@@ -3225,8 +3466,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
               cutterCSG = cutterCSG.union(c);
             }
             
-            // Subtract from plywood
-            const plyCSG = BABYLON.CSG.FromMesh(ply);
+            // Subtract from plywood (use plyMesh which may be slope-trimmed)
+            const plyCSG = BABYLON.CSG.FromMesh(plyMesh);
             const resultCSG = plyCSG.subtract(cutterCSG);
             const resultMesh = resultCSG.toMesh(plyPrefix + "panel-cut", plyMat, scene, false);
             
@@ -3238,7 +3479,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             resultMesh.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
             
             // Dispose original and cutters
-            ply.dispose(false, true);
+            plyMesh.dispose(false, true);
             for (let ci = 0; ci < cutters.length; ci++) {
               cutters[ci].dispose(false, true);
             }
@@ -3246,7 +3487,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             console.log('[WALL_INS] Successfully cut openings from plywood for wall', wallId);
           } catch (e) {
             console.warn('[WALL_INS] CSG cutting failed for wall', wallId, e);
-            // Dispose cutters but keep original ply
+            // Dispose cutters but keep original plyMesh
             for (let ci = 0; ci < cutters.length; ci++) {
               cutters[ci].dispose(false, true);
             }
@@ -4307,6 +4548,51 @@ function resolveApexHeightsMm(state) {
   let crest_mm = (c == null) ? null : Math.max(0, c);
 
   if (eaves_mm != null && crest_mm != null && crest_mm < eaves_mm) crest_mm = eaves_mm;
+
+  return { eaves_mm, crest_mm };
+}
+
+/**
+ * Resolve hipped roof heights from state.
+ * Similar to resolveApexHeightsMm but for hipped roofs.
+ * Falls back to apex values then to sensible defaults (matching roof.js behavior).
+ */
+function resolveHippedHeightsMm(state) {
+  const hipped = state && state.roof && state.roof.hipped ? state.roof.hipped : null;
+  const apex = state && state.roof && state.roof.apex ? state.roof.apex : null;
+
+  function pickMm() {
+    for (let i = 0; i < arguments.length; i++) {
+      const n = Number(arguments[i]);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+    return null;
+  }
+
+  // Support likely key names - fall back through hipped -> apex -> defaults (matching roof.js)
+  const e = pickMm(
+    hipped && hipped.eavesHeight_mm,
+    hipped && hipped.heightToEaves_mm,
+    hipped && hipped.eaves_mm,
+    apex && apex.heightToEaves_mm,
+    apex && apex.eavesHeight_mm,
+    apex && apex.eaves_mm
+  );
+
+  const c = pickMm(
+    hipped && hipped.crestHeight_mm,
+    hipped && hipped.heightToCrest_mm,
+    hipped && hipped.crest_mm,
+    apex && apex.heightToCrest_mm,
+    apex && apex.crestHeight_mm,
+    apex && apex.crest_mm
+  );
+
+  // Default to 1850 eaves / 2400 crest (matching roof.js defaults)
+  let eaves_mm = (e == null) ? 1850 : Math.max(0, e);
+  let crest_mm = (c == null) ? 2400 : Math.max(0, c);
+
+  if (crest_mm < eaves_mm) crest_mm = eaves_mm;
 
   return { eaves_mm, crest_mm };
 }
