@@ -1092,12 +1092,13 @@ export function computeRoofData_Pent(state) {
   // We need to subtract floor and roof stacks to get wall frame height.
   // FLOOR_STACK = grid (50) + frame depth + floor OSB (18)
   // ROOF_STACK = rafter depth + roof OSB (18)
+  // NOTE: plateThickness is NOT included in FLOOR_STACK — it's part of the wall frame,
+  // not the floor. This must match walls.js pentStackAdjust calculation.
   const GRID_HEIGHT_MM = 50;
   const OSB_THK_MM = 18;
   const frameDepth_mm = Math.floor(Number(CONFIG?.timber?.d ?? 100));
   const rafterDepth_mm = baseW; // rafter depth = baseW (timber thickness)
-  const plateThickness_mm = Math.floor(Number(CONFIG?.timber?.w ?? 50));  // Wall top plate thickness
-  const FLOOR_STACK_MM = GRID_HEIGHT_MM + frameDepth_mm + OSB_THK_MM + plateThickness_mm;
+  const FLOOR_STACK_MM = GRID_HEIGHT_MM + frameDepth_mm + OSB_THK_MM;
   const ROOF_STACK_MM = rafterDepth_mm + OSB_THK_MM;
   const pentStackAdjust = FLOOR_STACK_MM + ROOF_STACK_MM;
   const minH = Math.max(
