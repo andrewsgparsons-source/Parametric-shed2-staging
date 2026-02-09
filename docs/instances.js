@@ -239,43 +239,74 @@ export function getBuiltInPresets() {
       category: "Workshop",
       description: "Spacious workshop with double windows for light.",
       state: {
-        dimMode: "frame",
-        dim: { frameW_mm: 4000, frameD_mm: 3000 },
-        roof: { style: "apex" },
-        walls: {
-          height_mm: 2400,
-          variant: "insulated",
-          openings: [
+        "w": 4000,
+        "d": 3000,
+        "dimMode": "frame",
+        "roof": {
+          "style": "apex",
+          "covering": "felt",
+          "apex": {
+            "heightToEaves_mm": 1900,
+            "heightToCrest_mm": 2330,
+            "trussCount": 3,
+            "tieBeam": "raised"
+          },
+          "pent": {
+            "minHeight_mm": 2300,
+            "maxHeight_mm": 2500
+          },
+          "hipped": {
+            "heightToEaves_mm": 2500,
+            "heightToCrest_mm": 3600
+          }
+        },
+        "overhang": {
+          "uniform_mm": 75
+        },
+        "walls": {
+          "variant": "insulated",
+          "height_mm": 2400,
+          "openings": [
             {
-              id: "door1",
-              wall: "front",
-              type: "door",
-              enabled: true,
-              x_mm: 200,
-              width_mm: 900,
-              height_mm: 2000
+              "id": "door1",
+              "wall": "front",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 1250,
+              "width_mm": 1500,
+              "height_mm": 1800,
+              "style": "double-standard",
+              "handleSide": "left",
+              "isOpen": false
             },
             {
-              id: "win1",
-              wall: "left",
-              type: "window",
-              enabled: true,
-              x_mm: 400,
-              y_mm: 900,
-              width_mm: 900,
-              height_mm: 600
+              "id": "win1",
+              "wall": "left",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 400,
+              "width_mm": 900,
+              "height_mm": 600,
+              "y_mm": 900
             },
             {
-              id: "win2",
-              wall: "left",
-              type: "window",
-              enabled: true,
-              x_mm: 1700,
-              y_mm: 900,
-              width_mm: 900,
-              height_mm: 600
+              "id": "win2",
+              "wall": "left",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 1700,
+              "width_mm": 900,
+              "height_mm": 600,
+              "y_mm": 900
             }
           ]
+        },
+        "cladding": {
+          "style": "overlap"
+        },
+        "frame": {
+          "thickness_mm": 50,
+          "depth_mm": 75
         }
       }
     },
