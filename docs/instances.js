@@ -679,39 +679,113 @@ export function getBuiltInPresets() {
       category: "Garage",
       description: "Large hipped roof garage with 2.4m double mortise & tenon doors.",
       state: {
-        "w": 3400,
+        "w": 4000,
         "d": 5000,
-        "dimMode": "frame",
-        "roof": {
-          "style": "hipped",
-          "hipped": {
-            "heightToEaves_mm": 2500,
-            "heightToCrest_mm": 3600
+        "vis": {
+          "base": true,
+          "frame": true,
+          "ins": true,
+          "deck": true,
+          "wallsEnabled": true,
+          "walls": {
+            "front": true,
+            "back": true,
+            "left": true,
+            "right": true
+          },
+          "wallIns": false,
+          "wallPly": false,
+          "cladding": true,
+          "roof": true,
+          "roofParts": {
+            "ply": false,
+            "insulation": false,
+            "membraneBattens": false
           }
         },
+        "dimMode": "frame",
+        "dimGap_mm": 50,
+        "dim": { "frameW_mm": 3400, "frameD_mm": 5000 },
         "overhang": {
-          "uniform_mm": 150
+          "uniform_mm": 300,
+          "front_mm": null,
+          "back_mm": null,
+          "left_mm": null,
+          "right_mm": null
+        },
+        "dimInputs": {
+          "baseW_mm": 3350,
+          "baseD_mm": 4950,
+          "frameW_mm": 3400,
+          "frameD_mm": 5000,
+          "roofW_mm": 4000,
+          "roofD_mm": 5600
+        },
+        "roof": {
+          "style": "hipped",
+          "covering": "slate",
+          "apex": {
+            "trussCount": 3,
+            "heightToEaves_mm": 1850,
+            "heightToCrest_mm": 2200,
+            "tieBeam": "eaves"
+          },
+          "pent": {
+            "minHeight_mm": 2400,
+            "maxHeight_mm": 2500
+          },
+          "hipped": {
+            "heightToEaves_mm": 2262,
+            "heightToCrest_mm": 3430
+          }
         },
         "walls": {
-          "variant": "basic",
+          "variant": "insulated",
+          "height_mm": 2400,
+          "insulated": {
+            "section": { "w": 50, "h": 100 },
+            "spacing": 400
+          },
+          "basic": {
+            "section": { "w": 50, "h": 100 },
+            "spacing": null
+          },
           "openings": [
             {
               "id": "door1",
               "wall": "front",
               "type": "door",
               "enabled": true,
-              "x_mm": 500,
-              "width_mm": 2400,
-              "height_mm": 2100,
+              "x_mm": 550,
+              "width_mm": 2300,
+              "height_mm": 1850,
               "style": "double-mortise-tenon",
-              "handleSide": "left",
-              "isOpen": false
+              "isOpen": true
             }
-          ]
+          ],
+          "invalidDoorIds": [],
+          "invalidWindowIds": []
         },
         "frame": {
           "thickness_mm": 50,
           "depth_mm": 100
+        },
+        "cladding": {
+          "style": "overlap"
+        },
+        "sections": {
+          "enabled": false,
+          "main": {
+            "id": "main",
+            "type": "rectangular",
+            "dimensions": null,
+            "roof": null,
+            "walls": null
+          },
+          "attachments": []
+        },
+        "dividers": {
+          "items": []
         }
       }
     }
