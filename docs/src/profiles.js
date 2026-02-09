@@ -368,6 +368,7 @@ export function generateViewerUrl(state) {
   if (state.roof) {
     compact.roof = {};
     if (state.roof.style) compact.roof.style = state.roof.style;
+    if (state.roof.covering) compact.roof.covering = state.roof.covering;
 
     // Apex params
     if (state.roof.apex) {
@@ -380,6 +381,9 @@ export function generateViewerUrl(state) {
       }
       if (state.roof.apex.trussCount != null) {
         compact.roof.apex.trussCount = state.roof.apex.trussCount;
+      }
+      if (state.roof.apex.tieBeam) {
+        compact.roof.apex.tieBeam = state.roof.apex.tieBeam;
       }
     }
 
@@ -427,6 +431,11 @@ export function generateViewerUrl(state) {
     }
   }
 
+
+  // Cladding style
+  if (state.cladding && state.cladding.style) {
+    compact.cladding = { style: state.cladding.style };
+  }
   // Frame section
   if (state.frame && state.frame.thickness_mm && state.frame.depth_mm) {
     compact.frame = {
@@ -576,6 +585,10 @@ export function generateViewerUrl(state) {
       if (av.wallLeft === false) { compactAv.wallLeft = false; hasAttVisChanges = true; }
       if (av.wallRight === false) { compactAv.wallRight = false; hasAttVisChanges = true; }
       if (av.wallOuter === false) { compactAv.wallOuter = false; hasAttVisChanges = true; }
+      if (av.roofStructure === false) { compactAv.roofStructure = false; hasAttVisChanges = true; }
+      if (av.roofOsb === false) { compactAv.roofOsb = false; hasAttVisChanges = true; }
+      if (av.roofCovering === false) { compactAv.roofCovering = false; hasAttVisChanges = true; }
+      if (av.roofInsulation === false) { compactAv.roofInsulation = false; hasAttVisChanges = true; }
 
       if (hasAttVisChanges) {
         compactVis.attachments = compactAv;
@@ -1081,6 +1094,7 @@ export function generateProfileUrl(profileName, state) {
   if (state.roof) {
     compact.roof = {};
     if (state.roof.style) compact.roof.style = state.roof.style;
+    if (state.roof.covering) compact.roof.covering = state.roof.covering;
 
     if (state.roof.apex) {
       compact.roof.apex = {};
@@ -1092,6 +1106,9 @@ export function generateProfileUrl(profileName, state) {
       }
       if (state.roof.apex.trussCount != null) {
         compact.roof.apex.trussCount = state.roof.apex.trussCount;
+      }
+      if (state.roof.apex.tieBeam) {
+        compact.roof.apex.tieBeam = state.roof.apex.tieBeam;
       }
     }
 
@@ -1137,6 +1154,11 @@ export function generateProfileUrl(profileName, state) {
     }
   }
 
+
+  // Cladding style
+  if (state.cladding && state.cladding.style) {
+    compact.cladding = { style: state.cladding.style };
+  }
   // Frame section
   if (state.frame && state.frame.thickness_mm && state.frame.depth_mm) {
     compact.frame = {
@@ -1277,6 +1299,10 @@ export function generateProfileUrl(profileName, state) {
       if (av.wallLeft === false) { compactAv.wallLeft = false; hasAttVisChanges = true; }
       if (av.wallRight === false) { compactAv.wallRight = false; hasAttVisChanges = true; }
       if (av.wallOuter === false) { compactAv.wallOuter = false; hasAttVisChanges = true; }
+      if (av.roofStructure === false) { compactAv.roofStructure = false; hasAttVisChanges = true; }
+      if (av.roofOsb === false) { compactAv.roofOsb = false; hasAttVisChanges = true; }
+      if (av.roofCovering === false) { compactAv.roofCovering = false; hasAttVisChanges = true; }
+      if (av.roofInsulation === false) { compactAv.roofInsulation = false; hasAttVisChanges = true; }
 
       if (hasAttVisChanges) {
         compactVis.attachments = compactAv;
