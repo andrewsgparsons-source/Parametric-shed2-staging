@@ -3009,7 +3009,8 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
     buildWallInsulationAndLining(
       state, scene, materials, dims, height, prof, wallThk, plateY,
       flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll,
-      showWallInsulation, showWallPlywood
+      showWallInsulation, showWallPlywood,
+      isPent, minH, maxH
     );
   }
 
@@ -3040,7 +3041,7 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
  * @param {boolean} [showPlywood=true] - Whether to show plywood lining
  * @private
  */
-function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true) {
+function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true, isPent = false, minH = height, maxH = height) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
   const PLY_THICKNESS = 12; // 12mm plywood internal lining
   const STUD_SPACING = prof.spacing || 400;
@@ -3067,8 +3068,24 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
   }
   
   // Insulation height (between plates)
+  // For pent roofs, height varies per wall and per position along slope walls
+  const frameW = Math.max(1, dims.w);
+  function wallInsHeight(wallId) {
+    if (!isPent) return Math.max(1, height - 2 * plateY);
+    if (wallId === "left") return Math.max(1, minH - 2 * plateY);
+    if (wallId === "right") return Math.max(1, maxH - 2 * plateY);
+    // Front/back: use maxH (tallest side) — individual bays will be trimmed per-position via insHeightAtX
+    return Math.max(1, maxH - 2 * plateY);
+  }
+  // For pent slope walls (front/back), get insulation height at a given X position
+  function insHeightAtX(x_mm) {
+    if (!isPent) return Math.max(1, height - 2 * plateY);
+    const t = frameW > 0 ? Math.max(0, Math.min(1, x_mm / frameW)) : 0;
+    const wallH = Math.floor(minH + (maxH - minH) * t);
+    return Math.max(1, wallH - 2 * plateY);
+  }
   const insHeight = Math.max(1, height - 2 * plateY);
-  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY);
+  console.log('[WALL_INS] insHeight:', insHeight, 'plateY:', plateY, 'isPent:', isPent, 'minH:', minH, 'maxH:', maxH);
   
   // Helper: get openings (doors + windows) for a specific wall
   function getOpeningsForWall(wallId) {
@@ -3113,9 +3130,21 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const prefix = meshPrefix + `wall-${wallId}-ins-`;
     const plyPrefix = meshPrefix + `wall-${wallId}-ply-`;
     
+    // Pent roof: front/back are slope walls with varying height along X
+    const isSlopeWall = isPent && isAlongX && (wallId === "front" || wallId === "back");
+    // Per-wall insulation height (flat for non-slope walls)
+    const localInsH = wallInsHeight(wallId);
+    
+    // Get the insulation top Y at a given X position along this wall
+    // For slope walls, height varies; for flat walls, it's constant
+    function getInsTopY(x_mm) {
+      if (isSlopeWall) return plateY + insHeightAtX(x_mm);
+      return plateY + localInsH;
+    }
+    
     // Get openings for this wall
     const wallOpenings = getOpeningsForWall(wallId);
-    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length);
+    console.log('[WALL_INS] Building wall:', wallId, 'openings:', wallOpenings.length, 'isSlopeWall:', isSlopeWall, 'localInsH:', localInsH);
     
     // Calculate stud positions (same logic as main wall builder)
     const studPositions = [0]; // Start with corner stud
@@ -3197,7 +3226,10 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       for (let oi = 0; oi < wallOpenings.length; oi++) {
         const o = wallOpenings[oi];
         const openingBottomY = plateY + Math.max(0, o.y0 || 0);
-        const openingTopY = plateY + Math.max(0, o.y1 || insHeight);
+        // Use height at opening midpoint for slope walls
+        const openingMidX = (o.x0 + o.x1) / 2;
+        const localTopY = getInsTopY(openingMidX);
+        const openingTopY = plateY + Math.max(0, o.y1 || (localTopY - plateY));
         
         // BELOW panel - spans full opening width (ignoring studs)
         const insBelowTop = Math.max(plateY, openingBottomY - sillThickness);
@@ -3209,8 +3241,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         }
         
         // ABOVE panel - spans full opening width (ignoring studs)
-        const insAboveBottom = Math.min(plateY + insHeight, openingTopY + headerThickness);
-        const insAboveTop = plateY + insHeight;
+        const insAboveBottom = Math.min(localTopY, openingTopY + headerThickness);
+        const insAboveTop = localTopY;
         if (insAboveTop > insAboveBottom + 50 && o.x1 > o.x0 + 30) {
           if (createInsPanel(prefix + 'above-' + oi, o.x0, o.x1, insAboveBottom, insAboveTop)) {
             insCount++;
@@ -3233,7 +3265,10 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         
         if (bayOpenings.length === 0) {
           // No openings - fill entire bay with insulation
-          if (createInsPanel(prefix + i, studStart, studEnd, plateY, plateY + insHeight)) {
+          // For slope walls, use height at bay midpoint
+          const bayMidX = (studStart + studEnd) / 2;
+          const bayTopY = getInsTopY(bayMidX);
+          if (createInsPanel(prefix + i, studStart, studEnd, plateY, bayTopY)) {
             insCount++;
           }
         } else {
@@ -3251,7 +3286,9 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             
             // Fill gap BEFORE this opening (if any)
             if (openingStartInBay > currentX + 30) {
-              if (createInsPanel(prefix + i + '-gap-' + j, currentX, openingStartInBay, plateY, plateY + insHeight)) {
+              const gapMidX = (currentX + openingStartInBay) / 2;
+              const gapTopY = getInsTopY(gapMidX);
+              if (createInsPanel(prefix + i + '-gap-' + j, currentX, openingStartInBay, plateY, gapTopY)) {
                 insCount++;
                 console.log(`[WALL_INS] Added full-height panel in bay ${i} before opening, x=${currentX}-${openingStartInBay}`);
               }
@@ -3263,7 +3300,9 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
           
           // Fill gap AFTER all openings (if any remains in this bay)
           if (studEnd > currentX + 30) {
-            if (createInsPanel(prefix + i + '-gap-end', currentX, studEnd, plateY, plateY + insHeight)) {
+            const gapMidX = (currentX + studEnd) / 2;
+            const gapTopY = getInsTopY(gapMidX);
+            if (createInsPanel(prefix + i + '-gap-end', currentX, studEnd, plateY, gapTopY)) {
               insCount++;
               console.log(`[WALL_INS] Added full-height panel in bay ${i} after openings, x=${currentX}-${studEnd}`);
             }
@@ -3281,7 +3320,11 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     // Lining sits on inside face of wall (inside the stud cavity)
     const plyW = isAlongX ? wallLen : PLY_THICKNESS;
     const plyD = isAlongX ? PLY_THICKNESS : wallLen;
-    const plyH = height; // Full wall height
+    // For pent roofs, use per-wall height; slope walls use maxH then get CSG-trimmed
+    const plyWallH = isPent
+      ? (wallId === "left" ? minH : wallId === "right" ? maxH : maxH)
+      : height;
+    const plyH = plyWallH; // Wall height for this specific wall
     
     // Position on inside face of wall (OUTSIDE the stud volume, on interior side)
     let plyX, plyZ;
@@ -3318,6 +3361,63 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     ply.enableEdgesRendering();
     ply.edgesWidth = 2;
     ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+    
+    // For pent slope walls (front/back), trim ply to follow the roof slope
+    let plyMesh = ply; // Track current mesh (may be replaced by CSG result)
+    if (isSlopeWall) {
+      const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+      if (hasCSG) {
+        try {
+          // Create a wedge-shaped cutter above the slope line
+          // The slope goes from minH (x=0) to maxH (x=frameW)
+          // We create a large box positioned and rotated to cut everything above the slope
+          const slopeRise = maxH - minH;
+          const slopeAngle = Math.atan2(slopeRise, frameW);
+          
+          // Cutter box: tall enough to remove everything above slope
+          const cutterHeight = slopeRise + 500; // Extra margin
+          const cutterLen = Math.sqrt(frameW * frameW + slopeRise * slopeRise) + 200;
+          
+          const slopeCutter = BABYLON.MeshBuilder.CreateBox(plyPrefix + "slope-cutter", {
+            width: cutterLen * 0.001,
+            height: cutterHeight * 0.001,
+            depth: (PLY_THICKNESS + 40) * 0.001
+          }, scene);
+          
+          // Position at midpoint of slope line, shifted up by half cutter height
+          const midX = origin.x + frameW / 2;
+          const midY = (minH + maxH) / 2 + cutterHeight / 2;
+          slopeCutter.position = new BABYLON.Vector3(
+            midX * 0.001,
+            midY * 0.001,
+            plyZ * 0.001
+          );
+          // Rotate to match slope angle
+          slopeCutter.rotation.z = -slopeAngle;
+          
+          // Force world matrix computation before CSG
+          slopeCutter.computeWorldMatrix(true);
+          
+          const plyCSG = BABYLON.CSG.FromMesh(ply);
+          const cutCSG = BABYLON.CSG.FromMesh(slopeCutter);
+          const resultCSG = plyCSG.subtract(cutCSG);
+          const trimmedPly = resultCSG.toMesh(plyPrefix + "panel-trimmed", plyMat, scene, false);
+          
+          trimmedPly.parent = shedRoot;
+          trimmedPly.metadata = { dynamic: true, sectionId: sectionId || null };
+          trimmedPly.enableEdgesRendering();
+          trimmedPly.edgesWidth = 2;
+          trimmedPly.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
+          
+          ply.dispose(false, true);
+          slopeCutter.dispose(false, true);
+          plyMesh = trimmedPly;
+          console.log('[WALL_INS] Trimmed ply to pent slope for wall', wallId);
+        } catch (e) {
+          console.warn('[WALL_INS] Pent ply slope trim failed for wall', wallId, e);
+        }
+      }
+    }
     
     // If wall has openings, cut them out using CSG
     if (wallOpenings.length > 0) {
@@ -3372,8 +3472,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
               cutterCSG = cutterCSG.union(c);
             }
             
-            // Subtract from plywood
-            const plyCSG = BABYLON.CSG.FromMesh(ply);
+            // Subtract from plywood (use plyMesh which may be slope-trimmed)
+            const plyCSG = BABYLON.CSG.FromMesh(plyMesh);
             const resultCSG = plyCSG.subtract(cutterCSG);
             const resultMesh = resultCSG.toMesh(plyPrefix + "panel-cut", plyMat, scene, false);
             
@@ -3385,7 +3485,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             resultMesh.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
             
             // Dispose original and cutters
-            ply.dispose(false, true);
+            plyMesh.dispose(false, true);
             for (let ci = 0; ci < cutters.length; ci++) {
               cutters[ci].dispose(false, true);
             }
@@ -3393,7 +3493,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
             console.log('[WALL_INS] Successfully cut openings from plywood for wall', wallId);
           } catch (e) {
             console.warn('[WALL_INS] CSG cutting failed for wall', wallId, e);
-            // Dispose cutters but keep original ply
+            // Dispose cutters but keep original plyMesh
             for (let ci = 0; ci < cutters.length; ci++) {
               cutters[ci].dispose(false, true);
             }
