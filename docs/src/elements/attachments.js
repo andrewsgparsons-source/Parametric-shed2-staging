@@ -39,6 +39,8 @@
  */
 
 import { CONFIG } from '../params.js';
+import * as Doors from './doors.js';
+import * as Windows from './windows.js';
 
 // Constants matching main building
 const GRID_HEIGHT_MM = 50;
@@ -55,9 +57,13 @@ const RAFTER_SPACING_MM = 600;
 
 // Wall framing constants (matching main building walls.js)
 const STUD_W_MM = 50;       // Stud width (plate height)
-const STUD_H_MM = 75;       // Stud depth = wall thickness (basic variant)
-const STUD_SPACING_MM = 400; // Center-to-center stud spacing
+const STUD_H_BASIC_MM = 75;       // Stud depth = wall thickness (basic variant)
+const STUD_H_INSULATED_MM = 100;  // Stud depth = wall thickness (insulated variant)
+const STUD_SPACING_MM = 400; // Center-to-center stud spacing (insulated variant, max)
+const BASIC_MAX_PANEL_MM = 2400;  // Max panel width before splitting (basic variant)
 const PLATE_HEIGHT_MM = STUD_W_MM;  // Bottom/top plate height = stud width
+const PIR_THICKNESS_MM = 50;  // 50mm PIR insulation (insulated variant)
+const PLY_THICKNESS_MM = 12;  // 12mm plywood internal lining (insulated variant)
 
 // Cladding constants (matching main building walls.js)
 const CLAD_H_MM = 140;      // Height per course (horizontal board row)
@@ -390,6 +396,18 @@ export function build3D(mainState, attachment, ctx) {
     }
   }
 
+  // Build door/window openings for this attachment
+  const attOpenings = Array.isArray(attachment.walls?.openings) ? attachment.walls.openings : [];
+  if (attOpenings.length > 0 && wallsEnabled) {
+    console.log("[attachments] Building openings for", attId, ":", attOpenings.length, "openings");
+    try {
+      buildAttachmentOpenings(scene, root, attId, extentX, extentZ, attachWall, attachment, position, materials, ctx,
+                              wallHeightInner, wallHeightOuter, roofType);
+    } catch (openErr) {
+      console.error("[attachments] ERROR building openings:", openErr);
+    }
+  }
+
   // Build roof structure (rafters, OSB, covering, fascia)
   // Get timber dimensions from main building's frame settings
   const frameThickness = Math.max(1, Math.floor(Number(mainState?.frame?.thickness_mm || 50)));
@@ -641,13 +659,14 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
   // Wall base Y = floor surface = grid + floor frame + floor OSB
   const wallBaseY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM; // 50 + 100 + 18 = 168
 
-  // Wall framing dimensions
+  // Resolve wall variant (basic or insulated) — determines stud depth & layout
+  const variant = attachment.walls?.variant || "basic";
   const plateH = PLATE_HEIGHT_MM;   // 50mm - plate height
-  const wallThk = STUD_H_MM;        // 75mm - wall thickness (stud depth)
+  const wallThk = variant === "insulated" ? STUD_H_INSULATED_MM : STUD_H_BASIC_MM;
   const studW = STUD_W_MM;          // 50mm - stud width
-  const studSpacing = STUD_SPACING_MM; // 400mm center-to-center
+  const studSpacing = STUD_SPACING_MM; // 400mm max (insulated only; basic uses panel logic)
 
-  console.log("[attachments] Wall params - baseY:", wallBaseY, "wallThk:", wallThk, "plateH:", plateH);
+  console.log("[attachments] Wall params - variant:", variant, "baseY:", wallBaseY, "wallThk:", wallThk, "plateH:", plateH);
 
   // Get materials - use main building materials for consistency
   const plateMat = materials?.plate || createMaterial(scene, `att-${attId}-plate-mat`, 0.65, 0.45, 0.25);
@@ -862,8 +881,59 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
     mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-cladding', part: 'gable' };
   }
 
+  // ---- Variant-aware wall builder ----
+  // For BASIC: uses panel-based layout (2400mm max, 3 studs per panel)
+  // For INSULATED: uses regular ≤400mm stud centres + insulation/ply
+  function buildVariantWall(wallId, axis, length, origin, isSloped, heightAt, mkSlopedPlate, openings) {
+    if (variant === "basic") {
+      // Convert openings to interval format for panel computation
+      const intervals = openings.map(o => ({
+        x0: o.x_mm || 0,
+        x1: (o.x_mm || 0) + (o.width_mm || 0),
+        ...o
+      }));
+      const panels = computeAttBasicPanels(length, studW, intervals);
+      console.log("[attachments] Basic variant wall:", wallId, "panels:", panels.length, panels);
+
+      // Build sloped top plate for the full wall (if sloped)
+      if (isSloped && mkSlopedPlate) {
+        const yTop0 = wallBaseY + heightAt(0);
+        const yTop1 = wallBaseY + heightAt(length);
+        if (axis === 'x') {
+          mkSlopedPlate(`att-${attId}-${wallId}-plate-top`, length, wallThk,
+                        origin.x, origin.z, yTop0, yTop1, plateMat);
+        } else {
+          mkSlopedPlate(`att-${attId}-${wallId}-plate-top`, wallThk, length,
+                        origin.x, origin.z, yTop0, yTop1, plateMat);
+        }
+      }
+
+      for (let p = 0; p < panels.length; p++) {
+        const pan = panels[p];
+        buildAttBasicPanel(scene, root, attId, wallId, p, axis, pan.len, origin,
+                           pan.start, wallBaseY, wallThk, plateH, studW, plateMat, studMat,
+                           isSloped, heightAt, mkBox, intervals);
+      }
+    } else {
+      // Insulated: regular stud spacing (≤400mm centres)
+      buildWallPanel(scene, root, attId, wallId, axis, length, origin, wallBaseY, wallThk,
+                     plateH, studW, studSpacing, plateMat, studMat, isSloped, heightAt,
+                     mkBox, mkSlopedPlate, openings);
+
+      // Build insulation + plywood lining for insulated walls
+      buildAttWallInsulation(scene, root, attId, wallId, axis, length, origin, wallBaseY, wallThk,
+                             plateH, studW, studSpacing, isSloped, heightAt, mkBox, openings);
+    }
+  }
+
   // Build walls based on attachment orientation
   // Following main building corner join rules
+
+  // Get all openings for this attachment, grouped by wall name
+  const allOpenings = Array.isArray(attachment.walls?.openings) ? attachment.walls.openings : [];
+  function openingsForWall(wallName) {
+    return allOpenings.filter(o => o.wall === wallName && o.enabled !== false);
+  }
 
   if (attachWall === "left") {
     // Attachment to the left - inner wall (right side X=extentX) is missing
@@ -877,30 +947,34 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
     // Side walls length (outer runs between front and back)
     const outerLen = extentZ - 2 * wallThk;
 
+    const frontOpenings = openingsForWall('front');
+    const backOpenings = openingsForWall('back');
+    const outerOpenings = openingsForWall('outer');
+
     // FRONT WALL (at Z=0, runs along X, full width) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'front', 'x', extentX,
-                   { x: 0, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtX, mkBox, mkSlopedPlateAlongX);
+    buildVariantWall('front', 'x', extentX, { x: 0, z: 0 }, isPent, heightAtX, mkSlopedPlateAlongX, frontOpenings);
+    buildAttOpeningFraming(attId, 'front', 'x', { x: 0, z: 0 }, frontOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtX, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'front', extentX, wallBaseY, -CLAD_T_MM, isPent, heightAtX, cladMat);
+      buildCladdingAlongX(scene, root, attId, 'front', extentX, wallBaseY, -CLAD_T_MM, isPent, heightAtX, cladMat, 0, false, 0, frontOpenings);
     }
 
     // BACK WALL (at Z=extentZ-wallThk, runs along X, full width) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'back', 'x', extentX,
-                   { x: 0, z: extentZ - wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtX, mkBox, mkSlopedPlateAlongX);
+    buildVariantWall('back', 'x', extentX, { x: 0, z: extentZ - wallThk }, isPent, heightAtX, mkSlopedPlateAlongX, backOpenings);
+    buildAttOpeningFraming(attId, 'back', 'x', { x: 0, z: extentZ - wallThk }, backOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtX, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat);
+      buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat, 0, false, 0, backOpenings);
     }
 
     // OUTER WALL (at X=0, runs along Z, between front/back) - flat height
-    buildWallPanel(scene, root, attId, 'outer', 'z', outerLen,
-                   { x: 0, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
+    buildVariantWall('outer', 'z', outerLen, { x: 0, z: wallThk }, false, () => wallHeightOuter, null, outerOpenings);
+    buildAttOpeningFraming(attId, 'outer', 'z', { x: 0, z: wallThk }, outerOpenings,
+                           wallBaseY, plateH, studW, wallThk, false, () => wallHeightOuter, mkBox, studMat);
     if (claddingEnabled) {
       // For apex roofs, pass the crest height so cladding extends into the gable
       const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
-      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest);
+      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, -CLAD_T_MM, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest, outerOpenings);
     }
 
   } else if (attachWall === "right") {
@@ -914,30 +988,34 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
 
     const outerLen = extentZ - 2 * wallThk;
 
+    const frontOpenings = openingsForWall('front');
+    const backOpenings = openingsForWall('back');
+    const outerOpenings = openingsForWall('outer');
+
     // FRONT WALL (at Z=0, runs along X, full width) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'front', 'x', extentX,
-                   { x: 0, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtX, mkBox, mkSlopedPlateAlongX);
+    buildVariantWall('front', 'x', extentX, { x: 0, z: 0 }, isPent, heightAtX, mkSlopedPlateAlongX, frontOpenings);
+    buildAttOpeningFraming(attId, 'front', 'x', { x: 0, z: 0 }, frontOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtX, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'front', extentX, wallBaseY, -CLAD_T_MM, isPent, heightAtX, cladMat);
+      buildCladdingAlongX(scene, root, attId, 'front', extentX, wallBaseY, -CLAD_T_MM, isPent, heightAtX, cladMat, 0, false, 0, frontOpenings);
     }
 
     // BACK WALL (at Z=extentZ-wallThk, runs along X, full width) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'back', 'x', extentX,
-                   { x: 0, z: extentZ - wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtX, mkBox, mkSlopedPlateAlongX);
+    buildVariantWall('back', 'x', extentX, { x: 0, z: extentZ - wallThk }, isPent, heightAtX, mkSlopedPlateAlongX, backOpenings);
+    buildAttOpeningFraming(attId, 'back', 'x', { x: 0, z: extentZ - wallThk }, backOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtX, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat);
+      buildCladdingAlongX(scene, root, attId, 'back', extentX, wallBaseY, extentZ, isPent, heightAtX, cladMat, 0, false, 0, backOpenings);
     }
 
     // OUTER WALL (at X=extentX-wallThk, runs along Z, between front/back) - flat height
-    buildWallPanel(scene, root, attId, 'outer', 'z', outerLen,
-                   { x: extentX - wallThk, z: wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
+    buildVariantWall('outer', 'z', outerLen, { x: extentX - wallThk, z: wallThk }, false, () => wallHeightOuter, null, outerOpenings);
+    buildAttOpeningFraming(attId, 'outer', 'z', { x: extentX - wallThk, z: wallThk }, outerOpenings,
+                           wallBaseY, plateH, studW, wallThk, false, () => wallHeightOuter, mkBox, studMat);
     if (claddingEnabled) {
       // For apex roofs, pass the crest height so cladding extends into the gable
       const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
-      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest);
+      buildCladdingAlongZ(scene, root, attId, 'outer', outerLen, wallHeightOuter, extentX, wallBaseY, wallThk, cladMat, false, null, isApex, apexCrest, outerOpenings);
     }
 
   } else if (attachWall === "front") {
@@ -951,30 +1029,34 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
 
     const outerLen = extentX - 2 * wallThk;
 
+    const leftOpenings = openingsForWall('left');
+    const rightOpenings = openingsForWall('right');
+    const outerOpenings = openingsForWall('outer');
+
     // LEFT WALL (at X=0, runs along Z, full depth) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'left', 'z', extentZ,
-                   { x: 0, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtZ, mkBox, mkSlopedPlateAlongZ);
+    buildVariantWall('left', 'z', extentZ, { x: 0, z: 0 }, isPent, heightAtZ, mkSlopedPlateAlongZ, leftOpenings);
+    buildAttOpeningFraming(attId, 'left', 'z', { x: 0, z: 0 }, leftOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtZ, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'left', extentZ, wallHeightOuter, -CLAD_T_MM, wallBaseY, 0, cladMat, isPent, heightAtZ);
+      buildCladdingAlongZ(scene, root, attId, 'left', extentZ, wallHeightOuter, -CLAD_T_MM, wallBaseY, 0, cladMat, isPent, heightAtZ, false, 0, leftOpenings);
     }
 
     // RIGHT WALL (at X=extentX-wallThk, runs along Z, full depth) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'right', 'z', extentZ,
-                   { x: extentX - wallThk, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtZ, mkBox, mkSlopedPlateAlongZ);
+    buildVariantWall('right', 'z', extentZ, { x: extentX - wallThk, z: 0 }, isPent, heightAtZ, mkSlopedPlateAlongZ, rightOpenings);
+    buildAttOpeningFraming(attId, 'right', 'z', { x: extentX - wallThk, z: 0 }, rightOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtZ, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightOuter, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ);
+      buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightOuter, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ, false, 0, rightOpenings);
     }
 
     // OUTER WALL (at Z=0, runs along X, between left/right) - flat height
-    buildWallPanel(scene, root, attId, 'outer', 'x', outerLen,
-                   { x: wallThk, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
+    buildVariantWall('outer', 'x', outerLen, { x: wallThk, z: 0 }, false, () => wallHeightOuter, null, outerOpenings);
+    buildAttOpeningFraming(attId, 'outer', 'x', { x: wallThk, z: 0 }, outerOpenings,
+                           wallBaseY, plateH, studW, wallThk, false, () => wallHeightOuter, mkBox, studMat);
     if (claddingEnabled) {
       // For apex roofs, pass the crest height so cladding extends into the gable
       const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
-      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest);
+      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, -CLAD_T_MM, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest, outerOpenings);
     }
 
   } else if (attachWall === "back") {
@@ -988,44 +1070,448 @@ function buildAttachmentWalls(scene, root, attId, extentX, extentZ, wallHeightIn
 
     const outerLen = extentX - 2 * wallThk;
 
+    const leftOpenings = openingsForWall('left');
+    const rightOpenings = openingsForWall('right');
+    const outerOpenings = openingsForWall('outer');
+
     // LEFT WALL (at X=0, runs along Z, full depth) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'left', 'z', extentZ,
-                   { x: 0, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtZ, mkBox, mkSlopedPlateAlongZ);
+    buildVariantWall('left', 'z', extentZ, { x: 0, z: 0 }, isPent, heightAtZ, mkSlopedPlateAlongZ, leftOpenings);
+    buildAttOpeningFraming(attId, 'left', 'z', { x: 0, z: 0 }, leftOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtZ, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'left', extentZ, wallHeightInner, -CLAD_T_MM, wallBaseY, 0, cladMat, isPent, heightAtZ);
+      buildCladdingAlongZ(scene, root, attId, 'left', extentZ, wallHeightInner, -CLAD_T_MM, wallBaseY, 0, cladMat, isPent, heightAtZ, false, 0, leftOpenings);
     }
 
     // RIGHT WALL (at X=extentX-wallThk, runs along Z, full depth) - potentially sloped for pent
-    buildWallPanel(scene, root, attId, 'right', 'z', extentZ,
-                   { x: extentX - wallThk, z: 0 }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, isPent, heightAtZ, mkBox, mkSlopedPlateAlongZ);
+    buildVariantWall('right', 'z', extentZ, { x: extentX - wallThk, z: 0 }, isPent, heightAtZ, mkSlopedPlateAlongZ, rightOpenings);
+    buildAttOpeningFraming(attId, 'right', 'z', { x: extentX - wallThk, z: 0 }, rightOpenings,
+                           wallBaseY, plateH, studW, wallThk, isPent, heightAtZ, mkBox, studMat);
     if (claddingEnabled) {
-      buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightInner, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ);
+      buildCladdingAlongZ(scene, root, attId, 'right', extentZ, wallHeightInner, extentX, wallBaseY, 0, cladMat, isPent, heightAtZ, false, 0, rightOpenings);
     }
 
     // OUTER WALL (at Z=extentZ-wallThk, runs along X, between left/right) - flat height
-    buildWallPanel(scene, root, attId, 'outer', 'x', outerLen,
-                   { x: wallThk, z: extentZ - wallThk }, wallBaseY, wallThk, plateH, studW, studSpacing,
-                   plateMat, studMat, false, () => wallHeightOuter, mkBox, null);
+    buildVariantWall('outer', 'x', outerLen, { x: wallThk, z: extentZ - wallThk }, false, () => wallHeightOuter, null, outerOpenings);
+    buildAttOpeningFraming(attId, 'outer', 'x', { x: wallThk, z: extentZ - wallThk }, outerOpenings,
+                           wallBaseY, plateH, studW, wallThk, false, () => wallHeightOuter, mkBox, studMat);
     if (claddingEnabled) {
       // For apex roofs, pass the crest height so cladding extends into the gable
       const apexCrest = isApex ? (attachment.roof?.apex?.crestHeight_mm || 400) : 0;
-      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest);
+      buildCladdingAlongX(scene, root, attId, 'outer', outerLen, wallBaseY, extentZ, false, () => wallHeightOuter, cladMat, wallThk, isApex, apexCrest, outerOpenings);
     }
   }
 }
 
 /**
- * Build a single wall panel with plates and studs
- * Handles both flat and sloped (pent) walls
+ * Build door and window openings for an attachment building.
+ *
+ * Strategy: Create a synthetic state object that maps the attachment's local
+ * coordinate system to what Doors.build3D / Windows.build3D expect (state.w,
+ * state.d, wall names front/back/left/right), then call them with a
+ * sectionContext that positions everything at the attachment's world location.
+ *
+ * Wall name mapping (attachment wall → standard wall name):
+ *   left/right attachment:  front→front, back→back, outer→left(left)/right(right)
+ *   front/back attachment:  left→left, right→right, outer→front(front)/back(back)
+ */
+function buildAttachmentOpenings(scene, root, attId, extentX, extentZ, attachWall, attachment, worldPos, materials, ctx,
+                                 wallHeightInner, wallHeightOuter, roofType) {
+  const openings = Array.isArray(attachment.walls?.openings) ? attachment.walls.openings : [];
+  if (openings.length === 0) return;
+
+  // Determine wall name mapping based on which main wall we're attached to
+  // The synthetic state uses w=extentX, d=extentZ (matching local coords)
+  const wallMap = getAttachmentWallMap(attachWall);
+  const isPent = roofType === "pent";
+
+  // Wall height at a given position along the slope (for pent roofs)
+  // For left attachment: slope runs along X, high at X=extentX (inner), low at X=0 (outer)
+  // For right attachment: slope along X, high at X=0 (inner), low at X=extentX (outer)
+  // For front attachment: slope along Z, high at Z=extentZ (inner), low at Z=0 (outer)
+  // For back attachment: slope along Z, high at Z=0 (inner), low at Z=extentZ (outer)
+  function getWallHeightAtPosition(attWallName, x_mm) {
+    if (!isPent) return wallHeightInner; // Apex: uniform wall height
+
+    // "outer" wall always has the lowest (constant) height
+    if (attWallName === "outer") return wallHeightOuter;
+
+    // Front/back walls on left/right attachments: slope runs along X
+    if (attachWall === "left" || attachWall === "right") {
+      // front/back walls run along X axis
+      const fraction = x_mm / extentX;
+      if (attachWall === "left") {
+        // High at X=extentX (inner), low at X=0 (outer)
+        return wallHeightOuter + (wallHeightInner - wallHeightOuter) * fraction;
+      } else {
+        // High at X=0 (inner), low at X=extentX (outer)
+        return wallHeightInner + (wallHeightOuter - wallHeightInner) * fraction;
+      }
+    }
+    // Left/right walls on front/back attachments: slope runs along Z
+    if (attachWall === "front" || attachWall === "back") {
+      // left/right walls run along Z axis - but x_mm here is position along the wall
+      const fraction = x_mm / extentZ;
+      if (attachWall === "front") {
+        // High at Z=extentZ (inner), low at Z=0 (outer)
+        return wallHeightOuter + (wallHeightInner - wallHeightOuter) * fraction;
+      } else {
+        // High at Z=0 (inner), low at Z=extentZ (outer)
+        return wallHeightInner + (wallHeightOuter - wallHeightInner) * fraction;
+      }
+    }
+    return wallHeightInner;
+  }
+
+  // Clearance: leave room for top plate (50mm) below wall height
+  const TOP_PLATE_CLEARANCE = PLATE_HEIGHT_MM; // 50mm
+
+  // Map attachment openings to standard wall names, with height capping
+  const mappedOpenings = openings.map(function(o) {
+    const mapped = Object.assign({}, o);
+    const standardWall = wallMap[o.wall];
+    if (standardWall) {
+      mapped.wall = standardWall;
+    } else {
+      console.warn("[attachments] Unknown attachment wall name:", o.wall, "for attachment on", attachWall);
+      mapped.wall = "front"; // fallback
+    }
+
+    // Outer wall runs between corner walls, starting at wallThk offset.
+    // x_mm for outer openings is relative to the outer wall start, but the
+    // standard wall coordinate system starts at 0.  We must add wallThk so
+    // that Doors/Windows position the opening correctly in world space.
+    if (o.wall === "outer") {
+      mapped.x_mm = (mapped.x_mm || 0) + attWallThk; // +wallThk corner wall thickness (75mm basic, 100mm insulated)
+      console.log("[attachments] Offset outer opening", mapped.id, "x_mm by wallThk:", attWallThk, "→", mapped.x_mm);
+    }
+
+    // Cap opening height to available wall height at this position
+    const x = mapped.x_mm || 0;
+    const openingWidth = mapped.width_mm || 800;
+    // Use the minimum wall height across the opening's width (conservative)
+    const heightAtStart = getWallHeightAtPosition(o.wall, x);
+    const heightAtEnd = getWallHeightAtPosition(o.wall, x + openingWidth);
+    const minWallHeight = Math.min(heightAtStart, heightAtEnd);
+    // Maximum opening height = wall height - top plate clearance
+    const maxOpeningHeight = Math.max(200, minWallHeight - TOP_PLATE_CLEARANCE);
+
+    if (mapped.type === "door") {
+      if (mapped.height_mm > maxOpeningHeight) {
+        console.log("[attachments] Capping door", mapped.id, "height from", mapped.height_mm, "to", maxOpeningHeight,
+                    "(wall height at pos:", minWallHeight, ")");
+        mapped.height_mm = maxOpeningHeight;
+      }
+    } else if (mapped.type === "window") {
+      const winY = mapped.y_mm || 800;
+      const winTop = winY + (mapped.height_mm || 400);
+      if (winTop > maxOpeningHeight) {
+        // First try reducing height, then reduce y position
+        const newHeight = Math.max(200, maxOpeningHeight - winY);
+        if (newHeight >= 200) {
+          console.log("[attachments] Capping window", mapped.id, "height from", mapped.height_mm, "to", newHeight);
+          mapped.height_mm = newHeight;
+        } else {
+          // Window doesn't fit at all at this Y - move it down
+          mapped.y_mm = Math.max(200, maxOpeningHeight - (mapped.height_mm || 400));
+          console.log("[attachments] Moving window", mapped.id, "y_mm to", mapped.y_mm);
+        }
+      }
+    }
+
+    return mapped;
+  });
+
+  // Build synthetic state that Doors/Windows expect
+  const attVariant = attachment.walls?.variant || "basic";
+  const attWallThk = attVariant === "insulated" ? STUD_H_INSULATED_MM : STUD_H_BASIC_MM;
+  const syntheticState = {
+    w: extentX,
+    d: extentZ,
+    walls: {
+      variant: attVariant,
+      openings: mappedOpenings,
+      insulated: { section: { w: STUD_W_MM, h: STUD_H_INSULATED_MM }, spacing: STUD_SPACING_MM },
+      basic: { section: { w: STUD_W_MM, h: STUD_H_BASIC_MM }, spacing: null }
+    },
+    frame: { thickness_mm: STUD_W_MM, depth_mm: attWallThk }
+  };
+
+  // Section context: positions openings in world space at the attachment root
+  const sectionContext = {
+    sectionId: "att-" + attId,
+    position: { x: worldPos.x, y: worldPos.y, z: worldPos.z }
+  };
+
+  console.log("[attachments] Building openings with synthetic state:",
+    "w:", syntheticState.w, "d:", syntheticState.d,
+    "openings:", mappedOpenings.length,
+    "sectionPos:", sectionContext.position);
+
+  // Build doors
+  const doors = mappedOpenings.filter(o => o.type === "door" && o.enabled !== false);
+  if (doors.length > 0 && Doors && typeof Doors.build3D === "function") {
+    try {
+      Doors.build3D(syntheticState, ctx, sectionContext);
+      console.log("[attachments] Doors built:", doors.length);
+    } catch (e) {
+      console.error("[attachments] Error building doors:", e);
+    }
+  }
+
+  // Build windows
+  const windows = mappedOpenings.filter(o => o.type === "window" && o.enabled !== false);
+  if (windows.length > 0 && Windows && typeof Windows.build3D === "function") {
+    try {
+      Windows.build3D(syntheticState, ctx, sectionContext);
+      console.log("[attachments] Windows built:", windows.length);
+    } catch (e) {
+      console.error("[attachments] Error building windows:", e);
+    }
+  }
+}
+
+/**
+ * Map attachment wall names to standard wall names used by Doors/Windows.
+ * @param {string} attachToWall - Which main building wall this attachment is on
+ * @returns {Object} Map from attachment wall name → standard wall name
+ */
+function getAttachmentWallMap(attachToWall) {
+  switch (attachToWall) {
+    case "left":
+      // extentX = depth outward (+X from main), extentZ = width along wall
+      // front (Z=0), back (Z=extentZ), outer (X=0) = "left" in standard coords
+      return { front: "front", back: "back", outer: "left" };
+    case "right":
+      // extentX = depth outward (-X from main), extentZ = width along wall
+      // front (Z=0), back (Z=extentZ), outer (X=extentX) = "right" in standard coords
+      return { front: "front", back: "back", outer: "right" };
+    case "front":
+      // extentX = width along wall, extentZ = depth outward (-Z from main)
+      // left (X=0), right (X=extentX), outer (Z=0) = "front" in standard coords
+      return { left: "left", right: "right", outer: "front" };
+    case "back":
+      // extentX = width along wall, extentZ = depth outward (+Z from main)
+      // left (X=0), right (X=extentX), outer (Z=extentZ) = "back" in standard coords
+      return { left: "left", right: "right", outer: "back" };
+    default:
+      return { front: "front", back: "back", outer: "left" };
+  }
+}
+
+// ============================================================================
+// BASIC VARIANT: PANEL-BASED STUD LAYOUT
+// Replicates primary building logic from walls.js computeBasicPanels/buildBasicPanel
+// ============================================================================
+
+/**
+ * Compute basic panel splits for a wall.
+ * If wall length > BASIC_MAX_PANEL_MM (2400mm), split into 2 panels.
+ * Accounts for openings near the seam to avoid awkward splits.
+ *
+ * @param {number} length - Wall length in mm
+ * @param {number} studW - Stud width (50mm)
+ * @param {Array} openingsX - Opening intervals [{x0, x1, ...}]
+ * @returns {Array} panels [{start, len}, ...]
+ */
+function computeAttBasicPanels(length, studW, openingsX) {
+  let panels = [{ start: 0, len: length }];
+
+  if (length > BASIC_MAX_PANEL_MM) {
+    const p1 = Math.floor(length / 2);
+    const p2 = length - p1;
+    panels = [{ start: 0, len: p1 }, { start: p1, len: p2 }];
+
+    const seamA = p1 - studW;
+    const seamB = p1 + studW;
+
+    const all = openingsX
+      .map((o) => ({ x0: Math.floor(o.x0 ?? o.x_mm ?? 0), x1: Math.floor(o.x1 ?? ((o.x_mm || 0) + (o.width_mm || 0))) }))
+      .filter((o) => Number.isFinite(o.x0) && Number.isFinite(o.x1));
+
+    all.sort((a, b) => (a.x0 - b.x0) || (a.x1 - b.x1));
+
+    const clusters = [];
+    if (all.length) {
+      let cs = all[0].x0;
+      let ce = all[0].x1;
+      for (let i = 1; i < all.length; i++) {
+        const o = all[i];
+        const ne = Math.max(ce, o.x1);
+        const span = ne - cs;
+        if (span <= BASIC_MAX_PANEL_MM) {
+          ce = ne;
+        } else {
+          clusters.push({ x0: cs, x1: ce });
+          cs = o.x0;
+          ce = o.x1;
+        }
+      }
+      clusters.push({ x0: cs, x1: ce });
+    }
+
+    const regions = [];
+    for (let i = 0; i < clusters.length; i++) {
+      const c = clusters[i];
+      const coversSeam = !(c.x1 < seamA || c.x0 > seamB);
+      if (!coversSeam) continue;
+
+      const clusterPanelStart = Math.max(0, Math.min(c.x0 - studW, length));
+      const clusterPanelEnd = Math.max(0, Math.min(c.x1 + studW, length));
+
+      regions.push({ start: clusterPanelStart, end: clusterPanelEnd });
+    }
+
+    if (regions.length) {
+      regions.sort((a, b) => a.start - b.start || a.end - b.end);
+
+      const merged = [];
+      let cur = { start: regions[0].start, end: regions[0].end };
+      for (let i = 1; i < regions.length; i++) {
+        const r = regions[i];
+        if (r.start <= (cur.end + 1)) {
+          cur.end = Math.max(cur.end, r.end);
+        } else {
+          merged.push(cur);
+          cur = { start: r.start, end: r.end };
+        }
+      }
+      merged.push(cur);
+
+      const next = [];
+      let cursor = 0;
+      for (let i = 0; i < merged.length; i++) {
+        const r = merged[i];
+        const s = Math.max(0, Math.min(r.start, length));
+        const e = Math.max(0, Math.min(r.end, length));
+        if (s > cursor) {
+          const leftLen = Math.max(0, s - cursor);
+          if (leftLen > 0) next.push({ start: cursor, len: leftLen });
+        }
+        const midLen = Math.max(0, e - s);
+        if (midLen > 0) next.push({ start: s, len: midLen });
+        cursor = Math.max(cursor, e);
+      }
+      if (cursor < length) {
+        const rightLen = Math.max(0, length - cursor);
+        if (rightLen > 0) next.push({ start: cursor, len: rightLen });
+      }
+
+      panels = next.length ? next : panels;
+    }
+  }
+
+  return panels;
+}
+
+/**
+ * Build a single basic panel: left stud, centre stud, right stud.
+ * Replicates primary building's buildBasicPanel logic.
+ */
+function buildAttBasicPanel(scene, root, attId, wallId, panelIdx, axis, panelLen, origin,
+                             offsetAlong, baseY, wallThk, plateH, studW, plateMat, studMat,
+                             isSloped, heightAt, mkBox, openings) {
+  const isAlongX = axis === 'x';
+  const prefix = `att-${attId}-${wallId}-panel-${panelIdx}`;
+
+  // Stud height helper
+  const hForStart = (posStart) => {
+    if (!isSloped) {
+      const h0 = heightAt(0);
+      return Math.max(1, h0 - 2 * plateH);
+    }
+    const posCenter = posStart + studW / 2;
+    return Math.max(1, heightAt(posCenter) - 2 * plateH);
+  };
+
+  // Bottom plate for this panel
+  if (isAlongX) {
+    mkBox(`${prefix}-plate-bottom`, panelLen, plateH, wallThk,
+          { x: origin.x + offsetAlong, y: baseY, z: origin.z }, plateMat);
+  } else {
+    mkBox(`${prefix}-plate-bottom`, wallThk, plateH, panelLen,
+          { x: origin.x, y: baseY, z: origin.z + offsetAlong }, plateMat);
+  }
+
+  // Top plate for this panel
+  if (!isSloped) {
+    const topPlateY = baseY + heightAt(0) - plateH;
+    if (isAlongX) {
+      mkBox(`${prefix}-plate-top`, panelLen, plateH, wallThk,
+            { x: origin.x + offsetAlong, y: topPlateY, z: origin.z }, plateMat);
+    } else {
+      mkBox(`${prefix}-plate-top`, wallThk, plateH, panelLen,
+            { x: origin.x, y: topPlateY, z: origin.z + offsetAlong }, plateMat);
+    }
+  }
+  // Note: sloped top plates are built by the parent caller (buildAttachmentWalls)
+
+  // Place stud helper
+  const placeStud = (posWorld_x, posWorld_z, idx, posStartRel) => {
+    const h = hForStart(posStartRel);
+    if (h <= 0) return;
+    if (isAlongX) {
+      mkBox(`${prefix}-stud-${idx}`, studW, h, wallThk,
+            { x: posWorld_x, y: baseY + plateH, z: posWorld_z }, studMat);
+    } else {
+      mkBox(`${prefix}-stud-${idx}`, wallThk, h, studW,
+            { x: posWorld_x, y: baseY + plateH, z: posWorld_z }, studMat);
+    }
+  };
+
+  // Check if a stud at this position overlaps any opening
+  const panelOpenings = openings.filter((o) => {
+    const ox0 = o.x_mm || o.x0 || 0;
+    const ox1 = (o.x_mm || 0) + (o.width_mm || 0);
+    const s = o.x0 !== undefined ? o.x0 : ox0;
+    const e = o.x1 !== undefined ? o.x1 : ox1;
+    return e > offsetAlong && s < (offsetAlong + panelLen);
+  });
+
+  const studAt = (posStart) => {
+    for (let i = 0; i < panelOpenings.length; i++) {
+      const d = panelOpenings[i];
+      const s = d.x0 !== undefined ? d.x0 : (d.x_mm || 0);
+      const e = d.x1 !== undefined ? d.x1 : ((d.x_mm || 0) + (d.width_mm || 0));
+      if (posStart + studW > s && posStart < e) return false;
+    }
+    return true;
+  };
+
+  if (isAlongX) {
+    const x0 = origin.x + offsetAlong;
+    const x1 = origin.x + offsetAlong + panelLen - studW;
+    const xm = Math.max(x0, Math.floor(origin.x + offsetAlong + panelLen / 2 - studW / 2));
+
+    if (studAt(offsetAlong)) placeStud(x0, origin.z, 0, offsetAlong);
+    if (studAt(offsetAlong + panelLen - studW)) placeStud(x1, origin.z, 1, offsetAlong + panelLen - studW);
+    if (studAt(xm - origin.x)) placeStud(xm, origin.z, 2, xm - origin.x);
+  } else {
+    const z0 = origin.z + offsetAlong;
+    const z1 = origin.z + offsetAlong + panelLen - studW;
+    const zm = Math.max(z0, Math.floor(origin.z + offsetAlong + panelLen / 2 - studW / 2));
+
+    if (studAt(offsetAlong)) placeStud(origin.x, z0, 0, offsetAlong);
+    if (studAt(offsetAlong + panelLen - studW)) placeStud(origin.x, z1, 1, offsetAlong + panelLen - studW);
+    if (studAt(zm - origin.z)) placeStud(origin.x, zm, 2, zm - origin.z);
+  }
+}
+
+// ============================================================================
+// INSULATED VARIANT: REGULAR STUD SPACING (≤400mm)
+// ============================================================================
+
+/**
+ * Build a single wall panel with plates and studs (INSULATED variant).
+ * Studs at regular ≤400mm centres. Also used as fallback for basic when
+ * buildWallPanel is called directly.
+ * Handles both flat and sloped (pent) walls.
  * @param {string} axis - 'x' or 'z' - direction the wall runs
  * @param {number} length - wall length in mm
  * @param {object} origin - {x, z} position of wall start
  * @param {boolean} isSloped - whether this wall has a sloped top
  * @param {function} heightAt - function(position) returning wall height at that position
  */
-function buildWallPanel(scene, root, attId, wallId, axis, length, origin, baseY, wallThk, plateH, studW, studSpacing, plateMat, studMat, isSloped, heightAt, mkBox, mkSlopedPlate) {
+function buildWallPanel(scene, root, attId, wallId, axis, length, origin, baseY, wallThk, plateH, studW, studSpacing, plateMat, studMat, isSloped, heightAt, mkBox, mkSlopedPlate, openings = []) {
   const isAlongX = axis === 'x';
   const prefix = `att-${attId}-${wallId}`;
 
@@ -1061,8 +1547,22 @@ function buildWallPanel(scene, root, attId, wallId, axis, length, origin, baseY,
     }
   }
 
+  // Check if a stud at this position overlaps any opening's framed zone
+  // Opening framing occupies [x_mm - studW, x_mm + width_mm + studW]
+  function studOverlapsOpening(studPos) {
+    for (let i = 0; i < openings.length; i++) {
+      const o = openings[i];
+      const openLeft = (o.x_mm || 0) - studW;
+      const openRight = (o.x_mm || 0) + (o.width_mm || 0) + studW;
+      if (studPos + studW > openLeft && studPos < openRight) return true;
+    }
+    return false;
+  }
+
   // Build studs
   const placeStud = (posAlongWall) => {
+    if (studOverlapsOpening(posAlongWall)) return; // Skip studs in opening zones
+
     // Calculate stud height at this position
     const studHeight = isSloped
       ? Math.max(1, heightAt(posAlongWall + studW / 2) - 2 * plateH)
@@ -1096,6 +1596,457 @@ function buildWallPanel(scene, root, attId, wallId, axis, length, origin, baseY,
   }
 }
 
+// ============================================================================
+// INSULATION & PLYWOOD LINING (Insulated variant only)
+// Replicates primary building logic: PIR insulation between studs + ply lining
+// ============================================================================
+
+/**
+ * Build wall insulation (PIR) and plywood lining for an attachment's insulated walls.
+ * Creates insulation panels between stud bays and a plywood sheet on the interior face.
+ *
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment ID
+ * @param {string} wallId - Wall identifier (front/back/left/right/outer)
+ * @param {string} axis - 'x' or 'z' - direction the wall runs
+ * @param {number} length - Wall length in mm
+ * @param {object} origin - {x, z} position of wall start (local to attachment root)
+ * @param {number} baseY - Absolute Y of wall base (168mm typically)
+ * @param {number} wallThk - Wall thickness / stud depth (100mm for insulated)
+ * @param {number} plateH - Plate height (50mm)
+ * @param {number} studW - Stud width (50mm)
+ * @param {number} studSpacing - Stud spacing (400mm)
+ * @param {boolean} isSloped - Whether this wall has a sloped top
+ * @param {function} heightAt - Function(posAlongWall) → wall frame height at that position
+ * @param {function} mkBox - Box creation helper
+ * @param {Array} openings - Wall openings [{x_mm, width_mm, height_mm, ...}]
+ */
+function buildAttWallInsulation(scene, root, attId, wallId, axis, length, origin, baseY, wallThk, plateH, studW, studSpacing, isSloped, heightAt, mkBox, openings) {
+  const isAlongX = axis === 'x';
+  const prefix = `att-${attId}-${wallId}`;
+
+  // Materials
+  const insMat = new BABYLON.StandardMaterial(`${prefix}-ins-mat`, scene);
+  insMat.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4); // Yellow PIR
+  insMat.alpha = 0.9;
+
+  const plyMat = new BABYLON.StandardMaterial(`${prefix}-ply-mat`, scene);
+  plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65); // Light wood
+
+  // Insulation height (between plates)
+  const wallHeight = heightAt(0);
+  const insHeight = Math.max(1, wallHeight - 2 * plateH);
+  const insBaseY = baseY + plateH; // Top of bottom plate
+
+  // Stud bay positions: find where studs are placed, insulation goes between them
+  const studPositions = [0]; // Start stud
+  let pos = studSpacing;
+  while (pos < length - studW) {
+    if (Math.abs(pos - (length - studW)) >= studW) {
+      studPositions.push(pos);
+    }
+    pos += studSpacing;
+  }
+  if (length > studW) {
+    studPositions.push(length - studW);
+  }
+  studPositions.sort((a, b) => a - b);
+
+  // Check if a position range overlaps any opening
+  function overlapsOpening(start, end) {
+    for (let i = 0; i < openings.length; i++) {
+      const o = openings[i];
+      const oStart = o.x_mm || 0;
+      const oEnd = oStart + (o.width_mm || 0);
+      if (end > oStart && start < oEnd) return true;
+    }
+    return false;
+  }
+
+  // Build insulation panels between each pair of adjacent studs
+  for (let i = 0; i < studPositions.length - 1; i++) {
+    const bayStart = studPositions[i] + studW; // After left stud
+    const bayEnd = studPositions[i + 1];       // Before right stud
+    const bayWidth = bayEnd - bayStart;
+
+    if (bayWidth <= 0) continue;
+    if (overlapsOpening(bayStart, bayEnd)) continue;
+
+    // Insulation height at bay centre (for sloped walls)
+    const bayCentre = bayStart + bayWidth / 2;
+    const bayInsHeight = isSloped
+      ? Math.max(1, heightAt(bayCentre) - 2 * plateH)
+      : insHeight;
+
+    if (bayInsHeight <= 0) continue;
+
+    // Insulation is PIR_THICKNESS_MM deep, positioned against the OUTER face of the wall
+    // (studs are wallThk deep, insulation fills the inner portion)
+    if (isAlongX) {
+      const mesh = mkBox(`${prefix}-ins-${i}`, bayWidth, bayInsHeight, PIR_THICKNESS_MM,
+            { x: origin.x + bayStart, y: insBaseY, z: origin.z + (wallThk - PIR_THICKNESS_MM) }, insMat);
+      if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-insulation' };
+    } else {
+      const mesh = mkBox(`${prefix}-ins-${i}`, PIR_THICKNESS_MM, bayInsHeight, bayWidth,
+            { x: origin.x + (wallThk - PIR_THICKNESS_MM), y: insBaseY, z: origin.z + bayStart }, insMat);
+      if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-insulation' };
+    }
+  }
+
+  // Build plywood lining on interior face (covers the full wall, inside the insulation)
+  // Plywood sits on the INTERIOR side, after the insulation
+  const plyOffset = wallThk; // Flush with interior face of wall
+
+  // Full-wall plywood (simple rectangle for flat walls)
+  if (!isSloped) {
+    if (isAlongX) {
+      const mesh = mkBox(`${prefix}-ply`, length, insHeight, PLY_THICKNESS_MM,
+            { x: origin.x, y: insBaseY, z: origin.z + plyOffset }, plyMat);
+      if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-plywood' };
+    } else {
+      const mesh = mkBox(`${prefix}-ply`, PLY_THICKNESS_MM, insHeight, length,
+            { x: origin.x + plyOffset, y: insBaseY, z: origin.z }, plyMat);
+      if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-plywood' };
+    }
+  } else {
+    // For sloped walls, approximate with segments matching stud bays
+    for (let i = 0; i < studPositions.length - 1; i++) {
+      const bayStart = studPositions[i];
+      const bayEnd = studPositions[i + 1] + studW;
+      const bayWidth = bayEnd - bayStart;
+      if (bayWidth <= 0) continue;
+      if (overlapsOpening(bayStart, bayEnd)) continue;
+
+      const bayCentre = bayStart + bayWidth / 2;
+      const bayH = Math.max(1, heightAt(bayCentre) - 2 * plateH);
+
+      if (isAlongX) {
+        const mesh = mkBox(`${prefix}-ply-${i}`, bayWidth, bayH, PLY_THICKNESS_MM,
+              { x: origin.x + bayStart, y: insBaseY, z: origin.z + plyOffset }, plyMat);
+        if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-plywood' };
+      } else {
+        const mesh = mkBox(`${prefix}-ply-${i}`, PLY_THICKNESS_MM, bayH, bayWidth,
+              { x: origin.x + plyOffset, y: insBaseY, z: origin.z + bayStart }, plyMat);
+        if (mesh) mesh.metadata = { dynamic: true, attachmentId: attId, type: 'wall-plywood' };
+      }
+    }
+  }
+
+  console.log("[attachments] Built insulation + ply lining for wall:", wallId, "bays:", studPositions.length - 1);
+}
+
+// ============================================================================
+// OPENING FRAMING HELPERS
+// Mirror main building walls.js: uprights, headers, sills, cripple studs
+// ============================================================================
+
+/**
+ * Add door framing for an attachment wall running along X axis.
+ * Creates left/right uprights, header beam, and cripple studs above.
+ *
+ * @param {string} attId - Attachment ID
+ * @param {string} wallId - Wall identifier (front/back/outer/left/right)
+ * @param {object} origin - Wall origin {x, z} in mm (local to attachment root)
+ * @param {object} door - Opening definition {id, x_mm, width_mm, height_mm}
+ * @param {number} baseY - Absolute Y of wall base (168mm typically)
+ * @param {number} plateH - Plate height (50mm)
+ * @param {number} studW - Stud width (50mm)
+ * @param {number} wallThk - Wall thickness / stud depth (75mm)
+ * @param {boolean} isSloped - Whether this wall has a sloped top (pent)
+ * @param {function} heightAt - Function(posAlongWall) → wall frame height at that position
+ * @param {function} mkBox - Box creation helper (name, lenX, lenY, lenZ, pos, mat)
+ * @param {object} mat - Material for framing members
+ */
+function addAttDoorFramingAlongX(attId, wallId, origin, door, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
+  const x_mm = door.x_mm || 0;
+  const width_mm = door.width_mm || 800;
+  const height_mm = door.height_mm || 1900;
+  const id = door.id || 'unknown';
+  const studH = wallThk; // Header beam height = stud depth (75mm)
+
+  const plateY = baseY + plateH; // Top of bottom plate (absolute Y)
+
+  // Wall height at door centre
+  const centerPos = x_mm + width_mm / 2;
+  const wallHeight = isSloped ? heightAt(centerPos) : heightAt(0);
+  const wallTop = baseY + wallHeight; // Absolute Y of wall top
+
+  // Header Y (absolute) — clamped so header fits below top plate
+  const desiredHeaderY = plateY + height_mm;
+  const maxHeaderY = Math.max(plateY, wallTop - studH);
+  const headerY = Math.min(desiredHeaderY, maxHeaderY);
+
+  // Upright height = bottom plate top → header bottom
+  const uprightH = Math.max(1, headerY - plateY);
+
+  // Left upright
+  mkBox(`att-${attId}-${wallId}-door-${id}-upright-L`,
+    studW, uprightH, wallThk,
+    { x: origin.x + x_mm - studW, y: plateY, z: origin.z },
+    mat);
+
+  // Right upright
+  mkBox(`att-${attId}-${wallId}-door-${id}-upright-R`,
+    studW, uprightH, wallThk,
+    { x: origin.x + x_mm + width_mm, y: plateY, z: origin.z },
+    mat);
+
+  // Header beam (spans both uprights)
+  const headerL = width_mm + 2 * studW;
+  mkBox(`att-${attId}-${wallId}-door-${id}-header`,
+    headerL, studH, wallThk,
+    { x: origin.x + x_mm - studW, y: headerY, z: origin.z },
+    mat);
+
+  // Cripple studs above header (if space allows)
+  const headerTopY = headerY + studH;
+  const topPlateBottomY = wallTop - plateH;
+  const spaceAbove = Math.max(0, topPlateBottomY - headerTopY);
+  if (spaceAbove > studW) {
+    mkBox(`att-${attId}-${wallId}-door-${id}-cripple-L`,
+      studW, spaceAbove, wallThk,
+      { x: origin.x + x_mm - studW, y: headerTopY, z: origin.z },
+      mat);
+    mkBox(`att-${attId}-${wallId}-door-${id}-cripple-R`,
+      studW, spaceAbove, wallThk,
+      { x: origin.x + x_mm + width_mm, y: headerTopY, z: origin.z },
+      mat);
+  }
+}
+
+/**
+ * Add door framing for an attachment wall running along Z axis.
+ * Same members as AlongX but with swapped X/Z dimensions.
+ */
+function addAttDoorFramingAlongZ(attId, wallId, origin, door, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
+  const z_mm = door.x_mm || 0; // x_mm in opening def = position along wall (Z here)
+  const width_mm = door.width_mm || 800;
+  const height_mm = door.height_mm || 1900;
+  const id = door.id || 'unknown';
+  const studH = wallThk; // 75mm
+
+  const plateY = baseY + plateH;
+  const centerPos = z_mm + width_mm / 2;
+  const wallHeight = isSloped ? heightAt(centerPos) : heightAt(0);
+  const wallTop = baseY + wallHeight;
+
+  const desiredHeaderY = plateY + height_mm;
+  const maxHeaderY = Math.max(plateY, wallTop - studH);
+  const headerY = Math.min(desiredHeaderY, maxHeaderY);
+  const uprightH = Math.max(1, headerY - plateY);
+
+  // Left upright (Z-axis: wallThk wide in X, studW deep in Z)
+  mkBox(`att-${attId}-${wallId}-door-${id}-upright-L`,
+    wallThk, uprightH, studW,
+    { x: origin.x, y: plateY, z: origin.z + z_mm - studW },
+    mat);
+
+  // Right upright
+  mkBox(`att-${attId}-${wallId}-door-${id}-upright-R`,
+    wallThk, uprightH, studW,
+    { x: origin.x, y: plateY, z: origin.z + z_mm + width_mm },
+    mat);
+
+  // Header beam
+  const headerL = width_mm + 2 * studW;
+  mkBox(`att-${attId}-${wallId}-door-${id}-header`,
+    wallThk, studH, headerL,
+    { x: origin.x, y: headerY, z: origin.z + z_mm - studW },
+    mat);
+
+  // Cripple studs above header
+  const headerTopY = headerY + studH;
+  const topPlateBottomY = wallTop - plateH;
+  const spaceAbove = Math.max(0, topPlateBottomY - headerTopY);
+  if (spaceAbove > studW) {
+    mkBox(`att-${attId}-${wallId}-door-${id}-cripple-L`,
+      wallThk, spaceAbove, studW,
+      { x: origin.x, y: headerTopY, z: origin.z + z_mm - studW },
+      mat);
+    mkBox(`att-${attId}-${wallId}-door-${id}-cripple-R`,
+      wallThk, spaceAbove, studW,
+      { x: origin.x, y: headerTopY, z: origin.z + z_mm + width_mm },
+      mat);
+  }
+}
+
+/**
+ * Add window framing for an attachment wall running along X axis.
+ * Creates full-height uprights, header, sill, and cripple studs below sill.
+ */
+function addAttWindowFramingAlongX(attId, wallId, origin, win, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
+  const x_mm = win.x_mm || 0;
+  const width_mm = win.width_mm || 600;
+  const height_mm = win.height_mm || 400;
+  const y_mm = win.y_mm || 900; // Sill height above bottom plate
+  const id = win.id || 'unknown';
+  const studH = wallThk; // 75mm
+
+  const plateY = baseY + plateH;
+  const centerPos = x_mm + width_mm / 2;
+  const wallHeight = isSloped ? heightAt(centerPos) : heightAt(0);
+  const wallTop = baseY + wallHeight;
+
+  // Full-height uprights (bottom plate top → top plate bottom)
+  const studLen = Math.max(1, wallHeight - 2 * plateH);
+
+  // Left upright (full height)
+  mkBox(`att-${attId}-${wallId}-win-${id}-upright-L`,
+    studW, studLen, wallThk,
+    { x: origin.x + x_mm - studW, y: plateY, z: origin.z },
+    mat);
+
+  // Right upright (full height)
+  mkBox(`att-${attId}-${wallId}-win-${id}-upright-R`,
+    studW, studLen, wallThk,
+    { x: origin.x + x_mm + width_mm, y: plateY, z: origin.z },
+    mat);
+
+  // Sill and header Y positions (absolute)
+  const sillY = Math.min(plateY + y_mm, wallTop - studH);
+  const headerY = Math.min(sillY + height_mm, wallTop - studH);
+
+  // Header beam
+  const headerL = width_mm + 2 * studW;
+  mkBox(`att-${attId}-${wallId}-win-${id}-header`,
+    headerL, studH, wallThk,
+    { x: origin.x + x_mm - studW, y: headerY, z: origin.z },
+    mat);
+
+  // Sill beam
+  mkBox(`att-${attId}-${wallId}-win-${id}-sill`,
+    headerL, studH, wallThk,
+    { x: origin.x + x_mm - studW, y: sillY - studH, z: origin.z },
+    mat);
+
+  // Cripple studs below sill (from bottom plate top to sill underside)
+  const crippleHeight = Math.max(0, sillY - studH - plateY);
+  if (crippleHeight > studW) {
+    const innerWidth = Math.max(0, width_mm);
+    const studSpacing = 400;
+    const numCripples = Math.max(1, Math.min(10, Math.floor(innerWidth / studSpacing)));
+    const crippleSpacing = innerWidth / (numCripples + 1);
+
+    for (let ci = 1; ci <= numCripples; ci++) {
+      const crippleX = origin.x + x_mm + (ci * crippleSpacing) - (studW / 2);
+      mkBox(`att-${attId}-${wallId}-win-${id}-cripple-${ci}`,
+        studW, crippleHeight, wallThk,
+        { x: crippleX, y: plateY, z: origin.z },
+        mat);
+    }
+  }
+}
+
+/**
+ * Add window framing for an attachment wall running along Z axis.
+ * Same members as AlongX but with swapped X/Z dimensions.
+ */
+function addAttWindowFramingAlongZ(attId, wallId, origin, win, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
+  const z_mm = win.x_mm || 0; // x_mm in opening def = position along wall (Z here)
+  const width_mm = win.width_mm || 600;
+  const height_mm = win.height_mm || 400;
+  const y_mm = win.y_mm || 900;
+  const id = win.id || 'unknown';
+  const studH = wallThk; // 75mm
+
+  const plateY = baseY + plateH;
+  const centerPos = z_mm + width_mm / 2;
+  const wallHeight = isSloped ? heightAt(centerPos) : heightAt(0);
+  const wallTop = baseY + wallHeight;
+
+  const studLen = Math.max(1, wallHeight - 2 * plateH);
+
+  // Left upright (full height)
+  mkBox(`att-${attId}-${wallId}-win-${id}-upright-L`,
+    wallThk, studLen, studW,
+    { x: origin.x, y: plateY, z: origin.z + z_mm - studW },
+    mat);
+
+  // Right upright (full height)
+  mkBox(`att-${attId}-${wallId}-win-${id}-upright-R`,
+    wallThk, studLen, studW,
+    { x: origin.x, y: plateY, z: origin.z + z_mm + width_mm },
+    mat);
+
+  // Sill and header Y positions
+  const sillY = Math.min(plateY + y_mm, wallTop - studH);
+  const headerY = Math.min(sillY + height_mm, wallTop - studH);
+
+  // Header beam
+  const headerL = width_mm + 2 * studW;
+  mkBox(`att-${attId}-${wallId}-win-${id}-header`,
+    wallThk, studH, headerL,
+    { x: origin.x, y: headerY, z: origin.z + z_mm - studW },
+    mat);
+
+  // Sill beam
+  mkBox(`att-${attId}-${wallId}-win-${id}-sill`,
+    wallThk, studH, headerL,
+    { x: origin.x, y: sillY - studH, z: origin.z + z_mm - studW },
+    mat);
+
+  // Cripple studs below sill
+  const crippleHeight = Math.max(0, sillY - studH - plateY);
+  if (crippleHeight > studW) {
+    const innerWidth = Math.max(0, width_mm);
+    const studSpacing = 400;
+    const numCripples = Math.max(1, Math.min(10, Math.floor(innerWidth / studSpacing)));
+    const crippleSpacing = innerWidth / (numCripples + 1);
+
+    for (let ci = 1; ci <= numCripples; ci++) {
+      const crippleZ = origin.z + z_mm + (ci * crippleSpacing) - (studW / 2);
+      mkBox(`att-${attId}-${wallId}-win-${id}-cripple-${ci}`,
+        wallThk, crippleHeight, studW,
+        { x: origin.x, y: plateY, z: crippleZ },
+        mat);
+    }
+  }
+}
+
+/**
+ * Build all opening framing (doors + windows) for a single attachment wall.
+ * Dispatches to the appropriate AlongX/AlongZ helpers based on wall axis.
+ *
+ * @param {string} attId - Attachment ID
+ * @param {string} wallId - Wall identifier
+ * @param {string} axis - 'x' or 'z'
+ * @param {object} origin - Wall origin {x, z}
+ * @param {Array} openings - Openings on this wall [{id, type, x_mm, width_mm, height_mm, y_mm, ...}]
+ * @param {number} baseY - Wall base Y
+ * @param {number} plateH - Plate height
+ * @param {number} studW - Stud width
+ * @param {number} wallThk - Wall thickness
+ * @param {boolean} isSloped - Sloped top
+ * @param {function} heightAt - Height function
+ * @param {function} mkBox - Box creation helper
+ * @param {object} mat - Timber material
+ */
+function buildAttOpeningFraming(attId, wallId, axis, origin, openings, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
+  if (!openings || openings.length === 0) return;
+
+  const isAlongX = axis === 'x';
+
+  for (let i = 0; i < openings.length; i++) {
+    const o = openings[i];
+    if (o.enabled === false) continue;
+
+    if (o.type === 'door') {
+      if (isAlongX) {
+        addAttDoorFramingAlongX(attId, wallId, origin, o, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat);
+      } else {
+        addAttDoorFramingAlongZ(attId, wallId, origin, o, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat);
+      }
+    } else if (o.type === 'window') {
+      if (isAlongX) {
+        addAttWindowFramingAlongX(attId, wallId, origin, o, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat);
+      } else {
+        addAttWindowFramingAlongZ(attId, wallId, origin, o, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat);
+      }
+    }
+  }
+}
+
 /**
  * Create cladding material matching the main building
  */
@@ -1114,7 +2065,7 @@ function createCladdingMaterial(scene, name) {
  * For sloped walls, uses CSG to cleanly clip cladding at the roof line (matching main building)
  * @param {number} xOffset - optional X offset for walls that start after x=0 (e.g., outer wall between side walls)
  */
-function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, isSloped, heightAtX, cladMat, xOffset = 0, isApexGable = false, apexCrestHeight = 0) {
+function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, isSloped, heightAtX, cladMat, xOffset = 0, isApexGable = false, apexCrestHeight = 0, openings = []) {
   // For apex gables, we need to build up to the crest height
   const maxWallHeight = isApexGable ? apexCrestHeight : (isSloped ? Math.max(heightAtX(0), heightAtX(length)) : heightAtX(0));
   // Build extra courses above roof line for ALL walls:
@@ -1435,6 +2386,78 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
     }
   }
 
+  // ---- CSG cutouts for door/window openings (along X) ----
+  if (openings.length > 0 && merged && !merged.isDisposed()) {
+    const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+    if (hasCSG) {
+      const CUT_EXTRA = 80;
+      const cutDepth = Math.max(1, CLAD_T_MM + 2 * CUT_EXTRA);
+      // Z centre of the cutter box — covers full cladding thickness plus margin
+      const cutZCenter = zPos + CLAD_T_MM / 2;
+
+      const cutters = [];
+      for (let oi = 0; oi < openings.length; oi++) {
+        const o = openings[oi];
+        if (o.enabled === false) continue;
+        const ox = (o.x_mm || 0) + xOffset; // position along wall + any X offset
+        const ow = o.width_mm || (o.type === 'door' ? 800 : 600);
+        const oh = o.type === 'door'
+          ? (o.height_mm || 1900)
+          : (o.height_mm || 400);
+
+        // Y span for cutter
+        let y0, y1;
+        if (o.type === 'door') {
+          // Door: from bottom plate top to door height
+          y0 = baseY + PLATE_HEIGHT_MM;
+          y1 = y0 + oh;
+        } else {
+          // Window: from sill to top
+          const winY = o.y_mm || 900;
+          y0 = baseY + PLATE_HEIGHT_MM + winY;
+          y1 = y0 + oh;
+        }
+
+        const cutH = Math.max(1, y1 - y0);
+        const cutW = Math.max(1, ow);
+
+        const m = BABYLON.MeshBuilder.CreateBox(
+          `att-${attId}-cladcut-${wallId}-${oi}`,
+          { width: cutW / 1000, height: cutH / 1000, depth: cutDepth / 1000 },
+          scene
+        );
+        m.position = new BABYLON.Vector3(
+          (ox + cutW / 2) / 1000,
+          (y0 + cutH / 2) / 1000,
+          cutZCenter / 1000
+        );
+        cutters.push(m);
+      }
+
+      if (cutters.length > 0) {
+        try {
+          let openingCSG = BABYLON.CSG.FromMesh(cutters[0]);
+          for (let ci = 1; ci < cutters.length; ci++) {
+            openingCSG = openingCSG.union(BABYLON.CSG.FromMesh(cutters[ci]));
+          }
+          const baseCSG = BABYLON.CSG.FromMesh(merged);
+          const resCSG = baseCSG.subtract(openingCSG);
+          const resMesh = resCSG.toMesh(`att-${attId}-clad-${wallId}-cut`, cladMat, scene, false);
+          if (resMesh) {
+            try { merged.dispose(false, true); } catch (e) {}
+            merged = resMesh;
+          }
+        } catch (e) {
+          console.error("[attachments] Opening CSG cutout failed for wall", wallId, ":", e);
+        }
+      }
+      // Dispose cutter meshes
+      for (let ci = 0; ci < cutters.length; ci++) {
+        try { if (cutters[ci] && !cutters[ci].isDisposed()) cutters[ci].dispose(false, true); } catch (e) {}
+      }
+    }
+  }
+
   // Set final properties on the merged/clipped mesh
   merged.name = `att-${attId}-clad-${wallId}`;
   merged.material = cladMat;
@@ -1450,7 +2473,7 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
  * For sloped walls, uses CSG to cleanly clip cladding at the roof line (matching main building)
  * @param {number} zOffset - Z offset for the cladding start position
  */
-function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPos, baseY, zOffset, cladMat, isSloped, heightAtZ, isApexGable = false, apexCrestHeight = 0) {
+function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPos, baseY, zOffset, cladMat, isSloped, heightAtZ, isApexGable = false, apexCrestHeight = 0, openings = []) {
   // For apex gables, we need to build up to the crest height
   const effectiveHeight = isApexGable ? apexCrestHeight : (isSloped && heightAtZ ? Math.max(heightAtZ(0), heightAtZ(length)) : wallHeight);
   // Build extra courses above roof line for ALL walls:
@@ -1765,6 +2788,76 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
     if (resMesh) {
       try { merged.dispose(false, true); } catch (e) {}
       merged = resMesh;
+    }
+  }
+
+  // ---- CSG cutouts for door/window openings (along Z) ----
+  if (openings.length > 0 && merged && !merged.isDisposed()) {
+    const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+    if (hasCSG) {
+      const CUT_EXTRA = 80;
+      const cutDepth = Math.max(1, CLAD_T_MM + 2 * CUT_EXTRA);
+      // X centre of the cutter box — covers full cladding thickness plus margin
+      const cutXCenter = xPos + CLAD_T_MM / 2;
+
+      const cutters = [];
+      for (let oi = 0; oi < openings.length; oi++) {
+        const o = openings[oi];
+        if (o.enabled === false) continue;
+        const oz = (o.x_mm || 0) + zOffset; // position along wall + Z offset
+        const ow = o.width_mm || (o.type === 'door' ? 800 : 600);
+        const oh = o.type === 'door'
+          ? (o.height_mm || 1900)
+          : (o.height_mm || 400);
+
+        // Y span for cutter
+        let y0, y1;
+        if (o.type === 'door') {
+          y0 = baseY + PLATE_HEIGHT_MM;
+          y1 = y0 + oh;
+        } else {
+          const winY = o.y_mm || 900;
+          y0 = baseY + PLATE_HEIGHT_MM + winY;
+          y1 = y0 + oh;
+        }
+
+        const cutH = Math.max(1, y1 - y0);
+        const cutW = Math.max(1, ow);
+
+        const m = BABYLON.MeshBuilder.CreateBox(
+          `att-${attId}-cladcut-${wallId}-${oi}`,
+          { width: cutDepth / 1000, height: cutH / 1000, depth: cutW / 1000 },
+          scene
+        );
+        m.position = new BABYLON.Vector3(
+          cutXCenter / 1000,
+          (y0 + cutH / 2) / 1000,
+          (oz + cutW / 2) / 1000
+        );
+        cutters.push(m);
+      }
+
+      if (cutters.length > 0) {
+        try {
+          let openingCSG = BABYLON.CSG.FromMesh(cutters[0]);
+          for (let ci = 1; ci < cutters.length; ci++) {
+            openingCSG = openingCSG.union(BABYLON.CSG.FromMesh(cutters[ci]));
+          }
+          const baseCSG = BABYLON.CSG.FromMesh(merged);
+          const resCSG = baseCSG.subtract(openingCSG);
+          const resMesh = resCSG.toMesh(`att-${attId}-clad-${wallId}-cut`, cladMat, scene, false);
+          if (resMesh) {
+            try { merged.dispose(false, true); } catch (e) {}
+            merged = resMesh;
+          }
+        } catch (e) {
+          console.error("[attachments] Opening CSG cutout failed for wall", wallId, ":", e);
+        }
+      }
+      // Dispose cutter meshes
+      for (let ci = 0; ci < cutters.length; ci++) {
+        try { if (cutters[ci] && !cutters[ci].isDisposed()) cutters[ci].dispose(false, true); } catch (e) {}
+      }
     }
   }
 

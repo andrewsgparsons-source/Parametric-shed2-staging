@@ -61,12 +61,12 @@ import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js";
 import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=7";
-import * as Attachments from "./elements/attachments.js";
+import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
-import { initInstancesUI } from "./instances.js";
+import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
-import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js";
+import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
 import { initViews } from "./views.js";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
@@ -4953,6 +4953,56 @@ function parseOverhangInput(val) {
     }
 
     /**
+     * Get available wall names for an attachment based on which main wall it's attached to.
+     * The wall touching the main building ("inner") is always absent.
+     * @param {string} attachToWall - "left"|"right"|"front"|"back"
+     * @returns {string[]} Available wall names
+     */
+    function getAttachmentWallNames(attachToWall) {
+      if (attachToWall === "left" || attachToWall === "right") {
+        return ["front", "back", "outer"];
+      } else {
+        return ["left", "right", "outer"];
+      }
+    }
+
+    /**
+     * Patch a single opening within an attachment's walls.openings array.
+     * @param {string} attId - Attachment ID
+     * @param {string} openingId - Opening ID within that attachment
+     * @param {object} patch - Fields to merge into the opening
+     */
+    function patchAttachmentOpening(attId, openingId, patch) {
+      var atts = getAttachmentsFromState(store.getState());
+      var updated = atts.map(function(att) {
+        if (att.id !== attId) return att;
+        var openings = Array.isArray(att.walls?.openings) ? att.walls.openings.slice() : [];
+        var patchedOpenings = openings.map(function(o) {
+          if (String(o.id) !== String(openingId)) return o;
+          return Object.assign({}, o, patch);
+        });
+        return deepMerge(att, { walls: { openings: patchedOpenings } });
+      });
+      setAttachments(updated);
+    }
+
+    /**
+     * Remove an opening from an attachment's walls.openings array.
+     * @param {string} attId - Attachment ID
+     * @param {string} openingId - Opening ID to remove
+     */
+    function removeAttachmentOpening(attId, openingId) {
+      var atts = getAttachmentsFromState(store.getState());
+      var updated = atts.map(function(att) {
+        if (att.id !== attId) return att;
+        var openings = Array.isArray(att.walls?.openings) ? att.walls.openings.slice() : [];
+        var filtered = openings.filter(function(o) { return String(o.id) !== String(openingId); });
+        return deepMerge(att, { walls: { openings: filtered } });
+      });
+      setAttachments(updated);
+    }
+
+    /**
      * Calculate the maximum allowed height for an attachment's inner edge
      * based on the main building's fascia bottom position
      */
@@ -5152,6 +5202,285 @@ function parseOverhangInput(val) {
             '</select></label>';
           wallsSection.appendChild(wallsRow);
           body.appendChild(wallsSection);
+
+          // === Openings Section (Doors & Windows) ===
+          var openingsSection = document.createElement("div");
+          openingsSection.className = "att-section";
+          openingsSection.innerHTML = '<div class="att-section-title">Openings</div>';
+
+          // Determine available walls based on attachment orientation
+          var attOpeningWalls = getAttachmentWallNames(attachWall);
+          var attOpenings = Array.isArray(att.walls?.openings) ? att.walls.openings : [];
+
+          // Add Door / Add Window buttons
+          var openingsBtnRow = document.createElement("div");
+          openingsBtnRow.className = "att-row";
+          openingsBtnRow.style.cssText = "gap:8px;margin-bottom:8px;";
+
+          var addAttDoorBtn = document.createElement("button");
+          addAttDoorBtn.type = "button";
+          addAttDoorBtn.className = "att-add-opening-btn";
+          addAttDoorBtn.textContent = "+ Add Door";
+          addAttDoorBtn.addEventListener("click", (function(thisAttId, walls) {
+            return function() {
+              var currentAtts = getAttachmentsFromState(store.getState());
+              var thisAtt = currentAtts.find(function(a) { return a.id === thisAttId; });
+              if (!thisAtt) return;
+              var existingOpenings = Array.isArray(thisAtt.walls?.openings) ? thisAtt.walls.openings : [];
+              var newId = "att-door-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+              var newDoor = {
+                id: newId,
+                wall: walls[0],
+                type: "door",
+                style: "standard",
+                enabled: true,
+                x_mm: 200,
+                width_mm: 800,
+                height_mm: 1900,
+                handleSide: "left",
+                isOpen: false
+              };
+              existingOpenings.push(newDoor);
+              patchAttachmentById(thisAttId, { walls: { openings: existingOpenings } });
+            };
+          })(attId, attOpeningWalls));
+          openingsBtnRow.appendChild(addAttDoorBtn);
+
+          var addAttWindowBtn = document.createElement("button");
+          addAttWindowBtn.type = "button";
+          addAttWindowBtn.className = "att-add-opening-btn";
+          addAttWindowBtn.textContent = "+ Add Window";
+          addAttWindowBtn.addEventListener("click", (function(thisAttId, walls) {
+            return function() {
+              var currentAtts = getAttachmentsFromState(store.getState());
+              var thisAtt = currentAtts.find(function(a) { return a.id === thisAttId; });
+              if (!thisAtt) return;
+              var existingOpenings = Array.isArray(thisAtt.walls?.openings) ? thisAtt.walls.openings : [];
+              var newId = "att-win-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+              var newWindow = {
+                id: newId,
+                wall: walls[0],
+                type: "window",
+                enabled: true,
+                x_mm: 300,
+                y_mm: 1050,
+                width_mm: 600,
+                height_mm: 400
+              };
+              existingOpenings.push(newWindow);
+              patchAttachmentById(thisAttId, { walls: { openings: existingOpenings } });
+            };
+          })(attId, attOpeningWalls));
+          openingsBtnRow.appendChild(addAttWindowBtn);
+
+          openingsSection.appendChild(openingsBtnRow);
+
+          // List existing openings
+          if (attOpenings.length === 0) {
+            var noOpeningsHint = document.createElement("div");
+            noOpeningsHint.className = "att-hint";
+            noOpeningsHint.textContent = "(No doors or windows)";
+            openingsSection.appendChild(noOpeningsHint);
+          } else {
+            var openingsList = document.createElement("div");
+            openingsList.className = "att-openings-list";
+
+            for (var oi = 0; oi < attOpenings.length; oi++) {
+              (function(opening, thisAttId, walls) {
+                var openingId = String(opening.id || "");
+                var isDoor = opening.type === "door";
+                var openingItem = document.createElement("div");
+                openingItem.className = "att-opening-item";
+
+                // Row 1: Type label + Wall + Remove
+                var row1 = document.createElement("div");
+                row1.className = "att-opening-row";
+
+                var typeTag = document.createElement("span");
+                typeTag.className = "att-opening-type " + (isDoor ? "door-tag" : "window-tag");
+                typeTag.textContent = isDoor ? "🚪 Door" : "🪟 Window";
+                row1.appendChild(typeTag);
+
+                var wallLabel = document.createElement("label");
+                wallLabel.className = "att-opening-field";
+                wallLabel.innerHTML = "<span>Wall</span>";
+                var wallSelect = document.createElement("select");
+                for (var wi = 0; wi < walls.length; wi++) {
+                  var opt = document.createElement("option");
+                  opt.value = walls[wi];
+                  opt.textContent = walls[wi].charAt(0).toUpperCase() + walls[wi].slice(1);
+                  if (opening.wall === walls[wi]) opt.selected = true;
+                  wallSelect.appendChild(opt);
+                }
+                wallSelect.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { wall: this.value });
+                  };
+                })(openingId, thisAttId));
+                wallLabel.appendChild(wallSelect);
+                row1.appendChild(wallLabel);
+
+                var removeOpeningBtn = document.createElement("button");
+                removeOpeningBtn.type = "button";
+                removeOpeningBtn.className = "att-opening-remove";
+                removeOpeningBtn.textContent = "✕";
+                removeOpeningBtn.title = "Remove this opening";
+                removeOpeningBtn.addEventListener("click", (function(oId, aId) {
+                  return function() {
+                    removeAttachmentOpening(aId, oId);
+                  };
+                })(openingId, thisAttId));
+                row1.appendChild(removeOpeningBtn);
+
+                openingItem.appendChild(row1);
+
+                // Row 2: Position + Size
+                var row2 = document.createElement("div");
+                row2.className = "att-opening-row";
+
+                var xLabel = document.createElement("label");
+                xLabel.className = "att-opening-field";
+                xLabel.innerHTML = "<span>X pos (mm)</span>";
+                var xInput = document.createElement("input");
+                xInput.type = "number";
+                xInput.value = String(opening.x_mm || 0);
+                xInput.min = "0";
+                xInput.step = "50";
+                xInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { x_mm: parseInt(this.value, 10) || 0 });
+                  };
+                })(openingId, thisAttId));
+                xLabel.appendChild(xInput);
+                row2.appendChild(xLabel);
+
+                var wLabel = document.createElement("label");
+                wLabel.className = "att-opening-field";
+                wLabel.innerHTML = "<span>Width (mm)</span>";
+                var wInput = document.createElement("input");
+                wInput.type = "number";
+                wInput.value = String(opening.width_mm || (isDoor ? 800 : 600));
+                wInput.min = "200";
+                wInput.step = "50";
+                wInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { width_mm: parseInt(this.value, 10) || 600 });
+                  };
+                })(openingId, thisAttId));
+                wLabel.appendChild(wInput);
+                row2.appendChild(wLabel);
+
+                var hLabel = document.createElement("label");
+                hLabel.className = "att-opening-field";
+                hLabel.innerHTML = "<span>Height (mm)</span>";
+                var hInput = document.createElement("input");
+                hInput.type = "number";
+                hInput.value = String(opening.height_mm || (isDoor ? 1900 : 400));
+                hInput.min = "200";
+                hInput.step = "50";
+                hInput.addEventListener("change", (function(oId, aId) {
+                  return function() {
+                    patchAttachmentOpening(aId, oId, { height_mm: parseInt(this.value, 10) || 400 });
+                  };
+                })(openingId, thisAttId));
+                hLabel.appendChild(hInput);
+                row2.appendChild(hLabel);
+
+                openingItem.appendChild(row2);
+
+                // Row 3: Door-specific options (style, hinge, open) or Window-specific (Y position)
+                if (isDoor) {
+                  var row3 = document.createElement("div");
+                  row3.className = "att-opening-row";
+
+                  var doorWidth = Math.floor(Number(opening.width_mm || 800));
+
+                  var styleLabel = document.createElement("label");
+                  styleLabel.className = "att-opening-field";
+                  styleLabel.innerHTML = "<span>Style</span>";
+                  var styleSel = document.createElement("select");
+                  var styleHtml = '<option value="standard">Standard</option>';
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-standard">Double Standard</option>';
+                  }
+                  styleHtml += '<option value="mortise-tenon">Mortise & Tenon</option>';
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-mortise-tenon">Double M&T</option>';
+                  }
+                  if (doorWidth > 1200) {
+                    styleHtml += '<option value="french">French Doors</option>';
+                  }
+                  styleSel.innerHTML = styleHtml;
+                  styleSel.value = String(opening.style || "standard");
+                  styleSel.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { style: this.value });
+                    };
+                  })(openingId, thisAttId));
+                  styleLabel.appendChild(styleSel);
+                  row3.appendChild(styleLabel);
+
+                  var hingeLabel = document.createElement("label");
+                  hingeLabel.className = "att-opening-field";
+                  hingeLabel.innerHTML = "<span>Hinge</span>";
+                  var hingeSel = document.createElement("select");
+                  hingeSel.innerHTML = '<option value="left">Left</option><option value="right">Right</option>';
+                  hingeSel.value = String(opening.handleSide || "left");
+                  hingeSel.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { handleSide: this.value });
+                    };
+                  })(openingId, thisAttId));
+                  hingeLabel.appendChild(hingeSel);
+                  row3.appendChild(hingeLabel);
+
+                  var openLabel = document.createElement("label");
+                  openLabel.className = "att-opening-field att-opening-checkbox";
+                  var openCheck = document.createElement("input");
+                  openCheck.type = "checkbox";
+                  openCheck.checked = !!(opening.isOpen);
+                  openCheck.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { isOpen: this.checked });
+                    };
+                  })(openingId, thisAttId));
+                  openLabel.appendChild(openCheck);
+                  openLabel.appendChild(document.createTextNode(" Open"));
+                  row3.appendChild(openLabel);
+
+                  openingItem.appendChild(row3);
+                } else {
+                  // Window: Y position
+                  var row3w = document.createElement("div");
+                  row3w.className = "att-opening-row";
+
+                  var yLabel = document.createElement("label");
+                  yLabel.className = "att-opening-field";
+                  yLabel.innerHTML = "<span>Y pos (mm)</span>";
+                  var yInput = document.createElement("input");
+                  yInput.type = "number";
+                  yInput.value = String(opening.y_mm || 1050);
+                  yInput.min = "200";
+                  yInput.step = "50";
+                  yInput.addEventListener("change", (function(oId, aId) {
+                    return function() {
+                      patchAttachmentOpening(aId, oId, { y_mm: parseInt(this.value, 10) || 1050 });
+                    };
+                  })(openingId, thisAttId));
+                  yLabel.appendChild(yInput);
+                  row3w.appendChild(yLabel);
+
+                  openingItem.appendChild(row3w);
+                }
+
+                openingsList.appendChild(openingItem);
+              })(attOpenings[oi], attId, attOpeningWalls);
+            }
+
+            openingsSection.appendChild(openingsList);
+          }
+
+          body.appendChild(openingsSection);
 
           // === Roof Section ===
           var roofSection = document.createElement("div");

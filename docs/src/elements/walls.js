@@ -3136,9 +3136,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const localInsH = wallInsHeight(wallId);
     
     // Get the insulation top Y at a given X position along this wall
-    // For slope walls, height varies; for flat walls, it's constant
+    // For slope walls, build at max height then CSG-trim to slope later
     function getInsTopY(x_mm) {
-      if (isSlopeWall) return plateY + insHeightAtX(x_mm);
       return plateY + localInsH;
     }
     
@@ -3172,6 +3171,9 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       }
       return null;
     }
+    
+    // Collect created insulation meshes (for CSG slope trim on pent slope walls)
+    const insMeshes = [];
     
     // Helper to create an insulation panel
     function createInsPanel(name, bayStart, bayEnd, yBottom, yTop) {
@@ -3207,6 +3209,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       ins.enableEdgesRendering();
       ins.edgesWidth = 1;
       ins.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+      insMeshes.push(ins);
       return ins;
     }
     
@@ -3311,6 +3314,67 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       }
       
       console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
+      
+      // CSG slope trim for pent slope walls — cut insulation to follow roof slope
+      if (isSlopeWall && insMeshes.length > 0) {
+        const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+        if (hasCSG) {
+          try {
+            const slopeRise = maxH - minH;
+            const slopeAngle = Math.atan2(slopeRise, frameW);
+            const cutterHeight = slopeRise + 500;
+            const cutterLen = Math.sqrt(frameW * frameW + slopeRise * slopeRise) + 200;
+            const insDepth = wallThk - 10;
+            
+            // Create cutter box above the slope line (same approach as ply/cladding slope trim)
+            const slopeCutter = BABYLON.MeshBuilder.CreateBox(prefix + "slope-cutter", {
+              width: cutterLen * 0.001,
+              height: cutterHeight * 0.001,
+              depth: (insDepth + 40) * 0.001
+            }, scene);
+            
+            // Position at midpoint of slope, shifted up by half cutter height
+            const midX = origin.x + frameW / 2;
+            const midY = (minH + maxH) / 2 + cutterHeight / 2;
+            const insZ = origin.z + wallThk / 2;
+            slopeCutter.position = new BABYLON.Vector3(
+              midX * 0.001,
+              midY * 0.001,
+              insZ * 0.001
+            );
+            slopeCutter.rotation.z = -slopeAngle;
+            slopeCutter.computeWorldMatrix(true);
+            
+            const cutCSG = BABYLON.CSG.FromMesh(slopeCutter);
+            let trimCount = 0;
+            
+            for (let mi = 0; mi < insMeshes.length; mi++) {
+              const insMesh = insMeshes[mi];
+              try {
+                insMesh.computeWorldMatrix(true);
+                const baseCSG = BABYLON.CSG.FromMesh(insMesh);
+                const resultCSG = baseCSG.subtract(cutCSG);
+                const trimmed = resultCSG.toMesh(insMesh.name + "-trimmed", insMat, scene, false);
+                trimmed.parent = shedRoot;
+                trimmed.metadata = insMesh.metadata;
+                trimmed.enableEdgesRendering();
+                trimmed.edgesWidth = 1;
+                trimmed.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
+                insMesh.dispose(false, true);
+                insMeshes[mi] = trimmed;
+                trimCount++;
+              } catch (e) {
+                console.warn('[WALL_INS] CSG slope trim failed for', insMesh.name, e);
+              }
+            }
+            
+            slopeCutter.dispose(false, true);
+            console.log('[WALL_INS] CSG slope trimmed', trimCount, '/', insMeshes.length, 'insulation panels for slope wall', wallId);
+          } catch (e) {
+            console.warn('[WALL_INS] CSG slope trim setup failed for wall', wallId, e);
+          }
+        }
+      }
     }
     
     // Only build plywood if showPlywood flag is true
