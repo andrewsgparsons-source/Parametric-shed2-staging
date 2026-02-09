@@ -3359,7 +3359,8 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const ply = BABYLON.MeshBuilder.CreateBox(plyPrefix + "panel", {
       width: plyW * 0.001,
       height: plyH * 0.001,
-      depth: plyD * 0.001
+      depth: plyD * 0.001,
+      updatable: true
     }, scene);
     
     ply.position = new BABYLON.Vector3(
@@ -3370,9 +3371,6 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     ply.material = plyMat;
     ply.parent = shedRoot;
     ply.metadata = { dynamic: true, sectionId: sectionId || null };
-    ply.enableEdgesRendering();
-    ply.edgesWidth = 2;
-    ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
     
     // For pent slope walls (front/back), adjust box vertices to follow roof slope
     // instead of CSG trimming (which was producing backwards slopes)
@@ -3402,12 +3400,18 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
         const normals = [];
         BABYLON.VertexData.ComputeNormals(positions, ply.getIndices(), normals);
         ply.updateVerticesData(BABYLON.VertexBuffer.NormalKind, normals);
+        ply.refreshBoundingInfo();
         
         console.log('[WALL_INS] Adjusted ply vertices to follow pent slope for wall', wallId);
       } catch (e) {
         console.warn('[WALL_INS] Pent ply slope vertex adjustment failed for wall', wallId, e);
       }
     }
+    
+    // Enable edges AFTER vertex modification so edge buffer matches actual geometry
+    ply.enableEdgesRendering();
+    ply.edgesWidth = 2;
+    ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
     
     // If wall has openings, cut them out using CSG
     if (wallOpenings.length > 0) {
