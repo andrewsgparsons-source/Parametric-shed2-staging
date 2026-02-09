@@ -520,7 +520,7 @@ export function getBuiltInPresets() {
     },
     {
       id: "preset.apex_garden_room",
-      name: "Apex Garden Room 2.3m × 2.9m",
+      name: "Apex Insulated Garden Room 2.3m × 2.9m",
       category: "Garden Room",
       description: "Insulated apex garden room with felt roof, mortise & tenon door, front windows and side picture window.",
       state: {
