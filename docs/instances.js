@@ -124,6 +124,7 @@ export function getBuiltInPresets() {
         "w": 1800,
         "d": 2400,
         "dimMode": "frame",
+        "dim": { "frameW_mm": 1800, "frameD_mm": 2400 },
         "roof": {
           "style": "pent",
           "covering": "felt",
@@ -180,6 +181,7 @@ export function getBuiltInPresets() {
         "w": 4000,
         "d": 3000,
         "dimMode": "frame",
+        "dim": { "frameW_mm": 4000, "frameD_mm": 3000 },
         "roof": {
           "style": "apex",
           "covering": "felt",
