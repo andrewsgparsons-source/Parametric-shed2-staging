@@ -71,12 +71,15 @@ const CLAD_Rb_MM = 5;       // Rebate depth - upper strip is recessed by this am
  * Calculate the main building's apex diamond bottom height
  * Used to cap attachment crest heights when ridges run parallel
  * @param {object} mainState - The main building state  
- * @returns {number} The bottom of the decorative diamond in mm from floor surface
+ * @returns {number} The bottom of the decorative diamond in mm from GROUND (absolute Y)
  */
 function getMainBuildingDiamondBottom(mainState) {
   const DIAMOND_SIZE_MM = 120;  // Same as in roof.js
   
-  // Get crest and eaves heights
+  // Floor surface height (heights like crest/eaves are measured from here)
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM; // 168mm
+  
+  // Get crest and eaves heights (relative to floor surface)
   const crestHeight = Number(
     mainState.roof?.apex?.heightToCrest_mm || 
     mainState.roof?.apex?.crestHeight_mm || 
@@ -104,19 +107,21 @@ function getMainBuildingDiamondBottom(mainState) {
   // Diamond bottom = center - half the diagonal (it's rotated 45°)
   const diamondBottom = diamondCenterY - DIAMOND_SIZE_MM / 2;
   
-  return diamondBottom;
+  // Return absolute from ground (add floor surface height)
+  return floorSurfaceY + diamondBottom;
 }
 
 /**
  * Calculate the main building's lowest fascia bottom height
  * This is used to cap attachment roof heights
  * @param {object} mainState - The main building state
- * @returns {number} The lowest fascia bottom height in mm from ground
+ * @returns {number} The lowest fascia bottom height in mm from GROUND (absolute Y)
  */
 function getMainBuildingFasciaBottom(mainState) {
   const roofStyle = mainState.roof?.style || "apex";
 
-  // Floor surface height (same as attachment)
+  // Floor surface height — eaves/crest heights are measured from here, so we
+  // must add it to convert to absolute Y from ground.
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM; // 168mm
 
   if (roofStyle === "apex") {
@@ -126,17 +131,22 @@ function getMainBuildingFasciaBottom(mainState) {
       mainState.roof?.apex?.eavesHeight_mm ||
       1850
     );
-    // Fascia bottom = eaves height - fascia depth
-    // The eavesHeight is measured from floor surface, so add floor stack
-    return eavesHeight - FASCIA_DEPTH_MM;
+    // Fascia bottom = floor surface + eaves height - fascia depth
+    return floorSurfaceY + eavesHeight - FASCIA_DEPTH_MM;
   } else if (roofStyle === "pent") {
     // For pent roof, the lowest point is at the min height end
     const minHeight = Number(mainState.roof?.pent?.minHeight_mm || 2100);
-    // Fascia bottom = min height - fascia depth
-    return minHeight - FASCIA_DEPTH_MM;
+    // Fascia bottom = floor surface + min height - fascia depth
+    return floorSurfaceY + minHeight - FASCIA_DEPTH_MM;
+  } else if (roofStyle === "hipped") {
+    // For hipped roof, eaves run all around
+    const eavesHeight = Number(
+      mainState.roof?.hipped?.heightToEaves_mm || 2500
+    );
+    return floorSurfaceY + eavesHeight - FASCIA_DEPTH_MM;
   } else {
-    // Default/fallback - use a reasonable value
-    return 1850 - FASCIA_DEPTH_MM; // 1715mm
+    // Default/fallback
+    return floorSurfaceY + 1850 - FASCIA_DEPTH_MM;
   }
 }
 
