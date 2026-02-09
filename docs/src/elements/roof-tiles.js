@@ -662,11 +662,11 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   const rise_mm = Math.max(100, crestH - eavesH);
 
   // Slope geometry
-  // In hipped roof.js, memberD_mm = g.depth_mm (75mm for 50x75).
-  // getMemberD() returns thickness (50mm) which is correct for apex but WRONG for hipped.
   // Match what buildHipped() in roof.js uses: depth_mm (the tall/load-bearing dimension).
-  const g = state?.frame?.gauge ? state.frame.gauge : {};
-  const memberD_mm = Math.max(1, Math.floor(Number(g.depth_mm || 75)));
+  // state.frame stores thickness_mm and depth_mm directly (no nested gauge object).
+  const memberD_mm = Math.max(1, Math.floor(Number(
+    state?.frame?.depth_mm || state?.frame?.gauge?.depth_mm || 75
+  )));
   const slopeAng   = Math.atan2(rise_mm, halfSpan_mm);
   const sinT       = Math.sin(slopeAng);
   const cosT       = Math.cos(slopeAng);
