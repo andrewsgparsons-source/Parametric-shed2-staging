@@ -1959,17 +1959,8 @@ function buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOut
   const fasciaTopY = RAFTER_D_MM + ROOF_OSB_MM;
   const fasciaBottomY = fasciaTopY - FASCIA_DEPTH_MM;
 
-  // Create fascia material with same color as wall cladding (tan/wood color)
-  // Using scene._claddingMatLight if available, otherwise create matching color
-  let fasciaMat = claddingMat;
-  if (!fasciaMat || !fasciaMat.diffuseColor) {
-    fasciaMat = new BABYLON.StandardMaterial(`att-${attId}-fascia-mat`, scene);
-    fasciaMat.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
-    fasciaMat.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
-    fasciaMat.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
-    fasciaMat.specularPower = 16;
-    fasciaMat.backFaceCulling = false;
-  }
+  // Use the same fascia material as the main building for consistency
+  let fasciaMat = scene._fasciaMat || claddingMat;
   console.log("[buildPentRoof] FASCIA - using material:", fasciaMat?.name, "color:", fasciaMat?.diffuseColor?.toString());
 
   // Eaves fascia (at A=0) - uses cladding color to match walls
