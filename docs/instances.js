@@ -116,6 +116,62 @@ export function getBuiltInPresets() {
       }
     },
     {
+      id: "preset.small_pent_shed",
+      name: "Small Pent Shed 6ft × 8ft",
+      category: "Small Sheds",
+      description: "Compact pent roof shed with side door and shiplap cladding.",
+      state: {
+        "w": 1800,
+        "d": 2400,
+        "dimMode": "frame",
+        "roof": {
+          "style": "pent",
+          "covering": "felt",
+          "apex": {
+            "heightToEaves_mm": 1850,
+            "heightToCrest_mm": 2200,
+            "trussCount": 3,
+            "tieBeam": "eaves"
+          },
+          "pent": {
+            "minHeight_mm": 2100,
+            "maxHeight_mm": 2400
+          },
+          "hipped": {
+            "heightToEaves_mm": 2500,
+            "heightToCrest_mm": 3600
+          }
+        },
+        "overhang": {
+          "uniform_mm": 75
+        },
+        "walls": {
+          "variant": "basic",
+          "height_mm": 2400,
+          "openings": [
+            {
+              "id": "door1",
+              "wall": "right",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 250,
+              "width_mm": 900,
+              "height_mm": 1900,
+              "handleSide": "right",
+              "isOpen": true
+            }
+          ]
+        },
+        "cladding": {
+          "style": "shiplap"
+        },
+        "frame": {
+          "thickness_mm": 50,
+          "depth_mm": 75
+        }
+      }
+    },
+    {
       id: "preset.small_shed",
       name: "Small Shed 2.4m × 1.8m",
       category: "Garden Shed",
