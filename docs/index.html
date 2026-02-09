@@ -108,6 +108,7 @@
                     <select id="roofStyle" aria-label="Roof Type">
                       <option value="apex" selected>Apex (gabled)</option>
                       <option value="pent">Pent (single pitch)</option>
+                      <option value="hipped">Hipped (4 slopes)</option>
                       <option value="hipped">Hipped</option>
                     </select>
                   </label>
@@ -322,6 +323,18 @@
                     </select>
                   </label>
                 </div>
+
+                <div class="boSubhead">Roof Covering</div>
+                <div class="row">
+                  <label>
+                    Style
+                    <select id="roofCoveringStyle" aria-label="Roof covering style">
+                      <option value="felt">Standard Felt</option>
+                      <option value="epdm">EPDM Rubber</option>
+                      <option value="slate">Synthetic Slate Tiles</option>
+                    </select>
+                  </label>
+                </div>
               </div>
             </details>
 
@@ -401,7 +414,13 @@
                   <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
                     <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure</label>
                     <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
-                    <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Standard covering toggle (felt/shingles) -->
+                    <label id="vRoofCoveringLabel" class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Slate-specific toggles (hidden by default) -->
+                    <label id="vRoofMembraneBattensLabel" class="check" style="display: none;"><input id="vRoofMembraneBattens" type="checkbox" checked /> Membrane &amp; Battens</label>
+                    <label id="vRoofTilesLabel" class="check" style="display: none;"><input id="vRoofTiles" type="checkbox" checked /> Tiles</label>
+                    <label class="check"><input id="vRoofInsulation" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vRoofPly" type="checkbox" checked /> Interior Plywood</label>
                   </div>
                 </div>
 
@@ -436,6 +455,7 @@
                     <label class="check"><input id="vAttRoofStructure" type="checkbox" checked /> Structure</label>
                     <label class="check"><input id="vAttRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
                     <label class="check"><input id="vAttRoofCovering" type="checkbox" checked /> Covering</label>
+                    <label class="check"><input id="vAttRoofInsulation" type="checkbox" checked /> Insulation</label>
                   </div>
                 </div>
 
@@ -553,7 +573,7 @@
   <!-- View: Base Cutting List -->
   <div id="bomPage" class="page" aria-hidden="true">
     <div class="page-header">
-      <h2 tabindex="-1">Master Cutting &amp; Assembly Schedule</h2>
+      <h2 tabindex="-1">Base / Floor Cutting List</h2>
       <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
     </div>
 
@@ -856,9 +876,9 @@
     })();
   </script>
   <script type="importmap">
-    { "scopes": { "./src/elements/": { "./instances.js": "../instances.js" }, "./src/": { "./elements/instances.js": "./instances.js" } } }
+    { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js"></script>
+  <script type="module" src="./src/index.js?_v=11"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Mobile UX initialization -->

@@ -8,7 +8,7 @@
 //
 
 import { DEFAULTS } from "./params.js";
-import { getBuiltInPresets, getDefaultBuiltInPresetId, findBuiltInPresetById } from "../instances.js";
+import { getBuiltInPresets, getDefaultBuiltInPresetId, findBuiltInPresetById } from "../instances.js?_v=9";
 import { copyViewerUrlToClipboard, isViewerMode, getProfileFromUrl } from "./profiles.js";
 
 export function initInstancesUI({ store, ids, dbg }) {
@@ -115,6 +115,37 @@ function applyState(stateObj) {
     // Deep merge onto DEFAULTS to ensure all required fields exist
     var baseline = cloneJson(DEFAULTS);
     var merged = deepMerge(baseline, cloneJson(stateObj || {}));
+    
+    // If preset provides legacy w/d fields, ensure dim + dimInputs are set correctly
+    // (resolveDims uses dim as canonical source, dimInputs as fallback)
+    if (stateObj && stateObj.w != null && stateObj.d != null) {
+      var mode = stateObj.dimMode || merged.dimMode || "frame";
+      var pw = Number(stateObj.w);
+      var pd = Number(stateObj.d);
+      if (pw > 0 && pd > 0) {
+        // Ensure dim is set from w/d (canonical)
+        if (!stateObj.dim) {
+          merged.dim = { frameW_mm: pw, frameD_mm: pd };
+        }
+        // Also update dimInputs for the current mode
+        if (!stateObj.dimInputs) {
+          var ov = merged.overhang || {};
+          var uniformOv = Number(ov.uniform_mm) || 0;
+          var lOv = Number(ov.left_mm) || uniformOv;
+          var rOv = Number(ov.right_mm) || uniformOv;
+          var fOv = Number(ov.front_mm) || uniformOv;
+          var bOv = Number(ov.back_mm) || uniformOv;
+          var gap = Number(merged.dimGap_mm) || 50;
+          if (mode === "frame") {
+            merged.dimInputs = deepMerge(merged.dimInputs, {
+              frameW_mm: pw, frameD_mm: pd,
+              baseW_mm: Math.max(1, pw - gap), baseD_mm: Math.max(1, pd - gap),
+              roofW_mm: pw + lOv + rOv, roofD_mm: pd + fOv + bOv
+            });
+          }
+        }
+      }
+    }
     
     // Replace entire state (not shallow merge)
     // We need to set each top-level key

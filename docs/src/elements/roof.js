@@ -39,6 +39,7 @@
  */
 
 import { CONFIG, resolveDims } from "../params.js";
+import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=7";
 
 /**
  * Builds the 3D roof geometry for the current building state.
@@ -136,7 +137,18 @@ export function build3D(state, ctx, sectionContext) {
 
   if (style === "pent") {
     console.log("[ROOF] Building pent roof");
-    buildPent(state, ctx, meshPrefix, sectionPos, sectionId);
+    try {
+      buildPent(state, ctx, meshPrefix, sectionPos, sectionId);
+      console.log("[ROOF] Pent roof build COMPLETE");
+      // Build tile layers if enabled
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers (pent)...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
+    } catch (e) {
+      console.error("[ROOF] Pent roof build FAILED:", e);
+    }
     return;
   }
 
@@ -145,8 +157,31 @@ export function build3D(state, ctx, sectionContext) {
     try {
       buildApex(state, ctx, meshPrefix, sectionPos, sectionId);
       console.log("[ROOF] Apex roof build COMPLETE");
+      // Build tile layers if enabled (default to enabled for testing)
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
     } catch (e) {
       console.error("[ROOF] Apex roof build FAILED:", e);
+    }
+    return;
+  }
+
+  if (style === "hipped") {
+    console.log("[ROOF] Building hipped roof");
+    try {
+      buildHipped(state, ctx, meshPrefix, sectionPos, sectionId);
+      console.log("[ROOF] Hipped roof build COMPLETE");
+      // Build tile layers if enabled
+      const tilesEnabled = state?.roof?.tiles?.enabled !== false;
+      if (tilesEnabled) {
+        console.log("[ROOF] Building tile layers (hipped)...");
+        buildTileLayers(state, ctx, null, state?.roof?.tiles || {});
+      }
+    } catch (e) {
+      console.error("[ROOF] Hipped roof build FAILED:", e);
     }
     return;
   }
@@ -177,6 +212,11 @@ export function updateBOM(state) {
 
   if (style === "apex") {
     updateBOM_Apex(state, tbody);
+    return;
+  }
+
+  if (style === "hipped") {
+    updateBOM_Hipped(state, tbody);
     return;
   }
 
@@ -968,7 +1008,7 @@ function isPentEnabled(state) {
  *   - minH_mm, maxH_mm: wall heights at low/high edges
  * @private
  */
-function computeRoofData_Pent(state) {
+export function computeRoofData_Pent(state) {
   const dims = resolveDims(state);
 
   const roofW = Math.max(1, Math.floor(Number(dims?.roof?.w_mm)));
@@ -1052,12 +1092,13 @@ function computeRoofData_Pent(state) {
   // We need to subtract floor and roof stacks to get wall frame height.
   // FLOOR_STACK = grid (50) + frame depth + floor OSB (18)
   // ROOF_STACK = rafter depth + roof OSB (18)
+  // NOTE: plateThickness is NOT included in FLOOR_STACK — it's part of the wall frame,
+  // not the floor. This must match walls.js pentStackAdjust calculation.
   const GRID_HEIGHT_MM = 50;
   const OSB_THK_MM = 18;
   const frameDepth_mm = Math.floor(Number(CONFIG?.timber?.d ?? 100));
   const rafterDepth_mm = baseW; // rafter depth = baseW (timber thickness)
-  const plateThickness_mm = Math.floor(Number(CONFIG?.timber?.w ?? 50));  // Wall top plate thickness
-  const FLOOR_STACK_MM = GRID_HEIGHT_MM + frameDepth_mm + OSB_THK_MM + plateThickness_mm;
+  const FLOOR_STACK_MM = GRID_HEIGHT_MM + frameDepth_mm + OSB_THK_MM;
   const ROOF_STACK_MM = rafterDepth_mm + OSB_THK_MM;
   const pentStackAdjust = FLOOR_STACK_MM + ROOF_STACK_MM;
   const minH = Math.max(
@@ -2129,8 +2170,15 @@ if (roofParts.osb) {
     const OSB_CLEAR_MM = 1;
     const osbOutOffset_mm = memberD_mm + OSB_CLEAR_MM;
     
-    // Fascia hangs down from top of OSB
-    // Position fascia so its top edge aligns with OSB top surface
+    // Check if slate tiles are used - fascia needs to be raised to cover batten end grain
+    const covering = (state && state.roof && state.roof.covering) ? state.roof.covering : "felt";
+    const isSlate = covering === "slate";
+    // Slate tiles add: membrane (1mm) + battens (25mm) + extra clearance (10mm) = 36mm above OSB
+    const SLATE_BATTEN_HEIGHT_MM = 36;
+    const fasciaExtraHeight_mm = isSlate ? SLATE_BATTEN_HEIGHT_MM : 0;
+    
+    // Fascia hangs down from top of OSB (or top of battens for slate)
+    // Position fascia so its top edge covers the batten end grain
     
     function createSlopeFascia(side) {
       const rotZ = (side === "L") ? slopeAng : -slopeAng;
@@ -2146,8 +2194,9 @@ if (roofParts.osb) {
         const ySurfEaves_mm = memberD_mm;
         const osbTopY_eaves_mm = ySurfEaves_mm + normalY * (osbOutOffset_mm + OSB_THK_MM);
         
-        // Fascia center position
-        const fasciaCenterY_mm = osbTopY_eaves_mm - (FASCIA_DEPTH_MM / 2);
+        // Fascia center position - raised by batten height when slate tiles are used
+        const fasciaTopY_mm = osbTopY_eaves_mm + fasciaExtraHeight_mm;
+        const fasciaCenterY_mm = fasciaTopY_mm - (FASCIA_DEPTH_MM / 2);
         const fasciaCenterX_mm = eavesX_mm + normalX * (osbOutOffset_mm + OSB_THK_MM + FASCIA_THK_MM / 2);
         
         mkBoxCenteredLocal(
@@ -2178,9 +2227,10 @@ if (roofParts.osb) {
           : (halfSpan_mm + runMid_mm);
         
         // Position barge board outside the OSB edge
+        // Raised by batten height when slate tiles are used
         const osbOuterOffset_mm = osbOutOffset_mm + OSB_THK_MM;
         const bargeCenterX_mm = xSurfMid_mm + normalX * osbOuterOffset_mm;
-        const bargeCenterY_mm = ySurfMid_mm + normalY * osbOuterOffset_mm - (FASCIA_DEPTH_MM / 2) * cosT;
+        const bargeCenterY_mm = ySurfMid_mm + normalY * (osbOuterOffset_mm + fasciaExtraHeight_mm) - (FASCIA_DEPTH_MM / 2) * cosT;
         
         // Front barge (z = 0)
         const bargeFront = mkBoxCenteredLocal(
@@ -2230,7 +2280,8 @@ if (roofParts.osb) {
       // Diamond center X is at the ridge (halfSpan)
       const diamondCenterX_mm = halfSpan_mm;
       // Diamond center Y - positioned so it covers the barge board joint
-      const diamondCenterY_mm = ridgeY_mm - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 4;
+      // Raised slightly to ensure full coverage of the ridge gap
+      const diamondCenterY_mm = ridgeY_mm - (FASCIA_DEPTH_MM / 2) * cosT + DIAMOND_SIZE_MM / 2;
       
       // Front diamond (z = 0)
       const diamondFront = BABYLON.MeshBuilder.CreateBox(
@@ -2629,6 +2680,272 @@ if (roofParts.osb) {
     }
   }
 
+  // ---- ROOF INTERIOR PLYWOOD LINING (12mm boards covering insulation) ----
+  // Only for raised tie beam configuration with insulated variant
+  const showRoofPly = (state.vis?.roofParts?.ply !== false) && (state.walls?.variant === "insulated");
+  
+  if (showRoofPly && tieBeamSetting === "raised" && trussPos.length >= 2) {
+    console.log('[ROOF_PLY] Building roof interior plywood - trussCount:', trussPos.length, 'bays:', trussPos.length - 1);
+    
+    // Plywood material (light wood color - same as wall plywood)
+    const roofPlyMat = new BABYLON.StandardMaterial('roofPlyMat-' + Date.now(), scene);
+    roofPlyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65); // Light wood
+    
+    const PLY_THICKNESS_MM = 12; // 12mm plywood
+    const INS_THICKNESS_MM = 50; // 50mm insulation (to calculate offset)
+    const sinT = Math.sin(slopeAng);
+    const cosT = Math.cos(slopeAng);
+    
+    // Small gap between panels
+    const PLY_GAP_MM = 2;
+    
+    // For each bay between trusses
+    for (let bayIdx = 0; bayIdx < trussPos.length - 1; bayIdx++) {
+      const z0_mm = trussPos[bayIdx] + memberW_mm; // After front truss
+      const z1_mm = trussPos[bayIdx + 1];          // Before back truss
+      const bayDepth_mm = Math.max(1, z1_mm - z0_mm);
+      
+      if (bayDepth_mm < 50) continue; // Skip tiny bays
+      
+      const bayZ_mm = z0_mm + bayDepth_mm / 2; // Center Z of bay
+      
+      // --- SLOPED PLYWOOD PANELS (left and right) ---
+      // Plywood sits on the INTERIOR side of insulation
+      // The sloped panels extend from eaves UP to where they meet the horizontal ceiling
+      
+      // Slope from eaves to tie beam level
+      const slopeRunX_mm = halfSpan_mm - raisedTieHalfSpan_mm;
+      const slopeRiseY_mm = raisedTieY_mm;
+      const slopedLen_mm = Math.sqrt(slopeRunX_mm * slopeRunX_mm + slopeRiseY_mm * slopeRiseY_mm);
+      
+      // Panel dimensions - plywood goes all the way to meet horizontal ceiling
+      const slopedPanelLen_mm = slopedLen_mm - PLY_GAP_MM;
+      const slopedPanelDepth_mm = bayDepth_mm - PLY_GAP_MM * 2;
+      
+      // Midpoint along the rafter surface (before any offset)
+      const midX_L_mm = slopeRunX_mm / 2;
+      const midY_mm = memberD_mm + slopeRiseY_mm / 2;
+      
+      // Offset CENTER inward from rafter surface - plywood is INSIDE the insulation
+      // Total offset = insulation thickness + half of plywood thickness
+      const totalOffset_mm = INS_THICKNESS_MM + PLY_THICKNESS_MM / 2;
+      const offsetX_mm = sinT * totalOffset_mm;
+      const offsetY_mm = cosT * totalOffset_mm;
+      
+      // LEFT sloped plywood panel
+      {
+        const cx_mm = midX_L_mm + offsetX_mm;
+        const cy_mm = midY_mm - offsetY_mm;
+        
+        const plyLeft = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-L`,
+          slopedPanelLen_mm,
+          PLY_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "L" }
+        );
+        if (plyLeft) {
+          plyLeft.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+          plyLeft.enableEdgesRendering();
+          plyLeft.edgesWidth = 1;
+          plyLeft.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+      
+      // RIGHT sloped plywood panel (mirror of left)
+      {
+        const midX_R_mm = A_mm - slopeRunX_mm / 2;
+        const cx_mm = midX_R_mm - offsetX_mm;
+        const cy_mm = midY_mm - offsetY_mm;
+        
+        const plyRight = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-R`,
+          slopedPanelLen_mm,
+          PLY_THICKNESS_MM,
+          slopedPanelDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "R" }
+        );
+        if (plyRight) {
+          plyRight.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+          plyRight.enableEdgesRendering();
+          plyRight.edgesWidth = 1;
+          plyRight.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+      
+      // --- HORIZONTAL CEILING PLYWOOD (between sloped sections) ---
+      // This is the flat ceiling at tie beam level - UNDERSIDE visible from below
+      {
+        const horizWidth_mm = raisedTieSpan_mm - PLY_GAP_MM * 2;
+        const horizDepth_mm = slopedPanelDepth_mm;
+        
+        // Position: centered on ridge, BOTTOM at insulation bottom level
+        // Insulation bottom is at: raisedTieY_mm + memberD_mm - INS_THICKNESS_MM
+        // Plywood top should be at insulation bottom, so plywood center is offset down by PLY_THICKNESS_MM/2
+        const cx_mm = halfSpan_mm;
+        const cy_mm = raisedTieY_mm + memberD_mm - INS_THICKNESS_MM - PLY_THICKNESS_MM / 2;
+        
+        const plyHoriz = mkBoxCenteredLocal(
+          `${meshPrefix}roof-ply-bay${bayIdx}-H`,
+          horizWidth_mm,
+          PLY_THICKNESS_MM,
+          horizDepth_mm,
+          cx_mm,
+          cy_mm,
+          bayZ_mm,
+          roofRoot,
+          roofPlyMat,
+          { roof: "apex", part: "ply", bay: bayIdx, side: "H" }
+        );
+        if (plyHoriz) {
+          plyHoriz.enableEdgesRendering();
+          plyHoriz.edgesWidth = 1;
+          plyHoriz.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+        }
+      }
+    }
+    
+    console.log('[ROOF_PLY] Created plywood lining for', trussPos.length - 1, 'bays');
+    
+    // ---- GABLE END PLYWOOD (TRAPEZOIDAL) ----
+    // Same shape as gable insulation but thinner (12mm) and offset inward
+    
+    const gablePlyDepth_mm = PLY_THICKNESS_MM; // 12mm depth
+    const topY_mm = raisedTieY_mm - PLY_GAP_MM;
+    const bottomY_mm = 0;
+    const kingPostLeftX_mm = halfSpan_mm - memberW_mm / 2;
+    const kingPostRightX_mm = halfSpan_mm + memberW_mm / 2;
+    
+    // Rafter inner face position calculator (same as insulation)
+    function leftRafterInnerX(y_mm) {
+      if (y_mm <= memberD_mm) return memberW_mm;
+      return memberW_mm + (y_mm - memberD_mm) * halfSpan_mm / rise_mm;
+    }
+    function rightRafterInnerX(y_mm) {
+      return A_mm - leftRafterInnerX(y_mm);
+    }
+    
+    // Build trapezoidal gable plywood for one side of king post
+    // Now with door cutout support (same as gable insulation)
+    function buildGablePlyTrapezoid(gableEnd, side, gableDoor) {
+      // Z position: offset INWARD from gable frame by insulation thickness + ply position
+      let z_mm;
+      const gableOffset_mm = INS_THICKNESS_MM; // After insulation
+      if (gableEnd === "front") {
+        z_mm = trussPos[0] + memberW_mm + gableOffset_mm;
+      } else {
+        z_mm = trussPos[trussPos.length - 1] - gableOffset_mm - gablePlyDepth_mm;
+      }
+      
+      // Trapezoid corner positions (same as insulation trapezoid)
+      const leftAtBottom = leftRafterInnerX(bottomY_mm);
+      const leftAtTop = leftRafterInnerX(topY_mm);
+      const rightAtBottom = rightRafterInnerX(bottomY_mm);
+      const rightAtTop = rightRafterInnerX(topY_mm);
+      
+      let x0_bottom, x1_bottom, x0_top, x1_top;
+      if (side === "L") {
+        x0_bottom = leftAtBottom + PLY_GAP_MM;
+        x1_bottom = kingPostLeftX_mm - PLY_GAP_MM;
+        x0_top = leftAtTop + PLY_GAP_MM;
+        x1_top = kingPostLeftX_mm - PLY_GAP_MM;
+      } else {
+        x0_bottom = kingPostRightX_mm + PLY_GAP_MM;
+        x1_bottom = rightAtBottom - PLY_GAP_MM;
+        x0_top = kingPostRightX_mm + PLY_GAP_MM;
+        x1_top = rightAtTop - PLY_GAP_MM;
+      }
+      
+      // Build 2D shape - either simple trapezoid or with door notch
+      let shape = [];
+      
+      if (gableDoor) {
+        // Calculate door position in roof-local coordinates
+        const doorLeftEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) - (gableDoor.studW || 50);
+        const doorRightEdge = l_mm + Math.floor(Number(gableDoor.x_mm || 0)) + Math.floor(Number(gableDoor.width_mm || 800)) + (gableDoor.studW || 50);
+        const eavesH = Number(apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850;
+        const doorTopY = Math.floor(Number(gableDoor.doorTopY || 0)) - eavesH;
+        
+        // Check if door overlaps this trapezoid
+        if (doorLeftEdge < x1_bottom && doorRightEdge > x0_bottom && doorTopY > bottomY_mm) {
+          // Door overlaps - create shape with notch cut from bottom
+          const cutLeft = Math.max(doorLeftEdge, x0_bottom);
+          const cutRight = Math.min(doorRightEdge, x1_bottom);
+          const cutTop = Math.min(doorTopY, topY_mm);
+          
+          console.log('[ROOF_PLY] Cutting door notch in gable ply', gableEnd, side, 
+            'door:', doorLeftEdge, '-', doorRightEdge, 'y:', doorTopY,
+            'cut:', cutLeft, '-', cutRight, 'top:', cutTop);
+          
+          // Trapezoid with rectangular notch - go clockwise from bottom-left
+          shape = [
+            new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),    // BL corner
+            new BABYLON.Vector3(cutLeft / 1000, bottomY_mm / 1000, 0),      // Before door
+            new BABYLON.Vector3(cutLeft / 1000, cutTop / 1000, 0),          // Up to door header
+            new BABYLON.Vector3(cutRight / 1000, cutTop / 1000, 0),         // Across door header
+            new BABYLON.Vector3(cutRight / 1000, bottomY_mm / 1000, 0),     // Down after door
+            new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),    // BR corner
+            new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),          // TR corner
+            new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),          // TL corner
+          ];
+        } else {
+          // No overlap - simple trapezoid
+          shape = [
+            new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),
+            new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),
+            new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),
+          ];
+        }
+      } else {
+        // No door - simple trapezoid
+        shape = [
+          new BABYLON.Vector3(x0_bottom / 1000, bottomY_mm / 1000, 0),
+          new BABYLON.Vector3(x1_bottom / 1000, bottomY_mm / 1000, 0),
+          new BABYLON.Vector3(x1_top / 1000, topY_mm / 1000, 0),
+          new BABYLON.Vector3(x0_top / 1000, topY_mm / 1000, 0),
+        ];
+      }
+      
+      // Extrusion path along Z
+      const extrusionPath = [
+        new BABYLON.Vector3(0, 0, z_mm / 1000),
+        new BABYLON.Vector3(0, 0, (z_mm + gablePlyDepth_mm) / 1000)
+      ];
+      
+      const gablePly = BABYLON.MeshBuilder.ExtrudeShape(
+        `${meshPrefix}roof-ply-gable-${gableEnd}-${side}`,
+        { shape: shape, path: extrusionPath, cap: BABYLON.Mesh.CAP_ALL, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
+        scene
+      );
+      gablePly.material = roofPlyMat;
+      gablePly.parent = roofRoot;
+      gablePly.metadata = { dynamic: true, sectionId: sectionId || null, roof: "apex", part: "ply-gable", end: gableEnd, side: side };
+      gablePly.enableEdgesRendering();
+      gablePly.edgesWidth = 1;
+      gablePly.edgesColor = new BABYLON.Color4(0.6, 0.5, 0.4, 1);
+    }
+    
+    // Only build gable plywood if we have gable insulation area (raised tie beam gives headroom)
+    if (raisedTieY_mm > 50) {
+      buildGablePlyTrapezoid("front", "L", frontGableDoor);
+      buildGablePlyTrapezoid("front", "R", frontGableDoor);
+      buildGablePlyTrapezoid("back", "L", backGableDoor);
+      buildGablePlyTrapezoid("back", "R", backGableDoor);
+      console.log('[ROOF_PLY] Created gable end plywood trapezoids');
+    }
+  }
+
   // ---- Placement in world: align plan min corner to [-l,-f], then lift to wall height ----
   const targetMinX_m = (-l_mm) / 1000;
   const targetMinZ_m = (-f_mm) / 1000;
@@ -2940,6 +3257,1165 @@ function updateBOM_Apex(state, tbody) {
   totalFrameLength_mm += (trussQty * 2) * rafterLen_mm;  // Truss Rafters
   totalFrameLength_mm += 1 * B_mm;                  // Ridge Beam
   totalFrameLength_mm += purlinQty * B_mm;          // Purlins
+
+  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+  appendRow5(tbody, [
+    "TOTAL FRAME",
+    String(totalFrameStockPieces),
+    String(FRAME_STOCK_LENGTH),
+    "",
+    `Total: ${Math.round(totalFrameLength_mm / 1000 * 10) / 10}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`
+  ]);
+
+  if (!rows.length) appendPlaceholderRow(tbody, "Roof cutting list not yet generated.");
+}
+
+/* ------------------------------ HIPPED (new) ------------------------------ */
+
+/**
+ * Builds a hipped roof with four sloping sides meeting at a ridge (or point for square plans).
+ * Creates hip rafters, jack rafters, common rafters, ridge, OSB sheathing, covering, and fascia.
+ * 
+ * Components built:
+ * - Ridge board: shortened (length = depth - width, or none for square plans)
+ * - Hip rafters: 4 diagonal rafters from corners to ridge ends (or peak)
+ * - Common rafters: standard rafters in the middle section (if rectangular)
+ * - Jack rafters: shortened rafters from wall plate to hip rafters
+ * - OSB: 4 roof planes (2 trapezoids + 2 triangles, or 4 triangles if square)
+ * - Covering: felt/membrane over OSB
+ * - Fascia: trim boards around perimeter and along hips
+ * 
+ * @param {Object} state - Building state with roof.hipped parameters
+ * @param {Object} ctx - Babylon.js context {scene, materials}
+ * @param {string} [meshPrefix=""] - Prefix for mesh names (for multi-section)
+ * @param {Object} [sectionPos={x:0,y:0,z:0}] - Section position offset in mm
+ * @param {string|null} [sectionId=null] - Section identifier for metadata
+ * @private
+ */
+function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 }, sectionId = null) {
+  const { scene, materials } = ctx || {};
+  if (!scene) return;
+
+  const roofParts = getRoofParts(state);
+  const dims = resolveDims(state);
+
+  const ovh = (dims && dims.overhang) ? dims.overhang : { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+  const l_mm = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+  const r_mm = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+  const f_mm = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+  const b_mm = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+
+  const frameW_mm = Math.max(1, Math.floor(Number(dims?.frame?.w_mm ?? state?.w ?? 1)));
+  const frameD_mm = Math.max(1, Math.floor(Number(dims?.frame?.d_mm ?? state?.d ?? 1)));
+
+  // Roof plan (outer) in mm - includes overhang
+  const roofW_mm = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
+  const roofD_mm = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? frameD_mm)));
+
+  // For hipped roof: A = width (X), B = depth (Z)
+  const A_mm = roofW_mm;
+  const B_mm = roofD_mm;
+
+  // Determine if rectangular (has ridge) or square (pyramid peak)
+  const isSquare = Math.abs(A_mm - B_mm) < 100; // Within 100mm = treat as square
+  
+  // Ridge length (0 for square/pyramid)
+  const ridgeLen_mm = isSquare ? 0 : Math.max(0, B_mm - A_mm);
+  
+  // Ridge starts/ends positions along Z
+  const ridgeStartZ_mm = A_mm / 2;
+  const ridgeEndZ_mm = B_mm - (A_mm / 2);
+
+  // Height controls - use apex settings if available
+  const hipped = (state && state.roof && state.roof.hipped) ? state.roof.hipped : null;
+  const apex = (state && state.roof && state.roof.apex) ? state.roof.apex : null;
+  
+  const eavesH_mm = Number(hipped?.heightToEaves_mm || apex?.heightToEaves_mm || apex?.eavesHeight_mm) || 1850;
+  const crestH_mm = Number(hipped?.heightToCrest_mm || apex?.heightToCrest_mm || apex?.crestHeight_mm) || 2400;
+  
+  // Calculate rise from eaves to crest
+  const rise_mm = Math.max(100, crestH_mm - eavesH_mm);
+
+  // Timber section
+  // For load-bearing rafters, timber should be "on its side" (tall and narrow)
+  // g.thickness_mm = narrow dimension (e.g., 50mm)
+  // g.depth_mm = tall dimension (e.g., 75 or 100mm)
+  const g = getRoofFrameGauge(state);
+  const baseW = Math.max(1, Math.floor(Number(g.thickness_mm)));  // e.g., 50
+  const baseD = Math.max(1, Math.floor(Number(g.depth_mm)));      // e.g., 75/100
+  const memberW_mm = baseW; // width in plan = narrow (50mm)
+  const memberD_mm = baseD; // vertical depth = tall (75/100mm) - load bearing
+
+  // Materials
+  const joistMat = materials && materials.timber ? materials.timber : null;
+
+  const osbMat = (() => {
+    try {
+      if (scene._roofOsbMat) return scene._roofOsbMat;
+      const m = new BABYLON.StandardMaterial("roofOsbMat", scene);
+      m.diffuseColor = new BABYLON.Color3(0.75, 0.62, 0.45);
+      scene._roofOsbMat = m;
+      return m;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const coveringMat = (() => {
+    try {
+      if (scene._roofCoveringMat) return scene._roofCoveringMat;
+      const m = new BABYLON.StandardMaterial("roofCoveringMat", scene);
+      m.diffuseColor = new BABYLON.Color3(0.1, 0.1, 0.1); // Black
+      scene._roofCoveringMat = m;
+      return m;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  // Helper functions
+  function mkBoxBottomLocal(name, Lx_mm, Ly_mm, Lz_mm, x_mm, yBottom_m, z_mm, parentNode, mat, meta) {
+    const mesh = BABYLON.MeshBuilder.CreateBox(
+      name,
+      { width: Lx_mm / 1000, height: Ly_mm / 1000, depth: Lz_mm / 1000 },
+      scene
+    );
+    mesh.position = new BABYLON.Vector3(
+      (x_mm + Lx_mm / 2) / 1000,
+      yBottom_m + (Ly_mm / 2) / 1000,
+      (z_mm + Lz_mm / 2) / 1000
+    );
+    mesh.material = mat;
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
+    if (parentNode) mesh.parent = parentNode;
+    return mesh;
+  }
+
+  function mkBoxCenteredLocal(name, Lx_mm, Ly_mm, Lz_mm, cx_mm, cy_mm, cz_mm, parentNode, mat, meta) {
+    const mesh = BABYLON.MeshBuilder.CreateBox(
+      name,
+      { width: Lx_mm / 1000, height: Ly_mm / 1000, depth: Lz_mm / 1000 },
+      scene
+    );
+    mesh.position = new BABYLON.Vector3(cx_mm / 1000, cy_mm / 1000, cz_mm / 1000);
+    mesh.material = mat;
+    mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, meta || {});
+    if (parentNode) mesh.parent = parentNode;
+    return mesh;
+  }
+
+  // Root transform node
+  const roofRoot = new BABYLON.TransformNode(`${meshPrefix}roof-root`, scene);
+  roofRoot.metadata = { dynamic: true, sectionId: sectionId || null };
+  roofRoot.position = new BABYLON.Vector3(sectionPos.x / 1000, sectionPos.y / 1000, sectionPos.z / 1000);
+  roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
+
+  // Calculate geometry
+  const halfSpan_mm = A_mm / 2; // Half width for common rafter rise calculation
+  const commonRafterLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
+  const commonSlopeAng = Math.atan2(rise_mm, halfSpan_mm);
+  
+  // Hip rafter geometry (runs at 45° in plan from corners to ridge ends)
+  // Plan length = halfSpan * sqrt(2) (diagonal of half-width square)
+  const hipPlanLen_mm = halfSpan_mm * Math.SQRT2;
+  const hipRafterLen_mm = Math.sqrt(hipPlanLen_mm * hipPlanLen_mm + rise_mm * rise_mm);
+  const hipSlopeAng = Math.atan2(rise_mm, hipPlanLen_mm);
+
+  // Jack rafter spacing (same as common rafters)
+  const rafterSpacing_mm = 600;
+
+  if (roofParts.structure) {
+    // === RIDGE BOARD (only if rectangular) ===
+    // Ridge top should be at rise_mm (where rafters meet), not bottom
+    if (ridgeLen_mm > 0) {
+      mkBoxBottomLocal(
+        `${meshPrefix}roof-hipped-ridge`,
+        memberW_mm,
+        memberD_mm,
+        ridgeLen_mm,
+        Math.floor(halfSpan_mm - memberW_mm / 2),
+        (rise_mm - memberD_mm) / 1000,  // Position so TOP is at rise_mm
+        ridgeStartZ_mm,
+        roofRoot,
+        joistMat,
+        { roof: "hipped", part: "ridge" }
+      );
+    }
+
+    // === HIP RAFTERS (4 diagonal rafters from corners to ridge ends/peak) ===
+    // Each hip rafter runs from a corner (at y=0) to the ridge end (at y=rise)
+    // In plan view, they run at 45° from the corners
+    
+    const hipCorners = [
+      { name: "FL", x: 0, z: 0, ridgeX: halfSpan_mm, ridgeZ: ridgeStartZ_mm }, // Front-Left
+      { name: "FR", x: A_mm, z: 0, ridgeX: halfSpan_mm, ridgeZ: ridgeStartZ_mm }, // Front-Right
+      { name: "BL", x: 0, z: B_mm, ridgeX: halfSpan_mm, ridgeZ: ridgeEndZ_mm }, // Back-Left
+      { name: "BR", x: A_mm, z: B_mm, ridgeX: halfSpan_mm, ridgeZ: ridgeEndZ_mm }, // Back-Right
+    ];
+
+    for (let i = 0; i < hipCorners.length; i++) {
+      const hip = hipCorners[i];
+      
+      // Calculate center position and rotation for hip rafter
+      const dx = hip.ridgeX - hip.x;
+      const dz = hip.ridgeZ - hip.z;
+      const planAngle = Math.atan2(dz, dx); // Angle in XZ plane
+      
+      // Center of hip rafter (midpoint between eaves at y=0 and ridge at y=rise)
+      const cx_mm = (hip.x + hip.ridgeX) / 2;
+      const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
+      const cz_mm = (hip.z + hip.ridgeZ) / 2;
+
+      const hipMesh = mkBoxCenteredLocal(
+        `${meshPrefix}roof-hipped-hip-${hip.name}`,
+        hipRafterLen_mm,
+        memberD_mm,
+        memberW_mm,
+        cx_mm,
+        cy_mm,
+        cz_mm,
+        roofRoot,
+        joistMat,
+        { roof: "hipped", part: "hip-rafter", corner: hip.name }
+      );
+      
+      // Rotate: first rotate about Z for slope, then about Y for plan direction
+      // Create rotation from Euler angles
+      hipMesh.rotation = new BABYLON.Vector3(0, -planAngle, hipSlopeAng);
+    }
+
+    // === COMMON RAFTERS (only in middle section if rectangular) ===
+    // These run perpendicular to the ridge, from ridge to wall plate
+    if (ridgeLen_mm > 0) {
+      const commonStartZ = ridgeStartZ_mm + memberW_mm; // After first hip connection
+      const commonEndZ = ridgeEndZ_mm - memberW_mm; // Before last hip connection
+      
+      // Generate positions along the ridge
+      const commonPositions = [];
+      let z = commonStartZ;
+      while (z < commonEndZ) {
+        commonPositions.push(z);
+        z += rafterSpacing_mm;
+      }
+      
+      for (let i = 0; i < commonPositions.length; i++) {
+        const z_mm = commonPositions[i];
+        
+        // Left common rafter (from ridge to left wall)
+        {
+          const cx_mm = halfSpan_mm / 2;
+          const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
+          
+          const leftRafter = mkBoxCenteredLocal(
+            `${meshPrefix}roof-hipped-common-L-${i}`,
+            commonRafterLen_mm,
+            memberD_mm,
+            memberW_mm,
+            cx_mm,
+            cy_mm,
+            z_mm + memberW_mm / 2,
+            roofRoot,
+            joistMat,
+            { roof: "hipped", part: "common-rafter", side: "L" }
+          );
+          leftRafter.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
+        }
+        
+        // Right common rafter (from ridge to right wall)
+        {
+          const cx_mm = halfSpan_mm + halfSpan_mm / 2;
+          const cy_mm = rise_mm / 2;  // Center height between eaves (0) and ridge (rise)
+          
+          const rightRafter = mkBoxCenteredLocal(
+            `${meshPrefix}roof-hipped-common-R-${i}`,
+            commonRafterLen_mm,
+            memberD_mm,
+            memberW_mm,
+            cx_mm,
+            cy_mm,
+            z_mm + memberW_mm / 2,
+            roofRoot,
+            joistMat,
+            { roof: "hipped", part: "common-rafter", side: "R" }
+          );
+          rightRafter.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
+        }
+      }
+    }
+
+    // === JACK RAFTERS (shortened rafters on hip end slopes) ===
+    // Jack rafters are like common rafters but truncated by hip rafters at corners.
+    // They land on the FRONT/BACK wall plates and run along Z (parallel to common rafters).
+    // At the hip end, they form pairs on either side of each hip rafter.
+    
+    // FRONT HIP END - jack rafters landing on FRONT wall plate (Z=0)
+    // Run from front wall toward back, truncated by hip rafters
+    {
+      // Left side of front hip end (left of center, truncated by FL hip)
+      // Jack at X position meets FL hip at Z = X (since hip is 45° in plan)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = j * rafterSpacing_mm;  // Position along front wall from left corner
+        
+        if (xPos >= halfSpan_mm) break;  // Stop at ridge centerline
+        
+        // Hip is at Z = xPos at this X position
+        const jackRunZ = xPos;  // Length of horizontal run (to hip)
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on front wall at (xPos, 0, 0), rises to hip at (xPos, heightAtHip, xPos)
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = jackRunZ / 2;  // Centered along Z run from wall
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-FL-${j}`,
+          memberW_mm,  // width along X
+          memberD_mm,
+          jackLen_mm,  // length along Z (slope)
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "front", side: "L" }
+        );
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
+        
+        console.log(`[JACK_RAFTERS] FL-${j}: xPos=${xPos}mm, jackLen=${jackLen_mm}mm at (${cx_mm}, ${cy_mm}, ${cz_mm})`);
+      }
+      
+      // Right side of front hip end (right of center, truncated by FR hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = A_mm - j * rafterSpacing_mm;  // Position from right corner
+        
+        if (xPos <= halfSpan_mm) break;  // Stop at ridge centerline
+        
+        // Hip is at Z = (A_mm - xPos) at this X position
+        const distFromRightCorner = A_mm - xPos;
+        const jackRunZ = distFromRightCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = jackRunZ / 2;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-FR-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "front", side: "R" }
+        );
+        jack.rotation = new BABYLON.Vector3(-jackAngle, 0, 0);
+        
+        console.log(`[JACK_RAFTERS] FR-${j}: xPos=${xPos}mm, jackLen=${jackLen_mm}mm`);
+      }
+    }
+    
+    // BACK HIP END - jack rafters landing on BACK wall plate (Z=B)
+    {
+      // Left side of back hip end (truncated by BL hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = j * rafterSpacing_mm;
+        
+        if (xPos >= halfSpan_mm) break;
+        
+        const jackRunZ = xPos;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on back wall at (xPos, 0, B), rises toward ridge
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = B_mm - jackRunZ / 2;  // Centered from back wall
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-BL-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "back", side: "L" }
+        );
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
+      }
+      
+      // Right side of back hip end (truncated by BR hip)
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const xPos = A_mm - j * rafterSpacing_mm;
+        
+        if (xPos <= halfSpan_mm) break;
+        
+        const distFromRightCorner = A_mm - xPos;
+        const jackRunZ = distFromRightCorner;
+        const heightAtHip = jackRunZ * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunZ * jackRunZ + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = xPos;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = B_mm - jackRunZ / 2;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunZ);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-BR-${j}`,
+          memberW_mm,
+          memberD_mm,
+          jackLen_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", end: "back", side: "R" }
+        );
+        jack.rotation = new BABYLON.Vector3(jackAngle, 0, 0);
+      }
+    }
+    
+    // === PAIRED SIDE SLOPE JACKS ===
+    // These land on LEFT/RIGHT wall plates and pair with the front/back jacks at the hip
+    
+    // LEFT slope - jacks landing on LEFT wall (X=0), pairing with FL/BL jacks
+    {
+      // Front portion - pairs with FL jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = j * rafterSpacing_mm;  // Position along left wall from front corner
+        
+        if (zPos >= ridgeStartZ_mm) break;  // Stop at ridge start
+        
+        // Hip at this Z position is at X = zPos (45° angle)
+        const jackRunX = zPos;  // Run from left wall to hip
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on left wall at (0, 0, zPos), rises to hip
+        const cx_mm = jackRunX / 2;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = zPos;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-LS-F-${j}`,
+          jackLen_mm,  // length along X
+          memberD_mm,
+          memberW_mm,  // width along Z
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", slope: "left", end: "front" }
+        );
+        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
+      }
+      
+      // Back portion - pairs with BL jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = B_mm - j * rafterSpacing_mm;
+        
+        if (zPos <= ridgeEndZ_mm) break;
+        
+        const distFromBackCorner = B_mm - zPos;
+        const jackRunX = distFromBackCorner;
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = jackRunX / 2;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = zPos;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-LS-B-${j}`,
+          jackLen_mm,
+          memberD_mm,
+          memberW_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", slope: "left", end: "back" }
+        );
+        jack.rotation = new BABYLON.Vector3(0, 0, jackAngle);
+      }
+    }
+    
+    // RIGHT slope - jacks landing on RIGHT wall (X=A), pairing with FR/BR jacks
+    {
+      // Front portion - pairs with FR jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = j * rafterSpacing_mm;
+        
+        if (zPos >= ridgeStartZ_mm) break;
+        
+        const jackRunX = zPos;  // Run from right wall to hip (toward center)
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        // Jack lands on right wall at (A, 0, zPos), rises toward hip at (A-zPos, height, zPos)
+        const cx_mm = A_mm - jackRunX / 2;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = zPos;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-RS-F-${j}`,
+          jackLen_mm,
+          memberD_mm,
+          memberW_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", slope: "right", end: "front" }
+        );
+        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);  // Negative for right side
+      }
+      
+      // Back portion - pairs with BR jacks
+      for (let j = 1; j <= Math.floor(halfSpan_mm / rafterSpacing_mm); j++) {
+        const zPos = B_mm - j * rafterSpacing_mm;
+        
+        if (zPos <= ridgeEndZ_mm) break;
+        
+        const distFromBackCorner = B_mm - zPos;
+        const jackRunX = distFromBackCorner;
+        const heightAtHip = jackRunX * (rise_mm / halfSpan_mm);
+        const jackLen_mm = Math.sqrt(jackRunX * jackRunX + heightAtHip * heightAtHip);
+        
+        if (jackLen_mm < memberW_mm * 2) continue;
+        
+        const cx_mm = A_mm - jackRunX / 2;
+        const cy_mm = heightAtHip / 2;
+        const cz_mm = zPos;
+        
+        const jackAngle = Math.atan2(heightAtHip, jackRunX);
+        
+        const jack = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-jack-RS-B-${j}`,
+          jackLen_mm,
+          memberD_mm,
+          memberW_mm,
+          cx_mm,
+          cy_mm,
+          cz_mm,
+          roofRoot,
+          joistMat,
+          { roof: "hipped", part: "jack-rafter", slope: "right", end: "back" }
+        );
+        jack.rotation = new BABYLON.Vector3(0, 0, -jackAngle);
+      }
+    }
+  }
+
+  // === OSB SHEATHING - Proper Hipped Roof Geometry ===
+  // 2 Rectangles (saddle sections) + 8 Triangles (hip end panels)
+  if (roofParts.osb) {
+    const osbThk = 18;
+    
+    const sinT = Math.sin(commonSlopeAng);
+    const cosT = Math.cos(commonSlopeAng);
+    const hipSinT = Math.sin(hipSlopeAng);
+    const hipCosT = Math.cos(hipSlopeAng);
+    
+    // OSB sits on top of rafters (at rafter top surface)
+    const osbOffset_mm = memberD_mm;
+    
+    // ============================================
+    // RECTANGLES: 2 saddle sections (main slopes)
+    // ============================================
+    // These span from front hip to back hip along the ridge
+    if (ridgeLen_mm > 0) {
+      // Left saddle rectangle
+      {
+        const slopeLen_mm = commonRafterLen_mm;
+        const panelWidth_mm = ridgeLen_mm;
+        
+        // Center of the slope
+        const sMid_mm = slopeLen_mm / 2;
+        const runMid_mm = sMid_mm * cosT;
+        const dropMid_mm = sMid_mm * sinT;
+        const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
+        
+        // X position (left slope goes from halfSpan toward 0)
+        const xSurf_mm = halfSpan_mm - runMid_mm;
+        
+        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
+        const cx = xSurf_mm + (-sinT) * (osbThk / 2);
+        const cy = ySurf_mm + cosT * (osbThk / 2);
+        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
+        
+        const meshL = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-osb-saddle-L`,
+          slopeLen_mm,
+          osbThk,
+          panelWidth_mm,
+          cx,
+          cy,
+          cz,
+          roofRoot,
+          osbMat,
+          { roof: "hipped", part: "osb", type: "saddle", side: "L" }
+        );
+        meshL.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
+        if (meshL.enableEdgesRendering) {
+          meshL.enableEdgesRendering();
+          meshL.edgesWidth = 2;
+          meshL.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        }
+      }
+      
+      // Right saddle rectangle
+      {
+        const slopeLen_mm = commonRafterLen_mm;
+        const panelWidth_mm = ridgeLen_mm;
+        
+        const sMid_mm = slopeLen_mm / 2;
+        const runMid_mm = sMid_mm * cosT;
+        const dropMid_mm = sMid_mm * sinT;
+        const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
+        
+        // X position (right slope goes from halfSpan toward A_mm)
+        const xSurf_mm = halfSpan_mm + runMid_mm;
+        
+        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
+        const cx = xSurf_mm + sinT * (osbThk / 2);
+        const cy = ySurf_mm + cosT * (osbThk / 2);
+        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
+        
+        const meshR = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-osb-saddle-R`,
+          slopeLen_mm,
+          osbThk,
+          panelWidth_mm,
+          cx,
+          cy,
+          cz,
+          roofRoot,
+          osbMat,
+          { roof: "hipped", part: "osb", type: "saddle", side: "R" }
+        );
+        meshR.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
+        if (meshR.enableEdgesRendering) {
+          meshR.enableEdgesRendering();
+          meshR.edgesWidth = 2;
+          meshR.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        }
+      }
+    }
+    
+    // ============================================
+    // TRIANGLES: 8 hip end panels (4 per hip end)
+    // ============================================
+    // Each hip end has 4 triangles:
+    // - 2 on the main slope sides (meeting the saddle rectangles)
+    // - Each split by the hip rafter into left/right
+    
+    // Helper to create a triangular OSB panel
+    function createTriangleOSB(name, p1, p2, p3, normal, metadata) {
+      // p1, p2, p3 are Vector3 positions in mm
+      // Create a triangle mesh using vertex data
+      
+      const positions = [
+        p1.x / 1000, p1.y / 1000, p1.z / 1000,
+        p2.x / 1000, p2.y / 1000, p2.z / 1000,
+        p3.x / 1000, p3.y / 1000, p3.z / 1000
+      ];
+      
+      // Two triangles (front and back faces)
+      const indices = [0, 1, 2, 2, 1, 0];
+      
+      // Normals for both faces
+      const normals = [
+        normal.x, normal.y, normal.z,
+        normal.x, normal.y, normal.z,
+        normal.x, normal.y, normal.z
+      ];
+      
+      const vertexData = new BABYLON.VertexData();
+      vertexData.positions = positions;
+      vertexData.indices = indices;
+      vertexData.normals = normals;
+      
+      const mesh = new BABYLON.Mesh(name, scene);
+      vertexData.applyToMesh(mesh);
+      mesh.material = osbMat;
+      mesh.metadata = Object.assign({ dynamic: true, sectionId: sectionId || null }, metadata || {});
+      if (roofRoot) mesh.parent = roofRoot;
+      
+      if (mesh.enableEdgesRendering) {
+        mesh.enableEdgesRendering();
+        mesh.edgesWidth = 2;
+        mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+      }
+      
+      return mesh;
+    }
+    
+    // Calculate key points for hip triangles
+    // Front hip end (at Z = 0 to ridgeStartZ_mm)
+    // Back hip end (at Z = ridgeEndZ_mm to B_mm)
+    
+    // Base Y for OSB - should sit ON TOP of rafters at eaves level
+    // Using just memberD_mm to sit right on the rafters (not offset above)
+    const osbY = memberD_mm;
+    
+    // FRONT HIP END - 4 triangles
+    {
+      // Ridge end point (where front hip meets ridge)
+      const ridgeFrontX = halfSpan_mm;
+      const ridgeFrontY = osbOffset_mm + rise_mm + osbThk / 2;
+      const ridgeFrontZ = ridgeStartZ_mm;
+      
+      // Eaves corners
+      const eavesFL_X = 0;
+      const eavesFL_Y = osbY;
+      const eavesFL_Z = 0;
+      
+      const eavesFR_X = A_mm;
+      const eavesFR_Y = osbY;
+      const eavesFR_Z = 0;
+      
+      // Mid-point of front eaves (where hip rafter meets eaves)
+      const eavesFMid_X = halfSpan_mm;
+      const eavesFMid_Y = osbY;
+      const eavesFMid_Z = 0;
+      
+      // Left saddle junction (where left saddle meets front hip)
+      const saddleFLjunc_X = 0;
+      const saddleFLjunc_Y = osbY;
+      const saddleFLjunc_Z = ridgeStartZ_mm;
+      
+      // Right saddle junction
+      const saddleFRjunc_X = A_mm;
+      const saddleFRjunc_Y = osbY;
+      const saddleFRjunc_Z = ridgeStartZ_mm;
+      
+      // Triangle FL-1: Left side of front hip (main slope side)
+      // From: ridge front -> left saddle junction -> left eaves corner
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-FL1`,
+        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
+        new BABYLON.Vector3(saddleFLjunc_X, saddleFLjunc_Y, saddleFLjunc_Z),
+        new BABYLON.Vector3(eavesFL_X, eavesFL_Y, eavesFL_Z),
+        new BABYLON.Vector3(-0.5, 0.5, -0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "FL1" }
+      );
+      
+      // Triangle FL-2: Left side of front hip (hip slope side)
+      // From: ridge front -> left eaves corner -> front mid eaves
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-FL2`,
+        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
+        new BABYLON.Vector3(eavesFL_X, eavesFL_Y, eavesFL_Z),
+        new BABYLON.Vector3(eavesFMid_X, eavesFMid_Y, eavesFMid_Z),
+        new BABYLON.Vector3(0, 0.5, -0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "FL2" }
+      );
+      
+      // Triangle FR-1: Right side of front hip (main slope side)
+      // From: ridge front -> right eaves corner -> right saddle junction
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-FR1`,
+        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
+        new BABYLON.Vector3(eavesFR_X, eavesFR_Y, eavesFR_Z),
+        new BABYLON.Vector3(saddleFRjunc_X, saddleFRjunc_Y, saddleFRjunc_Z),
+        new BABYLON.Vector3(0.5, 0.5, -0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "FR1" }
+      );
+      
+      // Triangle FR-2: Right side of front hip (hip slope side)
+      // From: ridge front -> front mid eaves -> right eaves corner
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-FR2`,
+        new BABYLON.Vector3(ridgeFrontX, ridgeFrontY, ridgeFrontZ),
+        new BABYLON.Vector3(eavesFMid_X, eavesFMid_Y, eavesFMid_Z),
+        new BABYLON.Vector3(eavesFR_X, eavesFR_Y, eavesFR_Z),
+        new BABYLON.Vector3(0, 0.5, -0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "FR2" }
+      );
+    }
+    
+    // BACK HIP END - 4 triangles (mirror of front)
+    {
+      // Ridge end point (where back hip meets ridge)
+      const ridgeBackX = halfSpan_mm;
+      const ridgeBackY = osbOffset_mm + rise_mm + osbThk / 2;
+      const ridgeBackZ = ridgeEndZ_mm;
+      
+      // Eaves corners
+      const eavesBL_X = 0;
+      const eavesBL_Y = osbY;
+      const eavesBL_Z = B_mm;
+      
+      const eavesBR_X = A_mm;
+      const eavesBR_Y = osbY;
+      const eavesBR_Z = B_mm;
+      
+      // Mid-point of back eaves
+      const eavesBMid_X = halfSpan_mm;
+      const eavesBMid_Y = osbY;
+      const eavesBMid_Z = B_mm;
+      
+      // Left saddle junction
+      const saddleBLjunc_X = 0;
+      const saddleBLjunc_Y = osbY;
+      const saddleBLjunc_Z = ridgeEndZ_mm;
+      
+      // Right saddle junction
+      const saddleBRjunc_X = A_mm;
+      const saddleBRjunc_Y = osbY;
+      const saddleBRjunc_Z = ridgeEndZ_mm;
+      
+      // Triangle BL-1: Left side of back hip (main slope side)
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-BL1`,
+        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
+        new BABYLON.Vector3(eavesBL_X, eavesBL_Y, eavesBL_Z),
+        new BABYLON.Vector3(saddleBLjunc_X, saddleBLjunc_Y, saddleBLjunc_Z),
+        new BABYLON.Vector3(-0.5, 0.5, 0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "BL1" }
+      );
+      
+      // Triangle BL-2: Left side of back hip (hip slope side)
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-BL2`,
+        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
+        new BABYLON.Vector3(eavesBMid_X, eavesBMid_Y, eavesBMid_Z),
+        new BABYLON.Vector3(eavesBL_X, eavesBL_Y, eavesBL_Z),
+        new BABYLON.Vector3(0, 0.5, 0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "BL2" }
+      );
+      
+      // Triangle BR-1: Right side of back hip (main slope side)
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-BR1`,
+        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
+        new BABYLON.Vector3(saddleBRjunc_X, saddleBRjunc_Y, saddleBRjunc_Z),
+        new BABYLON.Vector3(eavesBR_X, eavesBR_Y, eavesBR_Z),
+        new BABYLON.Vector3(0.5, 0.5, 0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "BR1" }
+      );
+      
+      // Triangle BR-2: Right side of back hip (hip slope side)
+      createTriangleOSB(
+        `${meshPrefix}roof-hipped-osb-tri-BR2`,
+        new BABYLON.Vector3(ridgeBackX, ridgeBackY, ridgeBackZ),
+        new BABYLON.Vector3(eavesBR_X, eavesBR_Y, eavesBR_Z),
+        new BABYLON.Vector3(eavesBMid_X, eavesBMid_Y, eavesBMid_Z),
+        new BABYLON.Vector3(0, 0.5, 0.5).normalize(),
+        { roof: "hipped", part: "osb", type: "triangle", id: "BR2" }
+      );
+    }
+  }
+  // === COVERING (FELT) ===
+  if (roofParts.covering) {
+    const coveringThk = 2;
+    const sinT = Math.sin(commonSlopeAng);
+    const cosT = Math.cos(commonSlopeAng);
+    const osbOutOffset_mm = memberD_mm + 1 + 18; // On top of OSB
+    
+    // Main covering panels (simplified)
+    if (ridgeLen_mm > 0) {
+      // Left covering
+      {
+        const coveringLen_mm = commonRafterLen_mm + 20; // Slight overlap at ridge
+        const coveringWidth_mm = ridgeLen_mm;
+        
+        const sMid_mm = commonRafterLen_mm / 2;
+        const runMid_mm = Math.round(sMid_mm * cosT);
+        const dropMid_mm = Math.round(sMid_mm * sinT);
+        const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
+        
+        const xSurfMid_mm = halfSpan_mm - runMid_mm;
+        const cx = xSurfMid_mm + (-sinT) * (osbOutOffset_mm + coveringThk / 2);
+        const cy = ySurfMid_mm + (cosT) * (osbOutOffset_mm + coveringThk / 2);
+        
+        const covL = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-covering-L`,
+          coveringLen_mm,
+          coveringThk,
+          coveringWidth_mm,
+          cx,
+          cy,
+          ridgeStartZ_mm + coveringWidth_mm / 2,
+          roofRoot,
+          coveringMat,
+          { roof: "hipped", part: "covering", side: "L" }
+        );
+        covL.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
+      }
+      
+      // Right covering
+      {
+        const coveringLen_mm = commonRafterLen_mm + 20;
+        const coveringWidth_mm = ridgeLen_mm;
+        
+        const sMid_mm = commonRafterLen_mm / 2;
+        const runMid_mm = Math.round(sMid_mm * cosT);
+        const dropMid_mm = Math.round(sMid_mm * sinT);
+        const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
+        
+        const xSurfMid_mm = halfSpan_mm + runMid_mm;
+        const cx = xSurfMid_mm + (sinT) * (osbOutOffset_mm + coveringThk / 2);
+        const cy = ySurfMid_mm + (cosT) * (osbOutOffset_mm + coveringThk / 2);
+        
+        const covR = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-covering-R`,
+          coveringLen_mm,
+          coveringThk,
+          coveringWidth_mm,
+          cx,
+          cy,
+          ridgeStartZ_mm + coveringWidth_mm / 2,
+          roofRoot,
+          coveringMat,
+          { roof: "hipped", part: "covering", side: "R" }
+        );
+        covR.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
+      }
+    }
+  }
+
+  // === FASCIA BOARDS ===
+  if (roofParts.covering) {
+    const fasciaThk = 20;
+    const fasciaDepth = 135;
+    const fasciaMat = scene._fasciaMat || joistMat;
+    
+    // Eaves fascia runs around the entire perimeter at eaves level
+    const osbTop_mm = memberD_mm + 18 + 1;
+    const fasciaTopY_mm = osbTop_mm;
+    const fasciaCenterY_mm = fasciaTopY_mm - fasciaDepth / 2;
+    
+    // Front fascia
+    mkBoxCenteredLocal(
+      `${meshPrefix}roof-hipped-fascia-front`,
+      A_mm,
+      fasciaDepth,
+      fasciaThk,
+      halfSpan_mm,
+      fasciaCenterY_mm,
+      -fasciaThk / 2,
+      roofRoot,
+      fasciaMat,
+      { roof: "hipped", part: "fascia", edge: "front" }
+    );
+    
+    // Back fascia
+    mkBoxCenteredLocal(
+      `${meshPrefix}roof-hipped-fascia-back`,
+      A_mm,
+      fasciaDepth,
+      fasciaThk,
+      halfSpan_mm,
+      fasciaCenterY_mm,
+      B_mm + fasciaThk / 2,
+      roofRoot,
+      fasciaMat,
+      { roof: "hipped", part: "fascia", edge: "back" }
+    );
+    
+    // Left fascia
+    mkBoxCenteredLocal(
+      `${meshPrefix}roof-hipped-fascia-left`,
+      fasciaThk,
+      fasciaDepth,
+      B_mm,
+      -fasciaThk / 2,
+      fasciaCenterY_mm,
+      B_mm / 2,
+      roofRoot,
+      fasciaMat,
+      { roof: "hipped", part: "fascia", edge: "left" }
+    );
+    
+    // Right fascia
+    mkBoxCenteredLocal(
+      `${meshPrefix}roof-hipped-fascia-right`,
+      fasciaThk,
+      fasciaDepth,
+      B_mm,
+      A_mm + fasciaThk / 2,
+      fasciaCenterY_mm,
+      B_mm / 2,
+      roofRoot,
+      fasciaMat,
+      { roof: "hipped", part: "fascia", edge: "right" }
+    );
+  }
+
+  // === FINAL POSITIONING ===
+  // Align roof to wall plate level
+  const targetMinX_m = (-l_mm) / 1000;
+  const targetMinZ_m = (-f_mm) / 1000;
+  
+  roofRoot.rotationQuaternion = BABYLON.Quaternion.Identity();
+  
+  // Position based on overhang
+  roofRoot.position.x = targetMinX_m;
+  roofRoot.position.z = targetMinZ_m;
+  
+  // Height positioning
+  // shiftRoofMeshes() in index.js adds WALL_RISE_MM (168mm) to all roof mesh positions.
+  // Wall plates are at frame height = eavesH_mm - WALL_RISE_MM (in local coords).
+  // Rafter geometry has y=0 at eaves level. After shift, meshes at local y=0 
+  // end up at world y = roofRoot.y + 0 + shift = roofRoot.y + WALL_RISE_MM.
+  // For rafters to sit on wall plates: roofRoot.y + WALL_RISE_MM = eavesH_mm
+  // Therefore: roofRoot.y = eavesH_mm - WALL_RISE_MM
+  const WALL_RISE_MM = 168;
+  roofRoot.position.y = (eavesH_mm - WALL_RISE_MM) / 1000;
+
+  console.log(`[HIPPED_ROOF] Built hipped roof: ${A_mm}mm x ${B_mm}mm`);
+  console.log(`[HIPPED_ROOF] eavesH_mm=${eavesH_mm}, crestH_mm=${crestH_mm}, rise_mm=${rise_mm}`);
+  console.log(`[HIPPED_ROOF] roofRoot.position.y=${roofRoot.position.y}m (world)`);
+  console.log(`[HIPPED_ROOF] memberW_mm=${memberW_mm}, memberD_mm=${memberD_mm}`);
+}
+
+/**
+ * Updates the Bill of Materials (BOM) for hipped roof components.
+ * @param {Object} state - Building state object
+ * @param {HTMLTableSectionElement} tbody - Target table body element
+ * @private
+ */
+function updateBOM_Hipped(state, tbody) {
+  const dims = resolveDims(state);
+
+  const roofW_mm = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? state?.w ?? 1)));
+  const roofD_mm = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? state?.d ?? 1)));
+
+  const A_mm = roofW_mm;
+  const B_mm = roofD_mm;
+
+  const g = getRoofFrameGauge(state);
+  const memberW_mm = Math.max(1, Math.floor(Number(g.depth_mm)));
+  const memberD_mm = Math.max(1, Math.floor(Number(g.thickness_mm)));
+
+  const hipped = (state && state.roof && state.roof.hipped) ? state.roof.hipped : null;
+  const apex = (state && state.roof && state.roof.apex) ? state.roof.apex : null;
+  const eavesH_mm = Number(hipped?.heightToEaves_mm || apex?.heightToEaves_mm) || 1850;
+  const crestH_mm = Number(hipped?.heightToCrest_mm || apex?.heightToCrest_mm) || 2400;
+  const rise_mm = Math.max(100, crestH_mm - eavesH_mm);
+
+  const halfSpan_mm = A_mm / 2;
+  const commonRafterLen_mm = Math.round(Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm));
+  
+  const hipPlanLen_mm = halfSpan_mm * Math.SQRT2;
+  const hipRafterLen_mm = Math.round(Math.sqrt(hipPlanLen_mm * hipPlanLen_mm + rise_mm * rise_mm));
+
+  const ridgeLen_mm = Math.max(0, B_mm - A_mm);
+  const rafterSpacing_mm = 600;
+
+  const rows = [];
+
+  // Ridge beam
+  if (ridgeLen_mm > 0) {
+    rows.push({
+      item: "Ridge Beam",
+      qty: 1,
+      L: ridgeLen_mm,
+      W: memberW_mm,
+      notes: "D (mm): " + String(memberD_mm) + "; hipped roof",
+    });
+  }
+
+  // Hip rafters (4)
+  rows.push({
+    item: "Hip Rafter",
+    qty: 4,
+    L: hipRafterLen_mm,
+    W: memberW_mm,
+    notes: "D (mm): " + String(memberD_mm) + "; diagonal corners",
+  });
+
+  // Common rafters (in middle section)
+  if (ridgeLen_mm > 0) {
+    const commonCount = Math.floor((ridgeLen_mm - memberW_mm * 2) / rafterSpacing_mm) * 2;
+    if (commonCount > 0) {
+      rows.push({
+        item: "Common Rafter",
+        qty: commonCount,
+        L: commonRafterLen_mm,
+        W: memberW_mm,
+        notes: "D (mm): " + String(memberD_mm) + "; @600mm spacing",
+      });
+    }
+  }
+
+  // Jack rafters (estimate based on hip end size)
+  const hipEndDepth = halfSpan_mm;
+  const jackCountPerEnd = Math.max(0, Math.floor(hipEndDepth / rafterSpacing_mm) - 1);
+  const totalJacks = jackCountPerEnd * 4; // 4 sides of 2 hip ends
+  
+  if (totalJacks > 0) {
+    // Average jack length (varies, so use midpoint)
+    const avgJackLen = Math.round(commonRafterLen_mm * 0.6);
+    rows.push({
+      item: "Jack Rafter (avg)",
+      qty: totalJacks,
+      L: avgJackLen,
+      W: memberW_mm,
+      notes: "D (mm): " + String(memberD_mm) + "; varying lengths; hipped ends",
+    });
+  }
+
+  rows.sort((a, b) => String(a.item).localeCompare(String(b.item)));
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    appendRow5(tbody, [r.item, String(r.qty), String(r.L), String(r.W), r.notes || ""]);
+  }
+
+  // Total frame timber
+  const FRAME_STOCK_LENGTH = 6200;
+  let totalFrameLength_mm = 0;
+  totalFrameLength_mm += ridgeLen_mm; // Ridge
+  totalFrameLength_mm += 4 * hipRafterLen_mm; // Hip rafters
+  
+  if (ridgeLen_mm > 0) {
+    const commonCount = Math.floor((ridgeLen_mm - memberW_mm * 2) / rafterSpacing_mm) * 2;
+    totalFrameLength_mm += commonCount * commonRafterLen_mm;
+  }
+  
+  const avgJackLen = Math.round(commonRafterLen_mm * 0.6);
+  totalFrameLength_mm += totalJacks * avgJackLen;
 
   const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
   appendRow5(tbody, [

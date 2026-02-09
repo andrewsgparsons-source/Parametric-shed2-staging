@@ -48,6 +48,7 @@ export const DEFAULTS = {
   },
   roof: {
     style: "apex",
+    covering: "felt",  // "felt" | "epdm" | "slate"
     apex: {
       trussCount: 3,
       heightToEaves_mm: 1850,
@@ -78,7 +79,7 @@ export const DEFAULTS = {
         enabled: true,
         x_mm: 500,
         width_mm: 800,
-        height_mm: 1900
+        height_mm: 1800
       },
       {
         id: "win1",

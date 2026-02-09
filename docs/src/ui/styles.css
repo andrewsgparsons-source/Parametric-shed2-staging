@@ -622,6 +622,19 @@
       }
     }
     
+    /* Landscape mode on mobile - more vertical space for panel */
+    @media (max-width: 1024px) and (orientation: landscape) {
+      #controls {
+        max-height: 85vh;
+      }
+      #controlPanel details {
+        max-height: 85vh;
+      }
+      #controlPanel .inner {
+        max-height: calc(85vh - 60px);
+      }
+    }
+    
     /* Small phones */
     @media (max-width: 480px) {
       #mobileOpenBtn {

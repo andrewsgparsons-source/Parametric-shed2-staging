@@ -1,0 +1,43 @@
+{
+  "w": 3690,
+  "d": 3775,
+  "dimMode": "frame",
+  "roof": {
+    "style": "pent",
+    "apex": {
+      "heightToEaves_mm": 1850,
+      "heightToCrest_mm": 2200,
+      "trussCount": 3,
+      "tieBeam": "eaves"
+    },
+    "pent": {
+      "minHeight_mm": 2200,
+      "maxHeight_mm": 2500
+    }
+  },
+  "overhang": {
+    "uniform_mm": 75
+  },
+  "walls": {
+    "variant": "basic",
+    "height_mm": 2400,
+    "openings": []
+  },
+  "frame": {
+    "thickness_mm": 50,
+    "depth_mm": 75
+  },
+  "vis": {
+    "roof": true,
+    "cladding": true,
+    "openings": false,
+    "base": true,
+    "ins": false,
+    "deck": false,
+    "grids": false,
+    "roofParts": {
+      "osb": false,
+      "covering": false
+    }
+  }
+}
