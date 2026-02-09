@@ -3136,8 +3136,11 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     const localInsH = wallInsHeight(wallId);
     
     // Get the insulation top Y at a given X position along this wall
-    // For slope walls, build at max height then CSG-trim to slope later
+    // For slope walls, use per-position height so panels follow the roof slope
     function getInsTopY(x_mm) {
+      if (isSlopeWall) {
+        return plateY + insHeightAtX(x_mm);
+      }
       return plateY + localInsH;
     }
     
@@ -3315,65 +3318,10 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       
       console.log('[WALL_INS] Created', insCount, 'insulation panels for wall', wallId);
       
-      // CSG slope trim for pent slope walls — cut insulation to follow roof slope
-      if (isSlopeWall && insMeshes.length > 0) {
-        const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
-        if (hasCSG) {
-          try {
-            const slopeRise = maxH - minH;
-            const slopeAngle = Math.atan2(slopeRise, frameW);
-            const cutterHeight = slopeRise + 500;
-            const cutterLen = Math.sqrt(frameW * frameW + slopeRise * slopeRise) + 200;
-            const insDepth = wallThk - 10;
-            
-            // Create cutter box above the slope line (same approach as ply/cladding slope trim)
-            const slopeCutter = BABYLON.MeshBuilder.CreateBox(prefix + "slope-cutter", {
-              width: cutterLen * 0.001,
-              height: cutterHeight * 0.001,
-              depth: (insDepth + 40) * 0.001
-            }, scene);
-            
-            // Position at midpoint of slope, shifted up by half cutter height
-            const midX = origin.x + frameW / 2;
-            const midY = (minH + maxH) / 2 + cutterHeight / 2;
-            const insZ = origin.z + wallThk / 2;
-            slopeCutter.position = new BABYLON.Vector3(
-              midX * 0.001,
-              midY * 0.001,
-              insZ * 0.001
-            );
-            slopeCutter.rotation.z = -slopeAngle;
-            slopeCutter.computeWorldMatrix(true);
-            
-            const cutCSG = BABYLON.CSG.FromMesh(slopeCutter);
-            let trimCount = 0;
-            
-            for (let mi = 0; mi < insMeshes.length; mi++) {
-              const insMesh = insMeshes[mi];
-              try {
-                insMesh.computeWorldMatrix(true);
-                const baseCSG = BABYLON.CSG.FromMesh(insMesh);
-                const resultCSG = baseCSG.subtract(cutCSG);
-                const trimmed = resultCSG.toMesh(insMesh.name + "-trimmed", insMat, scene, false);
-                trimmed.parent = shedRoot;
-                trimmed.metadata = insMesh.metadata;
-                trimmed.enableEdgesRendering();
-                trimmed.edgesWidth = 1;
-                trimmed.edgesColor = new BABYLON.Color4(0.7, 0.65, 0.3, 1);
-                insMesh.dispose(false, true);
-                insMeshes[mi] = trimmed;
-                trimCount++;
-              } catch (e) {
-                console.warn('[WALL_INS] CSG slope trim failed for', insMesh.name, e);
-              }
-            }
-            
-            slopeCutter.dispose(false, true);
-            console.log('[WALL_INS] CSG slope trimmed', trimCount, '/', insMeshes.length, 'insulation panels for slope wall', wallId);
-          } catch (e) {
-            console.warn('[WALL_INS] CSG slope trim setup failed for wall', wallId, e);
-          }
-        }
+      // Slope walls: panels are now built at per-position height (via getInsTopY)
+      // so CSG slope trim is no longer needed — each bay's panel follows the roof slope
+      if (isSlopeWall) {
+        console.log('[WALL_INS] Slope wall', wallId, '- panels built at per-position height, no CSG trim needed');
       }
     }
     
@@ -3426,60 +3374,38 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
     ply.edgesWidth = 2;
     ply.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
     
-    // For pent slope walls (front/back), trim ply to follow the roof slope
+    // For pent slope walls (front/back), adjust box vertices to follow roof slope
+    // instead of CSG trimming (which was producing backwards slopes)
     let plyMesh = ply; // Track current mesh (may be replaced by CSG result)
     if (isSlopeWall) {
-      const hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
-      if (hasCSG) {
-        try {
-          // Create a wedge-shaped cutter above the slope line
-          // The slope goes from minH (x=0) to maxH (x=frameW)
-          // We create a large box positioned and rotated to cut everything above the slope
-          const slopeRise = maxH - minH;
-          const slopeAngle = Math.atan2(slopeRise, frameW);
-          
-          // Cutter box: tall enough to remove everything above slope
-          const cutterHeight = slopeRise + 500; // Extra margin
-          const cutterLen = Math.sqrt(frameW * frameW + slopeRise * slopeRise) + 200;
-          
-          const slopeCutter = BABYLON.MeshBuilder.CreateBox(plyPrefix + "slope-cutter", {
-            width: cutterLen * 0.001,
-            height: cutterHeight * 0.001,
-            depth: (PLY_THICKNESS + 40) * 0.001
-          }, scene);
-          
-          // Position at midpoint of slope line, shifted up by half cutter height
-          const midX = origin.x + frameW / 2;
-          const midY = (minH + maxH) / 2 + cutterHeight / 2;
-          slopeCutter.position = new BABYLON.Vector3(
-            midX * 0.001,
-            midY * 0.001,
-            plyZ * 0.001
-          );
-          // Rotate to match slope angle
-          slopeCutter.rotation.z = -slopeAngle;
-          
-          // Force world matrix computation before CSG
-          slopeCutter.computeWorldMatrix(true);
-          
-          const plyCSG = BABYLON.CSG.FromMesh(ply);
-          const cutCSG = BABYLON.CSG.FromMesh(slopeCutter);
-          const resultCSG = plyCSG.subtract(cutCSG);
-          const trimmedPly = resultCSG.toMesh(plyPrefix + "panel-trimmed", plyMat, scene, false);
-          
-          trimmedPly.parent = shedRoot;
-          trimmedPly.metadata = { dynamic: true, sectionId: sectionId || null };
-          trimmedPly.enableEdgesRendering();
-          trimmedPly.edgesWidth = 2;
-          trimmedPly.edgesColor = new BABYLON.Color4(0.5, 0.4, 0.3, 1);
-          
-          ply.dispose(false, true);
-          slopeCutter.dispose(false, true);
-          plyMesh = trimmedPly;
-          console.log('[WALL_INS] Trimmed ply to pent slope for wall', wallId);
-        } catch (e) {
-          console.warn('[WALL_INS] Pent ply slope trim failed for wall', wallId, e);
+      try {
+        const positions = ply.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const halfH_m = (plyH / 2) * 0.001;
+        const halfW_m = (wallLen / 2) * 0.001;
+        
+        // Adjust every "top" vertex (localY > 0) to follow the slope
+        for (let i = 0; i < positions.length; i += 3) {
+          const localY = positions[i + 1];
+          if (localY > 0) {
+            // Determine position along wall from local X
+            const localX = positions[i];
+            const x_mm = (localX + halfW_m) / (2 * halfW_m) * wallLen;
+            // getInsTopY returns the correct top Y in mm (plateY + insulation height)
+            const targetTopY_mm = getInsTopY(x_mm);
+            // Convert from world mm to local coordinates (centered at plyH/2)
+            positions[i + 1] = (targetTopY_mm - plyH / 2) * 0.001;
+          }
         }
+        
+        ply.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+        // Recompute normals after vertex modification
+        const normals = [];
+        BABYLON.VertexData.ComputeNormals(positions, ply.getIndices(), normals);
+        ply.updateVerticesData(BABYLON.VertexBuffer.NormalKind, normals);
+        
+        console.log('[WALL_INS] Adjusted ply vertices to follow pent slope for wall', wallId);
+      } catch (e) {
+        console.warn('[WALL_INS] Pent ply slope vertex adjustment failed for wall', wallId, e);
       }
     }
     
