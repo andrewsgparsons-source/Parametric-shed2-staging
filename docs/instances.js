@@ -519,6 +519,169 @@ export function getBuiltInPresets() {
       }
     },
     {
+      id: "preset.apex_garden_room",
+      name: "Apex Garden Room 2.3m × 2.9m",
+      category: "Garden Room",
+      description: "Insulated apex garden room with felt roof, mortise & tenon door, front windows and side picture window.",
+      state: {
+        "w": 2340,
+        "d": 2900,
+        "vis": {
+          "base": true,
+          "frame": true,
+          "ins": true,
+          "deck": true,
+          "wallsEnabled": true,
+          "walls": {
+            "front": true,
+            "back": true,
+            "left": true,
+            "right": true
+          },
+          "wallIns": true,
+          "wallPly": true,
+          "cladding": true,
+          "roof": true,
+          "roofParts": {
+            "ply": false,
+            "insulation": false,
+            "membraneBattens": false,
+            "structure": true,
+            "osb": true,
+            "covering": true
+          }
+        },
+        "dimMode": "frame",
+        "dimGap_mm": 50,
+        "dim": {
+          "frameW_mm": 2340,
+          "frameD_mm": 2891
+        },
+        "overhang": {
+          "uniform_mm": 75,
+          "front_mm": null,
+          "back_mm": null,
+          "left_mm": null,
+          "right_mm": null
+        },
+        "dimInputs": {
+          "baseW_mm": 2290,
+          "baseD_mm": 2841,
+          "frameW_mm": 2340,
+          "frameD_mm": 2891,
+          "roofW_mm": 2490,
+          "roofD_mm": 3041
+        },
+        "roof": {
+          "style": "apex",
+          "covering": "felt",
+          "apex": {
+            "trussCount": 4,
+            "heightToEaves_mm": 2080,
+            "heightToCrest_mm": 2400,
+            "tieBeam": "raised"
+          },
+          "pent": {
+            "minHeight_mm": 2400,
+            "maxHeight_mm": 2400
+          },
+          "hipped": {
+            "heightToEaves_mm": 2500,
+            "heightToCrest_mm": 3600
+          }
+        },
+        "walls": {
+          "variant": "insulated",
+          "height_mm": 2400,
+          "insulated": {
+            "section": {
+              "w": 50,
+              "h": 75
+            },
+            "spacing": 400
+          },
+          "basic": {
+            "section": {
+              "w": 50,
+              "h": 75
+            },
+            "spacing": null
+          },
+          "openings": [
+            {
+              "id": "door1",
+              "wall": "front",
+              "type": "door",
+              "enabled": true,
+              "x_mm": 730,
+              "width_mm": 880,
+              "height_mm": 1900,
+              "style": "mortise-tenon",
+              "isOpen": false
+            },
+            {
+              "id": "win1",
+              "wall": "front",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 250,
+              "y_mm": 750,
+              "width_mm": 350,
+              "height_mm": 1080
+            },
+            {
+              "id": "win2",
+              "wall": "front",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 1740,
+              "y_mm": 750,
+              "width_mm": 350,
+              "height_mm": 1080
+            },
+            {
+              "id": "win3",
+              "wall": "left",
+              "type": "window",
+              "enabled": true,
+              "x_mm": 890,
+              "y_mm": 860,
+              "width_mm": 1120,
+              "height_mm": 1000
+            }
+          ],
+          "invalidDoorIds": [],
+          "invalidWindowIds": []
+        },
+        "frame": {
+          "thickness_mm": 50,
+          "depth_mm": 75
+        },
+        "cladding": {
+          "style": "shiplap"
+        },
+        "sections": {
+          "enabled": false,
+          "main": {
+            "id": "main",
+            "type": "rectangular",
+            "dimensions": null,
+            "roof": null,
+            "walls": null
+          },
+          "attachments": []
+        },
+        "dividers": {
+          "items": []
+        },
+        "unitMode": "imperial",
+        "wallSection": {
+          "thickness_mm": 50,
+          "depth_mm": 50
+        }
+      }
+    },
+    {
       id: "preset.hipped_garage",
       name: "Hipped Garage 3.4m × 5m",
       category: "Garage",
