@@ -172,68 +172,6 @@ export function getBuiltInPresets() {
       }
     },
     {
-      id: "preset.small_shed",
-      name: "Small Shed 2.4m × 1.8m",
-      category: "Garden Shed",
-      description: "Compact garden storage shed with single door.",
-      state: {
-        dimMode: "frame",
-        dim: { frameW_mm: 2400, frameD_mm: 1800 },
-        roof: { style: "apex" },
-        walls: {
-          height_mm: 2400,
-          variant: "basic",
-          openings: [
-            {
-              id: "door1",
-              wall: "front",
-              type: "door",
-              enabled: true,
-              x_mm: 750,
-              width_mm: 900,
-              height_mm: 2000
-            }
-          ]
-        }
-      }
-    },
-    {
-      id: "preset.medium_shed",
-      name: "Medium Shed 3m × 2.4m",
-      category: "Garden Shed",
-      description: "Standard garden shed with door and window.",
-      state: {
-        dimMode: "frame",
-        dim: { frameW_mm: 3000, frameD_mm: 2400 },
-        roof: { style: "apex" },
-        walls: {
-          height_mm: 2400,
-          variant: "insulated",
-          openings: [
-            {
-              id: "door1",
-              wall: "front",
-              type: "door",
-              enabled: true,
-              x_mm: 200,
-              width_mm: 900,
-              height_mm: 2000
-            },
-            {
-              id: "win1",
-              wall: "front",
-              type: "window",
-              enabled: true,
-              x_mm: 1800,
-              y_mm: 900,
-              width_mm: 900,
-              height_mm: 600
-            }
-          ]
-        }
-      }
-    },
-    {
       id: "preset.large_workshop",
       name: "Large Workshop 4m × 3m",
       category: "Workshop",
@@ -307,35 +245,6 @@ export function getBuiltInPresets() {
         "frame": {
           "thickness_mm": 50,
           "depth_mm": 75
-        }
-      }
-    },
-    {
-      id: "preset.pent_lean_to",
-      name: "Pent Lean-to 2.4m × 1.8m",
-      category: "Lean-to",
-      description: "Simple pent roof lean-to storage.",
-      state: {
-        dimMode: "frame",
-        dim: { frameW_mm: 2400, frameD_mm: 1800 },
-        roof: {
-          style: "pent",
-          pent: { minHeight_mm: 2100, maxHeight_mm: 2400 }
-        },
-        walls: {
-          height_mm: 2400,
-          variant: "basic",
-          openings: [
-            {
-              id: "door1",
-              wall: "front",
-              type: "door",
-              enabled: true,
-              x_mm: 750,
-              width_mm: 900,
-              height_mm: 1900
-            }
-          ]
         }
       }
     },
