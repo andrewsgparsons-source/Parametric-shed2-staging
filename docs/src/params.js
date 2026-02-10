@@ -101,7 +101,8 @@ export const DEFAULTS = {
   },
   // Cladding appearance
   cladding: {
-    style: "shiplap"  // "shiplap" | "overlap" | "loglap"
+    style: "shiplap",  // "shiplap" | "overlap" | "loglap" | "box-profile" | "corrugated" | "composite-panel" | "composite-slatted"
+    colour: "natural-wood"  // "natural-wood" | "pale-blue" | "sage-green" | "anthracite" | "goosewing-grey" | "vandyke-brown" | "charcoal" | "stone-grey"
   },
   // Multi-section support (building attachments)
   sections: {
