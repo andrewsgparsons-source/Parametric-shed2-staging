@@ -829,10 +829,19 @@ console.log("CLAD_COURSES_FINAL", {
     // SHEET CLADDING (box-profile / corrugated): one piece per panel
     // ===============================================================
     if (isSheetCladding) {
-      // Cap sheet cladding at eaves height for gable walls
-      // (gable triangle cladding above eaves is TBD — needs angled cut)
+      // Cap sheet height: apex gable → eaves; pent side → minH/maxH; pent slope → maxH
+      let cappedH = panelHeightMm;
       const isApexGable = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
-      const cappedH = isApexGable ? Math.min(panelHeightMm, height) : panelHeightMm;
+      if (isApexGable) {
+        cappedH = Math.min(panelHeightMm, height);
+      } else if (isPent && !isAlongX) {
+        // Left/right pent walls: use their specific height
+        const targetH = (String(wallId) === "left") ? minH : maxH;
+        cappedH = Math.min(panelHeightMm, targetH);
+      } else if (isPent && isAlongX) {
+        // Front/back slope walls: use the max height (tallest end) — CSG will trim the slope
+        cappedH = Math.min(panelHeightMm, maxH);
+      }
       const sheetH = cappedH + CLAD_DRIP;
       const ySheet = claddingAnchorY_mm - CLAD_DRIP;
       const ribDepth = CLAD_T;   // 34mm box-profile, 18mm corrugated
@@ -907,7 +916,8 @@ console.log("CLAD_COURSES_FINAL", {
           parts.push(bRib);
         }
       }
-      return { created: parts.length, anchor: claddingAnchorY_mm };
+      // Fall through to merge → opening cut pipeline
+      // (Roof clip is skipped for sheet cladding — height is already capped)
     }
 
     // ===============================================================
@@ -1439,15 +1449,16 @@ for (let i = 0; i < wins.length; i++) {
       // ---- END openings cut-outs ----
 
       // ---- NEW: clip cladding to roof underside (pent) / gable line (apex) ----
+      // Skip roof clip for sheet cladding — height is already capped geometrically
       try {
-        console.log('DEBUG ROOF CLIP ENTRY: merged=', !!merged);
+        console.log('DEBUG ROOF CLIP ENTRY: merged=', !!merged, 'isSheet=', isSheetCladding);
         const hasCSG =
           typeof BABYLON !== "undefined" &&
           BABYLON &&
           BABYLON.CSG &&
           typeof BABYLON.CSG.FromMesh === "function";
 
-        if (hasCSG && merged) {
+        if (hasCSG && merged && !isSheetCladding) {
          const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
 console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
