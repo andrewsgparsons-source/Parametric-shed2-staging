@@ -19,7 +19,7 @@
   --sw-radius: 12px;
   --sw-radius-sm: 8px;
   --sw-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --sw-sidebar-w: 340px;
+  --sw-sidebar-w: 300px;
   --sw-flyout-w: 400px;
 }
 
