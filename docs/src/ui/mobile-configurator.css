@@ -148,12 +148,12 @@ body.mobile-configurator #controls {
 
 .mc-step-pill {
   flex: 0 0 auto;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border: 1.5px solid var(--mc-border);
   border-radius: 20px;
   background: var(--mc-bg-panel);
   color: var(--mc-text-secondary);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--mc-transition);
@@ -210,24 +210,24 @@ body.mobile-configurator #controls {
 #mcControls .boSubhead {
   color: var(--mc-primary) !important;
   font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 10px;
+  font-size: 16px;
+  margin-bottom: 12px;
   padding-bottom: 6px;
   border-bottom: 2px solid var(--mc-primary-light);
 }
 
 #mcControls label {
   color: var(--mc-text);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 #mcControls input[type="number"],
 #mcControls input[type="text"],
 #mcControls select {
-  padding: 12px 14px;
-  font-size: 16px; /* Prevents iOS zoom on focus */
-  min-height: 48px;
+  padding: 14px 16px;
+  font-size: 17px; /* Prevents iOS zoom on focus + readable */
+  min-height: 52px;
   border: 1.5px solid var(--mc-border);
   border-radius: var(--mc-radius-sm);
   background: var(--mc-bg-panel);
@@ -245,10 +245,10 @@ body.mobile-configurator #controls {
 }
 
 #mcControls button {
-  padding: 12px 16px;
-  font-size: 14px;
+  padding: 14px 18px;
+  font-size: 16px;
   font-weight: 600;
-  min-height: 48px;
+  min-height: 52px;
   border: 1.5px solid var(--mc-border);
   border-radius: var(--mc-radius-sm);
   background: var(--mc-bg-panel);
@@ -263,10 +263,11 @@ body.mobile-configurator #controls {
 }
 
 #mcControls .check {
-  padding: 10px 0;
-  min-height: 44px;
+  padding: 12px 0;
+  min-height: 48px;
   display: flex;
   align-items: center;
+  font-size: 15px;
 }
 
 #mcControls .check input[type="checkbox"],
@@ -302,10 +303,10 @@ body.mobile-configurator #controls {
 
 .mc-footer-btn {
   flex: 1;
-  padding: 14px 20px !important;
+  padding: 16px 22px !important;
   border: none !important;
   border-radius: 24px !important;
-  font-size: 15px !important;
+  font-size: 17px !important;
   font-weight: 700 !important;
   cursor: pointer;
   transition: all var(--mc-transition);
