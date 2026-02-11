@@ -58,7 +58,7 @@ import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
-import * as Walls from "./elements/walls.js";
+import * as Walls from "./elements/walls.js?_v=2";
 import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=7";
 import * as Attachments from "./elements/attachments.js?_v=2";
@@ -539,6 +539,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallsVariantEl = $("wallsVariant");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
+    var claddingColourEl = $("claddingColour");
     var roofCoveringStyleEl = $("roofCoveringStyle");
 
     var addDoorBtnEl = $("addDoorBtn");
@@ -3876,6 +3877,7 @@ if (state && state.overhang) {
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
+        if (claddingColourEl && state && state.cladding && state.cladding.colour) claddingColourEl.value = state.cladding.colour;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
         // Update visibility toggle display based on covering type
         updateRoofCoveringToggles(state?.roof?.covering || "felt");
@@ -4740,7 +4742,8 @@ function parseOverhangInput(val) {
     }
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
-    if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
+    if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value, colour: (claddingColourEl ? claddingColourEl.value : "natural-wood") } }); });
+    if (claddingColourEl) claddingColourEl.addEventListener("change", function () { store.setState({ cladding: { style: (claddingStyleEl ? claddingStyleEl.value : "shiplap"), colour: claddingColourEl.value } }); });
     if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
       store.setState({ roof: { covering: roofCoveringStyleEl.value } }); 
       // Toggle visibility toggles based on covering type
