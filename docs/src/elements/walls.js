@@ -952,6 +952,9 @@ console.log("CLAD_COURSES_FINAL", {
     // ===============================================================
     // (Falls through to the course loop below — handled per-course)
 
+    // SAFETY: sheet cladding uses rib generation above, NOT courses
+    if (isSheetCladding) courses = 0;
+
     for (let i = 0; i < courses; i++) {
       const isFirst = i === 0;
 const yBase = claddingAnchorY_mm + i * CLAD_H;
