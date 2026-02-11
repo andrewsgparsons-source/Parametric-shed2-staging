@@ -2142,7 +2142,7 @@ function render(state) {
 
       var fasciaThk = 0.020; // 20mm
       var fasciaDepth = 0.100; // 100mm
-      var fasciaInset = 0.030; // 30mm — tiles overhang past the fascia
+      var fasciaInset = 0.050; // 50mm — tiles overhang past the fascia (30mm + 20mm standoff from rafters)
 
       // Find the lowest Y of roof rafter meshes (hip + common rafters)
       var rafterMinY = Infinity;
@@ -2186,7 +2186,8 @@ function render(state) {
 
       // Fascia top = bottom of tiles/covering (so it meets the tiles)
       // Fascia bottom = below the rafter ends
-      var fasciaTopY = (coveringMinY < Infinity) ? coveringMinY : rafterMinY;
+      // Top of fascia = covering bottom + 25mm (batten thickness) to close the gap
+      var fasciaTopY = ((coveringMinY < Infinity) ? coveringMinY : rafterMinY) + 0.025;
       var fasciaBottomY = rafterMinY - fasciaDepth;
       var actualFasciaH = fasciaTopY - fasciaBottomY;
       var fasciaCentreY = (fasciaTopY + fasciaBottomY) / 2;
