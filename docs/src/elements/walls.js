@@ -509,7 +509,8 @@ if (isPent) {
     // For apex roofs, only front/back (gable) walls need extra courses - left/right stop at eaves
     const isApexGableWall = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
     const needsExtraCourses = roofStyle === "pent" || isApexGableWall;
-    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0));
+    let courses = (CLAD_H > 0) ? Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0)) : 0;
+    if (isSheetCladding) courses = 0; // Sheet cladding uses its own rib generation, not courses
     if (__DIAG_ONE_FRONT_ONE_BOARD) courses = 1;
     
     console.log("CLAD_DEBUG", {
