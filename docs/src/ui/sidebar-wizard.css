@@ -368,6 +368,77 @@ body.sidebar-wizard-mode #renderCanvas {
   box-shadow: 0 2px 8px rgba(45, 80, 22, 0.12);
 }
 
+/* ===== BOM PAGE THEME ===== */
+body.sidebar-wizard-mode .page {
+  background: var(--sw-bg) !important;
+}
+
+body.sidebar-wizard-mode .page h2 {
+  color: var(--sw-primary) !important;
+  font-weight: 700;
+}
+
+body.sidebar-wizard-mode .page h4 {
+  background: var(--sw-primary) !important;
+  color: #fff !important;
+  border-radius: 6px 6px 0 0 !important;
+  font-size: 13px !important;
+  letter-spacing: 0.5px;
+}
+
+body.sidebar-wizard-mode .page .back-to-3d-btn {
+  background: var(--sw-primary) !important;
+  color: #fff !important;
+  border-radius: var(--sw-radius-sm) !important;
+  box-shadow: 0 2px 8px rgba(45, 80, 22, 0.15);
+}
+
+body.sidebar-wizard-mode .page .back-to-3d-btn:hover {
+  background: var(--sw-primary-hover) !important;
+}
+
+body.sidebar-wizard-mode .page table {
+  border-radius: 0 0 var(--sw-radius-sm) var(--sw-radius-sm) !important;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(45, 80, 22, 0.06) !important;
+}
+
+body.sidebar-wizard-mode .page th {
+  background: var(--sw-accent-light) !important;
+  color: var(--sw-text) !important;
+  font-weight: 600;
+  border-bottom: 2px solid var(--sw-accent) !important;
+}
+
+body.sidebar-wizard-mode .page td {
+  border-bottom: 1px solid var(--sw-border) !important;
+}
+
+body.sidebar-wizard-mode .page tr:hover td {
+  background: rgba(45, 80, 22, 0.03);
+}
+
+body.sidebar-wizard-mode .page .schedule-section {
+  border-radius: var(--sw-radius-sm) !important;
+  overflow: hidden;
+  box-shadow: var(--sw-shadow);
+}
+
+body.sidebar-wizard-mode .page .subtle {
+  color: var(--sw-text-muted) !important;
+}
+
+body.sidebar-wizard-mode .page #bomToolbar select,
+body.sidebar-wizard-mode .page #bomToolbar button {
+  border-color: var(--sw-border) !important;
+  border-radius: var(--sw-radius-sm) !important;
+}
+
+body.sidebar-wizard-mode .page #bomToolbar button:hover {
+  background: var(--sw-primary-light) !important;
+  color: var(--sw-primary) !important;
+}
+
 /* ===== EMBEDDED CONTROLS ===== */
 #controls.sw-embedded {
   position: fixed !important;
