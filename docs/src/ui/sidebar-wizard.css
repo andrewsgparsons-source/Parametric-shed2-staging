@@ -32,7 +32,8 @@ html, body {
 body.sidebar-wizard-mode #mobileOpenBtn,
 body.sidebar-wizard-mode #mobileCloseBtn,
 body.sidebar-wizard-mode .designButton,
-body.sidebar-wizard-mode #statusOverlay {
+body.sidebar-wizard-mode #statusOverlay,
+body.mobile-panel-collapsed.sidebar-wizard-mode #mobileOpenBtn {
   display: none !important;
 }
 
@@ -735,6 +736,11 @@ body.sidebar-wizard-mode #controlPanel p {
   /* Completely hide the controls wrapper when panel is closed */
   body.sidebar-wizard-mode #controls.sw-embedded {
     display: none !important;
+  }
+
+  /* Override cream background on mobile */
+  html, body {
+    background: #e8e8e8 !important;
   }
 
   /* Canvas fills full screen */
