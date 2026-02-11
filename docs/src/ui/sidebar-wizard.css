@@ -1,6 +1,6 @@
 /* ============================================================
-   SIDEBAR WIZARD THEME — Left sidebar with summary + vertical steps
-   Colour Scheme: Earth tones (inherited from wizard theme)
+   SIDEBAR WIZARD THEME — Left sidebar + flyout panel
+   Colour Scheme: Earth tones (forest green + warm wood + cream)
    ============================================================ */
 
 :root {
@@ -11,7 +11,6 @@
   --sw-accent-light: #F5E6D3;
   --sw-bg: #FFF8F0;
   --sw-bg-panel: #FFFFFF;
-  --sw-bg-section: #FEFCF8;
   --sw-text: #1A1A1A;
   --sw-text-secondary: #5C5C5C;
   --sw-text-muted: #8A8A8A;
@@ -19,8 +18,9 @@
   --sw-shadow: 0 4px 24px rgba(45, 80, 22, 0.08);
   --sw-radius: 12px;
   --sw-radius-sm: 8px;
-  --sw-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --sw-sidebar-w: 380px;
+  --sw-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --sw-sidebar-w: 340px;
+  --sw-flyout-w: 400px;
 }
 
 /* ===== GLOBAL ===== */
@@ -46,11 +46,82 @@ body.sidebar-wizard-mode #statusOverlay {
   z-index: 2147483000;
   background: var(--sw-bg-panel);
   border-right: 1px solid var(--sw-border);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.06);
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ===== FLYOUT PANEL ===== */
+.sw-flyout {
+  position: fixed;
+  top: 0;
+  left: var(--sw-sidebar-w);
+  bottom: 0;
+  width: 0;
+  z-index: 2147482999;
+  background: var(--sw-bg-panel);
+  border-right: 1px solid var(--sw-border);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  opacity: 0;
+  transition: width var(--sw-transition), opacity var(--sw-transition);
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+.sw-flyout.open {
+  width: var(--sw-flyout-w);
+  opacity: 1;
+}
+
+/* ===== FLYOUT HEADER ===== */
+.sw-flyout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sw-border);
+  flex-shrink: 0;
+}
+
+.sw-flyout-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sw-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sw-flyout-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--sw-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sw-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--sw-transition);
+}
+
+.sw-flyout-close:hover {
+  background: var(--sw-primary-light);
+  border-color: var(--sw-primary);
+  color: var(--sw-primary);
+}
+
+/* ===== FLYOUT BODY ===== */
+.sw-flyout-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 /* ===== PUSH 3D VIEW RIGHT ===== */
@@ -61,7 +132,7 @@ body.sidebar-wizard-mode #renderCanvas {
 
 /* ===== HEADER ===== */
 .sw-header {
-  padding: 20px 20px 12px;
+  padding: 20px 20px 14px;
   border-bottom: 1px solid var(--sw-border);
   flex-shrink: 0;
 }
@@ -75,7 +146,7 @@ body.sidebar-wizard-mode #renderCanvas {
 
 /* ===== SUMMARY DASHBOARD ===== */
 .sw-dashboard {
-  padding: 14px 16px;
+  padding: 12px 14px;
   background: var(--sw-primary-light);
   border-bottom: 1px solid var(--sw-border);
   flex-shrink: 0;
@@ -92,7 +163,7 @@ body.sidebar-wizard-mode #renderCanvas {
 
 .sw-dash-item {
   flex: 1;
-  padding: 8px 10px;
+  padding: 7px 8px;
   background: rgba(255, 255, 255, 0.7);
   border-radius: 6px;
   text-align: center;
@@ -110,12 +181,12 @@ body.sidebar-wizard-mode #renderCanvas {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--sw-primary);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .sw-dash-value {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--sw-text);
   white-space: nowrap;
@@ -125,9 +196,8 @@ body.sidebar-wizard-mode #renderCanvas {
 
 /* ===== VERTICAL STEPS ===== */
 .sw-steps {
-  padding: 12px 12px;
-  border-bottom: 1px solid var(--sw-border);
-  flex-shrink: 0;
+  padding: 10px 10px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -137,7 +207,7 @@ body.sidebar-wizard-mode #renderCanvas {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: none;
   background: transparent;
   border-radius: var(--sw-radius-sm);
@@ -155,19 +225,13 @@ body.sidebar-wizard-mode #renderCanvas {
   background: var(--sw-primary-light);
 }
 
-.sw-step.completed .sw-step-num {
-  background: var(--sw-accent);
-  color: #fff;
-  border-color: var(--sw-accent);
-}
-
 /* ===== STEP NUMBER DOTS ===== */
 .sw-step-num {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: transparent;
   border: 2px solid var(--sw-border);
@@ -184,11 +248,18 @@ body.sidebar-wizard-mode #renderCanvas {
   color: #fff;
 }
 
+.sw-step.completed .sw-step-num {
+  background: var(--sw-accent);
+  border-color: var(--sw-accent);
+  color: #fff;
+}
+
 /* ===== STEP LABEL ===== */
 .sw-step-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--sw-text-secondary);
+  flex: 1;
   transition: color var(--sw-transition);
 }
 
@@ -197,25 +268,33 @@ body.sidebar-wizard-mode #renderCanvas {
   font-weight: 700;
 }
 
-.sw-step.completed .sw-step-label {
-  color: var(--sw-accent);
+/* ===== STEP ARROW ===== */
+.sw-step-arrow {
+  font-size: 14px;
+  color: var(--sw-text-muted);
+  transition: all var(--sw-transition);
+  flex-shrink: 0;
 }
 
-/* ===== CONTENT AREA ===== */
-.sw-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
+.sw-step:hover .sw-step-arrow {
+  color: var(--sw-primary);
+}
+
+.sw-step.active .sw-step-arrow {
+  color: var(--sw-primary);
+  transform: rotate(0deg);
 }
 
 /* ===== EMBEDDED CONTROLS ===== */
 #controls.sw-embedded {
-  position: static !important;
-  width: 100% !important;
-  max-width: 100% !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  max-width: none !important;
   max-height: none !important;
-  height: auto !important;
+  height: 100vh !important;
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -224,9 +303,18 @@ body.sidebar-wizard-mode #renderCanvas {
   margin: 0 !important;
   transform: none !important;
   overflow: visible !important;
+  z-index: 2147483000 !important;
+  display: flex !important;
+  flex-direction: row !important;
 }
 
-#controls.sw-embedded #controlPanel {
+#controls.sw-embedded > #controlPanel {
+  display: none !important;
+}
+
+/* Show controlPanel only inside the flyout body */
+#swFlyoutBody #controlPanel {
+  display: block !important;
   padding: 0 !important;
 }
 
@@ -258,13 +346,12 @@ body.sidebar-wizard-mode #controlPanel > details:not(.boSection) {
   overflow: visible !important;
 }
 
-/* Hide "Design your shed" heading block */
+/* Hide "Design your shed" heading */
 body.sidebar-wizard-mode #controlPanel h2,
 body.sidebar-wizard-mode #controlPanel h3 {
   display: none !important;
 }
 
-/* Hide version/subtitle text below heading */
 body.sidebar-wizard-mode .inner > div:first-child:not(form),
 body.sidebar-wizard-mode .inner > header {
   display: none !important;
@@ -283,7 +370,7 @@ body.sidebar-wizard-mode #controlPanel select {
   border-radius: var(--sw-radius-sm) !important;
   box-sizing: border-box !important;
   width: 100% !important;
-  transition: border-color var(--sw-transition), box-shadow var(--sw-transition) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
 }
 
 body.sidebar-wizard-mode #controlPanel input:focus,
@@ -310,13 +397,19 @@ body.sidebar-wizard-mode #controlPanel button {
   font-size: 12px !important;
   font-weight: 600 !important;
   color: var(--sw-text) !important;
-  transition: all var(--sw-transition) !important;
+  transition: all 0.2s !important;
 }
 
 body.sidebar-wizard-mode #controlPanel button:hover {
   background: var(--sw-bg) !important;
   border-color: var(--sw-primary) !important;
   color: var(--sw-primary) !important;
+}
+
+/* ===== RADIO/CHECKBOX ===== */
+body.sidebar-wizard-mode #controlPanel input[type="radio"],
+body.sidebar-wizard-mode #controlPanel input[type="checkbox"] {
+  accent-color: var(--sw-primary) !important;
 }
 
 /* ===== HINT TEXT ===== */
@@ -327,27 +420,21 @@ body.sidebar-wizard-mode #controlPanel p {
   color: var(--sw-text-muted) !important;
 }
 
-/* ===== RADIO/CHECKBOX ===== */
-body.sidebar-wizard-mode #controlPanel input[type="radio"],
-body.sidebar-wizard-mode #controlPanel input[type="checkbox"] {
-  accent-color: var(--sw-primary) !important;
-}
-
 /* ===== SCROLLBAR ===== */
-.sw-content::-webkit-scrollbar {
+.sw-flyout-body::-webkit-scrollbar {
   width: 5px;
 }
 
-.sw-content::-webkit-scrollbar-track {
+.sw-flyout-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sw-content::-webkit-scrollbar-thumb {
+.sw-flyout-body::-webkit-scrollbar-thumb {
   background: var(--sw-border);
   border-radius: 3px;
 }
 
-.sw-content::-webkit-scrollbar-thumb:hover {
+.sw-flyout-body::-webkit-scrollbar-thumb:hover {
   background: var(--sw-text-muted);
 }
 
@@ -355,11 +442,17 @@ body.sidebar-wizard-mode #controlPanel input[type="checkbox"] {
 @media (max-width: 768px) {
   :root {
     --sw-sidebar-w: 100vw;
+    --sw-flyout-w: 100vw;
   }
 
   #sidebarWizard {
     width: 100%;
     border-right: none;
+  }
+
+  .sw-flyout {
+    left: 0;
+    z-index: 2147483001;
   }
 
   body.sidebar-wizard-mode #renderCanvas {

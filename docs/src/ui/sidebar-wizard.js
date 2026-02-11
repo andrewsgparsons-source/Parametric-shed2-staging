@@ -1,37 +1,37 @@
 /**
- * sidebar-wizard.js — Left sidebar wizard with summary dashboard + vertical steps
+ * sidebar-wizard.js — Left sidebar with summary dashboard + vertical steps
+ * Each step has a ▸ arrow that opens a flyout panel to the right.
+ * Only one flyout open at a time. Click arrow again to close.
  * 
  * Layout:
- *   [LEFT SIDEBAR ~380px]          [3D VIEW]
- *   ┌─────────────────────┐
- *   │ Summary Dashboard    │
- *   │ (live config values) │
- *   ├─────────────────────┤
- *   │ ① Size & Shape       │
- *   │ ② Roof               │
- *   │ ③ Appearance          │
- *   │ ④ Walls & Openings   │
- *   │ ⑤ Attachments        │
- *   │ ⑥ Save & Share       │
- *   │ ⑦ Developer          │
- *   ├─────────────────────┤
- *   │ [Active step content]│
- *   └─────────────────────┘
+ *   [SIDEBAR 340px]  [FLYOUT 400px]   [3D VIEW]
+ *   ┌──────────────┐┌──────────────┐
+ *   │ Header       ││ Step content │
+ *   │ Dashboard    ││ (scrollable) │
+ *   │              ││              │
+ *   │ ① Size    ▸  ││              │
+ *   │ ② Roof    ▸  ││              │
+ *   │ ③ Appear  ▸  ││              │
+ *   │ ④ Walls   ▸  ││              │
+ *   │ ⑤ Attach  ▸  ││              │
+ *   │ ⑥ Save    ▸  ││              │
+ *   │ ⑦ Dev     ▸  ││              │
+ *   └──────────────┘└──────────────┘
  */
 (function() {
   'use strict';
 
   const STEPS = [
-    { num: 1, label: 'Size & Shape',     section: 'Size & Shape',        icon: '📐' },
-    { num: 2, label: 'Roof',             section: 'Roof',                icon: '🏠' },
-    { num: 3, label: 'Appearance',       section: 'Appearance',          icon: '🎨' },
-    { num: 4, label: 'Walls & Openings', section: 'Walls & Openings',   icon: '🚪' },
-    { num: 5, label: 'Attachments',      section: 'Building Attachments', icon: '🔗' },
-    { num: 6, label: 'Save & Share',     section: 'Save / Load Design',  icon: '💾' },
-    { num: 7, label: 'Developer',        section: 'Developer',           icon: '⚙️' }
+    { num: 1, label: 'Size & Shape',     section: 'Size & Shape' },
+    { num: 2, label: 'Roof',             section: 'Roof' },
+    { num: 3, label: 'Appearance',       section: 'Appearance' },
+    { num: 4, label: 'Walls & Openings', section: 'Walls & Openings' },
+    { num: 5, label: 'Attachments',      section: 'Building Attachments' },
+    { num: 6, label: 'Save & Share',     section: 'Save / Load Design' },
+    { num: 7, label: 'Developer',        section: 'Developer' }
   ];
 
-  let currentStep = 0;
+  let activeStep = -1; // -1 = none open
   let sections = [];
   let attempts = 0;
 
@@ -69,20 +69,38 @@
     // Open all sections so content renders
     allSections.forEach(s => s.setAttribute('open', ''));
 
-    // Build the sidebar wrapper
+    // Hide ALL sections initially
+    allSections.forEach(s => { s.style.display = 'none'; });
+
+    // Hide section summaries (we have our own step navigation)
+    allSections.forEach(s => {
+      const summary = s.querySelector('summary');
+      if (summary) summary.style.display = 'none';
+    });
+
+    // Strategy: inject sidebar + flyout INSIDE #controls so the app doesn't remove them
+    const controls = document.getElementById('controls');
+    controls.classList.add('sw-embedded');
+
+    // Build sidebar and flyout as siblings inside controls
     const sidebar = document.createElement('div');
     sidebar.id = 'sidebarWizard';
     sidebar.innerHTML = buildSidebarHTML();
-    document.body.appendChild(sidebar);
 
-    // Move the original controls into the sidebar content area
-    const controls = document.getElementById('controls');
-    const contentArea = document.getElementById('swContent');
+    const flyout = document.createElement('div');
+    flyout.id = 'swFlyout';
+    flyout.className = 'sw-flyout';
+    flyout.innerHTML = '<div class="sw-flyout-header"><span class="sw-flyout-title" id="swFlyoutTitle"></span><button class="sw-flyout-close" id="swFlyoutClose">✕</button></div><div class="sw-flyout-body" id="swFlyoutBody"></div>';
 
-    if (controls && contentArea) {
-      // Hide original panel chrome
-      controls.classList.add('sw-embedded');
-      contentArea.appendChild(controls);
+    // Insert sidebar and flyout at the start of #controls
+    controls.insertBefore(flyout, controls.firstChild);
+    controls.insertBefore(sidebar, controls.firstChild);
+
+    // Move #controlPanel into the flyout body
+    const controlPanel = document.getElementById('controlPanel');
+    const flyoutBody = document.getElementById('swFlyoutBody');
+    if (controlPanel && flyoutBody) {
+      flyoutBody.appendChild(controlPanel);
     }
 
     // Hide original panel chrome elements
@@ -115,21 +133,20 @@
       }
     }
 
-    // Hide section summaries (we have our own step navigation)
-    sections.forEach(s => {
-      const summary = s.querySelector('summary');
-      if (summary) summary.style.display = 'none';
-    });
-
     // Wire up step clicks
     document.querySelectorAll('.sw-step').forEach(step => {
       step.addEventListener('click', () => {
-        goToStep(parseInt(step.dataset.step));
+        const idx = parseInt(step.dataset.step);
+        toggleStep(idx);
       });
     });
 
-    // Initial state
-    goToStep(0);
+    // Wire up flyout close button
+    document.getElementById('swFlyoutClose').addEventListener('click', () => {
+      closeFlyout();
+    });
+
+    // Initial state — all closed
     updateDashboard();
 
     // Live update dashboard on changes
@@ -137,6 +154,14 @@
     document.addEventListener('input', () => setTimeout(updateDashboard, 100));
 
     console.log('[sidebar-wizard] Sidebar active! Sections:', sections.length);
+
+    // Guard: re-attach sidebar if something removes it from DOM
+    setInterval(function() {
+      if (!document.getElementById('sidebarWizard') && sidebar) {
+        console.log('[sidebar-wizard] Re-attaching sidebar (was removed from DOM)');
+        document.body.insertBefore(sidebar, document.body.firstChild);
+      }
+    }, 500);
   }
 
   function buildSidebarHTML() {
@@ -174,50 +199,66 @@
 
       <div class="sw-steps" id="swSteps">
         ${STEPS.map((s, i) => `
-          <button class="sw-step${i === 0 ? ' active' : ''}" data-step="${i}">
+          <button class="sw-step" data-step="${i}">
             <span class="sw-step-num">${s.num}</span>
             <span class="sw-step-label">${s.label}</span>
+            <span class="sw-step-arrow">▸</span>
           </button>
         `).join('')}
-      </div>
-
-      <div class="sw-content" id="swContent">
-        <!-- Original #controls gets moved here -->
       </div>
     `;
   }
 
-  function goToStep(i) {
-    if (i < 0 || i >= sections.length) return;
-    currentStep = i;
-
-    // Show only active section
-    sections.forEach((s, j) => {
-      s.style.display = j === i ? '' : 'none';
-    });
-
-    // Hide non-mapped sections
-    const panel = document.getElementById('controlPanel');
-    if (panel) {
-      const allSections = panel.querySelectorAll('details.boSection');
-      allSections.forEach(s => {
-        const name = s.querySelector('summary')?.textContent?.trim();
-        const matchedIndex = STEPS.findIndex(step => step.section === name);
-        if (matchedIndex === -1) {
-          s.style.display = 'none';
-        }
-      });
+  function toggleStep(idx) {
+    if (idx === activeStep) {
+      // Close current
+      closeFlyout();
+    } else {
+      // Open new (closes previous automatically)
+      openFlyout(idx);
     }
+  }
+
+  function openFlyout(idx) {
+    if (idx < 0 || idx >= sections.length) return;
+
+    // Hide all sections
+    sections.forEach(s => { s.style.display = 'none'; });
+
+    // Show active section
+    sections[idx].style.display = '';
+    activeStep = idx;
+
+    // Update flyout title
+    document.getElementById('swFlyoutTitle').textContent = STEPS[idx].label;
+
+    // Show flyout
+    const flyout = document.getElementById('swFlyout');
+    flyout.classList.add('open');
+
+    // Scroll flyout body to top
+    document.getElementById('swFlyoutBody').scrollTop = 0;
 
     // Update step buttons
     document.querySelectorAll('.sw-step').forEach((btn, j) => {
-      btn.classList.toggle('active', j === i);
-      btn.classList.toggle('completed', j < i);
+      btn.classList.toggle('active', j === idx);
     });
+  }
 
-    // Scroll content to top
-    const content = document.getElementById('swContent');
-    if (content) content.scrollTop = 0;
+  function closeFlyout() {
+    activeStep = -1;
+
+    // Hide all sections
+    sections.forEach(s => { s.style.display = 'none'; });
+
+    // Hide flyout
+    const flyout = document.getElementById('swFlyout');
+    flyout.classList.remove('open');
+
+    // Update step buttons
+    document.querySelectorAll('.sw-step').forEach(btn => {
+      btn.classList.remove('active');
+    });
   }
 
   function updateDashboard() {
@@ -228,13 +269,10 @@
     const roof = roofSel ? (roofSel.options[roofSel.selectedIndex]?.text || '?').replace(/ \(.*\)/, '') : '?';
     const clad = cladSel ? (cladSel.options[cladSel.selectedIndex]?.text || '?') : '?';
 
-    // Count doors and windows
     const doorCount = document.querySelectorAll('[id^="doorCard_"]').length ||
-                      document.querySelectorAll('.door-entry, .door-card').length || 
-                      (document.querySelector('[data-doors]')?.dataset?.doors) || '1';
+                      document.querySelectorAll('.door-entry, .door-card').length || '1';
     const winCount = document.querySelectorAll('[id^="winCard_"]').length ||
-                     document.querySelectorAll('.window-entry, .window-card').length ||
-                     (document.querySelector('[data-windows]')?.dataset?.windows) || '1';
+                     document.querySelectorAll('.window-entry, .window-card').length || '1';
 
     setDashValue('dashSize', w + ' × ' + d + 'mm');
     setDashValue('dashRoof', roof);

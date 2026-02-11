@@ -27,12 +27,17 @@
     document.head.appendChild(link);
   }
   
-  // Load JS (wizard mode restructures DOM — needs to run after page load)
+  // Load JS — append script immediately (each script handles its own timing internally)
   if (chosen.js) {
-    window.addEventListener('load', function() {
-      const script = document.createElement('script');
+    var loadScript = function() {
+      var script = document.createElement('script');
       script.src = chosen.js;
-      document.body.appendChild(script);
-    });
+      (document.body || document.documentElement).appendChild(script);
+    };
+    if (document.body) {
+      loadScript();
+    } else {
+      document.addEventListener('DOMContentLoaded', loadScript);
+    }
   }
 })();
