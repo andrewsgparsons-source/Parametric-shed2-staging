@@ -288,6 +288,47 @@ body.sidebar-wizard-mode #renderCanvas {
   transform: rotate(0deg);
 }
 
+/* ===== CUTTING LISTS ===== */
+.sw-cutting-lists {
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--sw-border);
+  flex-shrink: 0;
+}
+
+.sw-cutting-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sw-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.sw-cutting-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.sw-cutting-link {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--sw-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sw-text-secondary);
+  cursor: pointer;
+  transition: all var(--sw-transition);
+  text-align: center;
+}
+
+.sw-cutting-link:hover {
+  background: var(--sw-primary-light);
+  color: var(--sw-primary);
+  border-color: var(--sw-primary);
+}
+
 /* ===== EMBEDDED CONTROLS ===== */
 #controls.sw-embedded {
   position: fixed !important;

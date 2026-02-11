@@ -162,6 +162,17 @@
       }
     });
 
+    // Wire up cutting list links
+    document.querySelectorAll('.sw-cutting-link').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var viewSelect = document.getElementById('viewSelect');
+        if (viewSelect) {
+          viewSelect.value = btn.dataset.view;
+          viewSelect.dispatchEvent(new Event('change'));
+        }
+      });
+    });
+
     // Initial state — all closed
     updateDashboard();
 
@@ -221,6 +232,16 @@
             <span class="sw-step-arrow">▸</span>
           </button>
         `).join('')}
+      </div>
+
+      <div class="sw-cutting-lists">
+        <div class="sw-cutting-title">📋 Cutting Lists</div>
+        <div class="sw-cutting-links">
+          <button class="sw-cutting-link" data-view="base">Base</button>
+          <button class="sw-cutting-link" data-view="walls">Walls</button>
+          <button class="sw-cutting-link" data-view="roof">Roof</button>
+          <button class="sw-cutting-link" data-view="openings">Openings</button>
+        </div>
       </div>
     `;
   }
