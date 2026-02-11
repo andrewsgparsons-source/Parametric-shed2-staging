@@ -6,8 +6,11 @@
    Default: baseline (no extra CSS)
    ============================================================ */
 (function() {
+  // Skip sidebar wizard on mobile — use the original mobile UI instead
+  const isMobile = window.innerWidth <= 768;
   const params = new URLSearchParams(window.location.search);
-  const theme = (params.get('theme') || 'sidebar').toLowerCase();
+  const explicitTheme = params.get('theme');
+  const theme = (explicitTheme || (isMobile ? 'baseline' : 'sidebar')).toLowerCase();
   
   const themes = {
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },

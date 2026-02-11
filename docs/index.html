@@ -975,29 +975,7 @@
       }
     })();
   </script>
-  <!-- Mobile fallback: hardcoded toggle button (sidebar-wizard.js hides this if it creates its own) -->
-  <button id="swMobileFallback" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:14px 28px;border:none;border-radius:28px;background:#2D5016;color:#fff;font-size:16px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.3);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">☰ Design Options</button>
-  <script>
-  (function(){
-    // Only show on small screens
-    if (window.innerWidth > 768) return;
-    var btn = document.getElementById('swMobileFallback');
-    if (!btn) return;
-    // Show after short delay
-    setTimeout(function(){
-      // Don't show if sidebar-wizard already created its own toggle
-      if (document.getElementById('swMobileToggle')) { btn.remove(); return; }
-      btn.style.display = 'block';
-      // Hide original mobile button
-      var orig = document.getElementById('mobileOpenBtn');
-      if (orig) orig.style.setProperty('display','none','important');
-      btn.addEventListener('click', function(){
-        document.body.classList.add('sw-panel-open');
-        btn.style.display = 'none';
-      });
-    }, 3000);
-  })();
-  </script>
+  <!-- Sidebar wizard is desktop-only; mobile uses the original UI -->
 </body>
 </html>
 <!-- cache nudge 1769518008 -->
