@@ -2126,31 +2126,81 @@ function render(state) {
         beam.metadata = { dynamic: true };
       }
 
-      // Fascia boards around the roof perimeter
-      // 20mm thick x 150mm deep, positioned at eaves height extending to roof overhang
+      // Fascia boards — built AFTER roof so we can read rafter positions
+      // Flag to build fascia in a second pass (after roof is rendered)
+      scene._gazeboFasciaPending = {
+        wM: wM, dM: dM, mat: mat, postHeight: postHeight, beamH: beamH
+      };
+    }
+
+    // Build gazebo fascia boards by reading actual roof mesh positions
+    function buildGazeboFascia(scene) {
+      var BAB = window.BABYLON;
+      if (!BAB || !scene || !scene._gazeboFasciaPending) return;
+      var data = scene._gazeboFasciaPending;
+      delete scene._gazeboFasciaPending;
+
       var fasciaThk = 0.020; // 20mm
       var fasciaDepth = 0.150; // 150mm
-      var overhang = 0.075; // 75mm default overhang
-      var roofW = wM + 2 * overhang;
-      var roofD = dM + 2 * overhang;
 
-      // Fascia material — lighter timber colour
+      // Find the lowest Y of roof rafter meshes (hip + common rafters)
+      var rafterMinY = Infinity;
+      var roofMinX = Infinity, roofMaxX = -Infinity;
+      var roofMinZ = Infinity, roofMaxZ = -Infinity;
+
+      var meshes = scene.meshes || [];
+      for (var i = 0; i < meshes.length; i++) {
+        var m = meshes[i];
+        if (!m || !m.name) continue;
+        var nm = m.name;
+        // Match hip rafters, common rafters, jack rafters
+        if (nm.indexOf("roof-hipped-hip-") === 0 || nm.indexOf("roof-hipped-common-") === 0 || nm.indexOf("roof-hipped-jack-") === 0) {
+          try {
+            m.computeWorldMatrix(true);
+            var bi = m.getBoundingInfo();
+            var min = bi.boundingBox.minimumWorld;
+            var max = bi.boundingBox.maximumWorld;
+            if (min.y < rafterMinY) rafterMinY = min.y;
+            if (min.x < roofMinX) roofMinX = min.x;
+            if (max.x > roofMaxX) roofMaxX = max.x;
+            if (min.z < roofMinZ) roofMinZ = min.z;
+            if (max.z > roofMaxZ) roofMaxZ = max.z;
+          } catch (e) {}
+        }
+      }
+
+      if (rafterMinY === Infinity) {
+        console.log("[Gazebo] No rafter meshes found, skipping fascia");
+        return;
+      }
+
+      console.log("[Gazebo] Fascia: rafterMinY=" + rafterMinY.toFixed(3) +
+        " roofX=" + roofMinX.toFixed(3) + "-" + roofMaxX.toFixed(3) +
+        " roofZ=" + roofMinZ.toFixed(3) + "-" + roofMaxZ.toFixed(3));
+
+      // Fascia hangs from the bottom of the rafters at the perimeter
+      var fasciaTopY = rafterMinY;
+      var fasciaCentreY = fasciaTopY - fasciaDepth / 2;
+
+      // Fascia material
       var fasciaMat = new BAB.StandardMaterial("gazeboFasciaMat", scene);
       fasciaMat.diffuseColor = new BAB.Color3(0.72, 0.56, 0.38);
       fasciaMat.specularColor = new BAB.Color3(0.1, 0.1, 0.1);
 
-      var fasciaTopY = postHeight + beamH / 2;
-      var fasciaCentreY = fasciaTopY - fasciaDepth / 2;
+      var roofW = roofMaxX - roofMinX;
+      var roofD = roofMaxZ - roofMinZ;
+      var centreX = (roofMinX + roofMaxX) / 2;
+      var centreZ = (roofMinZ + roofMaxZ) / 2;
 
       var fasciaBoards = [
-        // Front fascia (along x, at z = -overhang)
-        { w: roofW, h: fasciaDepth, d: fasciaThk, x: wM / 2, z: -overhang + fasciaThk / 2, name: "gazebo-fascia-front" },
+        // Front fascia (along x)
+        { w: roofW + fasciaThk * 2, h: fasciaDepth, d: fasciaThk, x: centreX, z: roofMinZ - fasciaThk / 2, name: "gazebo-fascia-front" },
         // Back fascia
-        { w: roofW, h: fasciaDepth, d: fasciaThk, x: wM / 2, z: dM + overhang - fasciaThk / 2, name: "gazebo-fascia-back" },
+        { w: roofW + fasciaThk * 2, h: fasciaDepth, d: fasciaThk, x: centreX, z: roofMaxZ + fasciaThk / 2, name: "gazebo-fascia-back" },
         // Left fascia (along z)
-        { w: fasciaThk, h: fasciaDepth, d: roofD, x: -overhang + fasciaThk / 2, z: dM / 2, name: "gazebo-fascia-left" },
+        { w: fasciaThk, h: fasciaDepth, d: roofD + fasciaThk * 2, x: roofMinX - fasciaThk / 2, z: centreZ, name: "gazebo-fascia-left" },
         // Right fascia
-        { w: fasciaThk, h: fasciaDepth, d: roofD, x: wM + overhang - fasciaThk / 2, z: dM / 2, name: "gazebo-fascia-right" }
+        { w: fasciaThk, h: fasciaDepth, d: roofD + fasciaThk * 2, x: roofMaxX + fasciaThk / 2, z: centreZ, name: "gazebo-fascia-right" }
       ];
 
       for (var f = 0; f < fasciaBoards.length; f++) {
@@ -2268,6 +2318,9 @@ if (getWallsEnabled(state)) {
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
           shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+
+          // Build gazebo fascia boards now that roof meshes exist and are positioned
+          if (_isGazebo) buildGazeboFascia(ctx.scene);
 
           if (Roof && typeof Roof.updateBOM === "function") Roof.updateBOM(roofState);
         } else {
