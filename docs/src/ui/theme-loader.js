@@ -6,8 +6,11 @@
    Default: baseline (no extra CSS)
    ============================================================ */
 (function() {
-  // Skip sidebar wizard on mobile — use the original mobile UI instead
-  const isMobile = window.innerWidth <= 768;
+  // Detect mobile — use multiple signals since innerWidth may not be set in <head>
+  const isMobile = window.innerWidth <= 768 || 
+                   screen.width <= 768 || 
+                   (navigator.maxTouchPoints > 0 && screen.width <= 1024) ||
+                   /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const params = new URLSearchParams(window.location.search);
   const explicitTheme = params.get('theme');
   const theme = (explicitTheme || (isMobile ? 'baseline' : 'sidebar')).toLowerCase();
