@@ -2126,6 +2126,51 @@ function render(state) {
         beam.metadata = { dynamic: true };
       }
 
+      // ── Knee braces: 2 per post, 45° from 400mm down the post to the ring beam ──
+      var braceDropMm = 400;
+      var braceDrop = braceDropMm / 1000; // 0.4m
+      var braceSection = 0.075; // 75×75mm timber
+      var braceLen = Math.sqrt(braceDrop * braceDrop + braceDrop * braceDrop); // diagonal length
+      var braceAngle = Math.PI / 4; // 45°
+
+      // Each corner gets 2 braces — along the two adjacent beams
+      // Direction vectors: +x, -x, +z, -z from each corner toward the next post
+      var braceTopY = postHeight - beamH / 2; // centre of ring beam
+      var braceBotY = braceTopY - braceDrop;
+
+      var braces = [
+        // FL post: brace toward FR (+x) and toward BL (+z)
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-fl-x" },
+        { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-fl-z" },
+        // FR post: brace toward FL (-x) and toward BR (+z)
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-fr-x" },
+        { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-fr-z" },
+        // BL post: brace toward BR (+x) and toward FL (-z)
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-bl-x" },
+        { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-bl-z" },
+        // BR post: brace toward BL (-x) and toward FR (-z)
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-br-x" },
+        { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-br-z" }
+      ];
+
+      for (var br = 0; br < braces.length; br++) {
+        var b = braces[br];
+        var brace = BAB.MeshBuilder.CreateBox(b.name, {
+          width: braceSection,
+          height: braceLen,
+          depth: braceSection
+        }, scene);
+        brace.position = new BAB.Vector3(b.cx, b.cy, b.cz);
+        // Rotate 45° around the appropriate axis
+        if (b.rotAxis === "z") {
+          brace.rotation.z = b.rotSign * braceAngle;
+        } else {
+          brace.rotation.x = b.rotSign * braceAngle;
+        }
+        brace.material = mat;
+        brace.metadata = { dynamic: true };
+      }
+
       // Fascia boards — built AFTER roof so we can read rafter positions
       // Flag to build fascia in a second pass (after roof is rendered)
       scene._gazeboFasciaPending = {
