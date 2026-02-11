@@ -106,6 +106,30 @@
       flyoutBody.appendChild(controlPanel);
     }
 
+    // Mobile: add floating toggle button over 3D view
+    const mobileToggle = document.createElement('button');
+    mobileToggle.className = 'sw-mobile-toggle';
+    mobileToggle.textContent = '☰ Design Options';
+    document.body.appendChild(mobileToggle);
+
+    // Mobile: add "View Shed" button at top of sidebar
+    const viewShedBtn = document.createElement('button');
+    viewShedBtn.className = 'sw-mobile-view-shed';
+    viewShedBtn.textContent = '🏠 View Shed';
+    sidebar.insertBefore(viewShedBtn, sidebar.firstChild);
+
+    // Mobile toggle handlers
+    mobileToggle.addEventListener('click', function() {
+      document.body.classList.add('sw-panel-open');
+      setTimeout(resizeEngine, 50);
+    });
+
+    viewShedBtn.addEventListener('click', function() {
+      document.body.classList.remove('sw-panel-open');
+      closeFlyout();
+      setTimeout(resizeEngine, 350);
+    });
+
     // Hide original panel chrome elements
     const hideSelectors = [
       '#mobileOpenBtn', '#mobileCloseBtn', '.designButton',

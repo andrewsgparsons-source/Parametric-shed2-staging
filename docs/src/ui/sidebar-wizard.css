@@ -670,15 +670,72 @@ body.sidebar-wizard-mode #controlPanel p {
 }
 
 /* ===== MOBILE ===== */
+/* ===== MOBILE TOGGLE BUTTON (floating over 3D view) ===== */
+.sw-mobile-toggle {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483002;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 28px;
+  background: var(--sw-primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+.sw-mobile-toggle:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+/* ===== "View Shed" button inside sidebar on mobile ===== */
+.sw-mobile-view-shed {
+  display: none;
+  width: calc(100% - 32px);
+  margin: 12px 16px;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--sw-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  cursor: pointer;
+  text-align: center;
+}
+
+.sw-mobile-view-shed:active {
+  opacity: 0.85;
+}
+
 @media (max-width: 768px) {
   :root {
     --sw-sidebar-w: 100vw;
     --sw-flyout-w: 100vw;
   }
 
+  /* Show mobile toggle button */
+  .sw-mobile-toggle {
+    display: block;
+  }
+
+  /* Show "View Shed" button in sidebar */
+  .sw-mobile-view-shed {
+    display: block;
+  }
+
   #sidebarWizard {
     width: 100%;
     border-right: none;
+    transition: transform 0.3s ease;
   }
 
   .sw-flyout {
@@ -686,8 +743,47 @@ body.sidebar-wizard-mode #controlPanel p {
     z-index: 2147483001;
   }
 
+  /* Default: sidebar hidden, 3D view visible */
+  body.sidebar-wizard-mode #controls.sw-embedded {
+    pointer-events: none;
+    background: transparent !important;
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body.sidebar-wizard-mode #controls.sw-embedded #sidebarWizard,
+  body.sidebar-wizard-mode #controls.sw-embedded .sw-flyout {
+    pointer-events: auto;
+  }
+
+  body.sidebar-wizard-mode #sidebarWizard {
+    transform: translateY(100%);
+    visibility: hidden;
+  }
+
+  body.sidebar-wizard-mode.sw-panel-open #sidebarWizard {
+    visibility: visible;
+  }
+
   body.sidebar-wizard-mode #renderCanvas {
-    display: none !important;
+    display: block !important;
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  /* When panel is open: sidebar visible */
+  body.sidebar-wizard-mode.sw-panel-open #controls.sw-embedded {
+    pointer-events: auto;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  body.sidebar-wizard-mode.sw-panel-open #sidebarWizard {
+    transform: translateY(0);
+  }
+
+  body.sidebar-wizard-mode.sw-panel-open .sw-mobile-toggle {
+    display: none;
   }
 }
 
