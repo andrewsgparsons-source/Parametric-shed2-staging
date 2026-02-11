@@ -329,6 +329,45 @@ body.sidebar-wizard-mode #renderCanvas {
   border-color: var(--sw-primary);
 }
 
+/* ===== BOM FLYOUT CONTENT ===== */
+.sw-bom-content {
+  padding: 20px;
+}
+
+.sw-bom-desc {
+  font-size: 13px;
+  color: var(--sw-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+.sw-bom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.sw-bom-btn {
+  background: var(--sw-bg);
+  border: 1px solid var(--sw-border);
+  border-radius: var(--sw-radius-sm);
+  padding: 16px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sw-text);
+  cursor: pointer;
+  transition: all var(--sw-transition);
+  text-align: center;
+}
+
+.sw-bom-btn:hover {
+  background: var(--sw-primary-light);
+  color: var(--sw-primary);
+  border-color: var(--sw-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(45, 80, 22, 0.12);
+}
+
 /* ===== EMBEDDED CONTROLS ===== */
 #controls.sw-embedded {
   position: fixed !important;

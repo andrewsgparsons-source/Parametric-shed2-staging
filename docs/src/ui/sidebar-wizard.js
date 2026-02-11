@@ -22,13 +22,14 @@
   'use strict';
 
   const STEPS = [
-    { num: 1, label: 'Size & Shape',     section: 'Size & Shape' },
-    { num: 2, label: 'Roof',             section: 'Roof' },
-    { num: 3, label: 'Appearance',       section: 'Appearance' },
-    { num: 4, label: 'Walls & Openings', section: 'Walls & Openings' },
-    { num: 5, label: 'Attachments',      section: 'Building Attachments' },
-    { num: 6, label: 'Save & Share',     section: 'Save / Load Design' },
-    { num: 7, label: 'Developer',        section: 'Developer' }
+    { num: 1, label: 'Size & Shape',       section: 'Size & Shape' },
+    { num: 2, label: 'Roof',               section: 'Roof' },
+    { num: 3, label: 'Appearance',         section: 'Appearance' },
+    { num: 4, label: 'Walls & Openings',   section: 'Walls & Openings' },
+    { num: 5, label: 'Attachments',        section: 'Building Attachments' },
+    { num: 6, label: 'Bill of Materials',  section: '__bom__' },
+    { num: 7, label: 'Save & Share',       section: 'Save / Load Design' },
+    { num: 8, label: 'Developer',          section: 'Developer' }
   ];
 
   let activeStep = -1; // -1 = none open
@@ -61,7 +62,8 @@
       if (name) byName[name] = s;
     });
 
-    sections = STEPS.map(step => byName[step.section]).filter(Boolean);
+    // Map steps to sections (null for virtual steps like BOM)
+    sections = STEPS.map(step => byName[step.section] || null);
 
     // Tag body
     document.body.classList.add('sidebar-wizard-mode');
@@ -162,17 +164,6 @@
       }
     });
 
-    // Wire up cutting list links
-    document.querySelectorAll('.sw-cutting-link').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var viewSelect = document.getElementById('viewSelect');
-        if (viewSelect) {
-          viewSelect.value = btn.dataset.view;
-          viewSelect.dispatchEvent(new Event('change'));
-        }
-      });
-    });
-
     // Initial state — all closed
     updateDashboard();
 
@@ -234,15 +225,6 @@
         `).join('')}
       </div>
 
-      <div class="sw-cutting-lists">
-        <div class="sw-cutting-title">📋 Cutting Lists</div>
-        <div class="sw-cutting-links">
-          <button class="sw-cutting-link" data-view="base">Base</button>
-          <button class="sw-cutting-link" data-view="walls">Walls</button>
-          <button class="sw-cutting-link" data-view="roof">Roof</button>
-          <button class="sw-cutting-link" data-view="openings">Openings</button>
-        </div>
-      </div>
     `;
   }
 
@@ -259,11 +241,47 @@
   function openFlyout(idx) {
     if (idx < 0 || idx >= sections.length) return;
 
-    // Hide all sections
-    sections.forEach(s => { s.style.display = 'none'; });
+    // Handle BOM step (virtual — no section, shows custom content)
+    const isBom = STEPS[idx].section === '__bom__';
 
-    // Show active section
-    sections[idx].style.display = '';
+    // Hide all sections
+    sections.forEach(s => { if (s) s.style.display = 'none'; });
+
+    // Remove any previous BOM content
+    const existingBom = document.getElementById('swBomContent');
+    if (existingBom) existingBom.remove();
+
+    if (isBom) {
+      // Inject BOM buttons into flyout body
+      const bomDiv = document.createElement('div');
+      bomDiv.id = 'swBomContent';
+      bomDiv.className = 'sw-bom-content';
+      bomDiv.innerHTML = `
+        <p class="sw-bom-desc">View detailed cutting lists and material schedules for your shed design.</p>
+        <div class="sw-bom-grid">
+          <button class="sw-bom-btn" data-view="base">🏗️ Base</button>
+          <button class="sw-bom-btn" data-view="walls">🧱 Walls</button>
+          <button class="sw-bom-btn" data-view="roof">🏚️ Roof</button>
+          <button class="sw-bom-btn" data-view="openings">🚪 Openings</button>
+        </div>
+      `;
+      document.getElementById('swFlyoutBody').appendChild(bomDiv);
+
+      // Wire BOM buttons
+      bomDiv.querySelectorAll('.sw-bom-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var viewSelect = document.getElementById('viewSelect');
+          if (viewSelect) {
+            viewSelect.value = btn.dataset.view;
+            viewSelect.dispatchEvent(new Event('change'));
+          }
+        });
+      });
+    } else {
+      // Show active section
+      if (sections[idx]) sections[idx].style.display = '';
+    }
+
     activeStep = idx;
 
     // Update flyout title
@@ -286,7 +304,11 @@
     activeStep = -1;
 
     // Hide all sections
-    sections.forEach(s => { s.style.display = 'none'; });
+    sections.forEach(s => { if (s) s.style.display = 'none'; });
+
+    // Remove BOM content if present
+    const bomContent = document.getElementById('swBomContent');
+    if (bomContent) bomContent.remove();
 
     // Hide flyout
     const flyout = document.getElementById('swFlyout');
