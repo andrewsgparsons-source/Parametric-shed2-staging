@@ -2140,16 +2140,16 @@ function render(state) {
 
       var braces = [
         // FL post: brace toward FR (+x) and toward BL (+z)
-        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-fl-x" },
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-fl-x" },
         { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-fl-z" },
         // FR post: brace toward FL (-x) and toward BR (+z)
-        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-fr-x" },
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-fr-x" },
         { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-fr-z" },
         // BL post: brace toward BR (+x) and toward FL (-z)
-        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-bl-x" },
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-bl-x" },
         { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-bl-z" },
         // BR post: brace toward BL (-x) and toward FR (-z)
-        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-br-x" },
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-br-x" },
         { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-br-z" }
       ];
 
