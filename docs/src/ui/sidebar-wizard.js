@@ -210,10 +210,17 @@
     // Initial state — all closed
     updateDashboard();
 
-    // Trigger Babylon.js engine resize so the 3D view adjusts to the narrower canvas
+    // Trigger Babylon.js engine resize so the 3D view adjusts
     setTimeout(resizeEngine, 100);
-    // Also retry after a longer delay in case engine isn't ready yet
     setTimeout(resizeEngine, 1000);
+
+    // On mobile: controls are hidden, canvas should fill full screen — force multiple resizes
+    if (window.innerWidth <= 768) {
+      console.log('[sidebar-wizard] Mobile detected, scheduling engine resizes');
+      [500, 1500, 3000, 5000].forEach(function(delay) {
+        setTimeout(resizeEngine, delay);
+      });
+    }
 
     // Live update dashboard on changes
     document.addEventListener('change', () => setTimeout(updateDashboard, 50));
@@ -288,10 +295,20 @@
 
   function resizeEngine() {
     try {
+      // On mobile, force the canvas to fill viewport before resizing engine
+      if (window.innerWidth <= 768) {
+        var canvas = document.getElementById('renderCanvas');
+        if (canvas) {
+          canvas.style.width = '100vw';
+          canvas.style.height = '100vh';
+          canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
+          canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
+        }
+      }
       const engine = window.__dbg && window.__dbg.engine ? window.__dbg.engine :
                      (typeof BABYLON !== 'undefined' && BABYLON.Engine && BABYLON.Engine.Instances ? BABYLON.Engine.Instances[0] : null);
       if (engine && typeof engine.resize === 'function') engine.resize();
-    } catch (e) {}
+    } catch (e) { console.warn('[sidebar-wizard] resizeEngine error:', e); }
   }
 
   function openFlyout(idx) {
