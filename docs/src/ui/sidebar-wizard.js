@@ -27,9 +27,10 @@
     { num: 3, label: 'Appearance',         section: 'Appearance' },
     { num: 4, label: 'Walls & Openings',   section: 'Walls & Openings' },
     { num: 5, label: 'Attachments',        section: 'Building Attachments' },
-    { num: 6, label: 'Bill of Materials',  section: '__bom__' },
-    { num: 7, label: 'Save & Share',       section: 'Save / Load Design' },
-    { num: 8, label: 'Developer',          section: 'Developer' }
+    { num: 6, label: 'Visibility',         section: 'Visibility' },
+    { num: 7, label: 'Bill of Materials',  section: '__bom__' },
+    { num: 8, label: 'Save & Share',       section: 'Save / Load Design' },
+    { num: 9, label: 'Developer',          section: 'Developer' }
   ];
 
   let activeStep = -1; // -1 = none open
