@@ -1,0 +1,326 @@
+/* ============================================================
+   WILD THEME — Dark mode + vibrant accents + glassmorphism
+   Colour Scheme: Charcoal + Electric Blue + Warm Gold
+   ============================================================ */
+
+:root {
+  --wild-bg: #0F1117;
+  --wild-bg-panel: #1A1D27;
+  --wild-bg-section: #232736;
+  --wild-bg-input: #2A2E3B;
+  --wild-primary: #00D4FF;
+  --wild-primary-light: rgba(0, 212, 255, 0.12);
+  --wild-primary-hover: #00B8E0;
+  --wild-accent: #FFB800;
+  --wild-accent-light: rgba(255, 184, 0, 0.12);
+  --wild-text: #E8ECF4;
+  --wild-text-secondary: #9CA3B4;
+  --wild-text-muted: #5C6378;
+  --wild-border: #2E3347;
+  --wild-border-focus: var(--wild-primary);
+  --wild-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --wild-glow: 0 0 20px rgba(0, 212, 255, 0.15);
+  --wild-radius: 12px;
+  --wild-radius-sm: 8px;
+  --wild-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== GLOBAL ===== */
+html, body {
+  background: var(--wild-bg) !important;
+}
+
+/* ===== CANVAS BACKGROUND ===== */
+#renderCanvas {
+  background: linear-gradient(135deg, #0F1117 0%, #1A1D27 50%, #0F1117 100%) !important;
+}
+
+/* ===== PANEL STYLING ===== */
+#controls {
+  background: var(--wild-bg-panel) !important;
+  border: 1px solid var(--wild-border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--wild-shadow) !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  color: var(--wild-text) !important;
+  overflow-y: auto !important;
+  max-height: 90vh !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ===== FIX BASE STYLE CONSTRAINTS ===== */
+.boSection {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.boSection .boBox {
+  opacity: 1 !important;
+  max-height: none !important;
+}
+
+.inner {
+  max-height: none !important;
+}
+
+#controlPanel > details:not(.boSection) {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ===== SECTION HEADERS ===== */
+.boSection > summary {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--wild-text-secondary) !important;
+  padding: 14px 16px !important;
+  background: var(--wild-bg-section) !important;
+  border-radius: var(--wild-radius) !important;
+  margin: 4px 0 !important;
+  cursor: pointer !important;
+  transition: all var(--wild-transition) !important;
+  border: 1px solid var(--wild-border) !important;
+  list-style: none !important;
+}
+
+.boSection > summary::-webkit-details-marker {
+  display: none;
+}
+
+.boSection > summary::after {
+  content: '▸';
+  float: right;
+  font-size: 14px;
+  color: var(--wild-text-muted);
+  transition: transform var(--wild-transition);
+}
+
+.boSection[open] > summary::after {
+  content: '▾';
+  color: var(--wild-primary);
+}
+
+.boSection > summary:hover {
+  background: var(--wild-bg-input) !important;
+  border-color: var(--wild-primary) !important;
+  color: var(--wild-primary) !important;
+  box-shadow: var(--wild-glow) !important;
+}
+
+.boSection[open] > summary {
+  background: var(--wild-primary-light) !important;
+  color: var(--wild-primary) !important;
+  border-color: var(--wild-primary) !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* ===== SECTION CONTENT ===== */
+.boSection .boBox {
+  padding: 16px !important;
+  background: var(--wild-bg-section) !important;
+  border: 1px solid var(--wild-border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--wild-radius) var(--wild-radius) !important;
+  margin-bottom: 8px !important;
+  color: var(--wild-text) !important;
+}
+
+/* ===== FORM INPUTS ===== */
+#controlPanel input[type="number"],
+#controlPanel input[type="text"],
+#controlPanel select {
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--wild-text) !important;
+  background: var(--wild-bg-input) !important;
+  border: 1.5px solid var(--wild-border) !important;
+  border-radius: var(--wild-radius-sm) !important;
+  transition: all var(--wild-transition) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+#controlPanel input[type="number"]:focus,
+#controlPanel input[type="text"]:focus,
+#controlPanel select:focus {
+  outline: none !important;
+  border-color: var(--wild-primary) !important;
+  box-shadow: 0 0 0 3px var(--wild-primary-light), var(--wild-glow) !important;
+  background: var(--wild-bg-section) !important;
+}
+
+/* Select dropdown arrow color */
+#controlPanel select {
+  color-scheme: dark;
+}
+
+/* ===== LABELS ===== */
+#controlPanel label {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  color: var(--wild-accent) !important;
+}
+
+/* ===== RADIO/CHECKBOX ===== */
+#controlPanel input[type="radio"],
+#controlPanel input[type="checkbox"] {
+  accent-color: var(--wild-primary) !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.check {
+  font-size: 13px !important;
+  color: var(--wild-text) !important;
+}
+
+/* ===== BUTTONS ===== */
+#controlPanel button {
+  padding: 8px 14px !important;
+  border: 1.5px solid var(--wild-border) !important;
+  border-radius: var(--wild-radius-sm) !important;
+  background: var(--wild-bg-input) !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--wild-text-secondary) !important;
+  transition: all var(--wild-transition) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+
+#controlPanel button:hover {
+  background: var(--wild-primary-light) !important;
+  border-color: var(--wild-primary) !important;
+  color: var(--wild-primary) !important;
+  box-shadow: var(--wild-glow) !important;
+}
+
+/* ===== PANEL HEADING ===== */
+#controlPanel h2, 
+#controlPanel h3 {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: var(--wild-text) !important;
+  letter-spacing: -0.02em !important;
+}
+
+#controlPanel h2 span,
+#controlPanel h3 span {
+  color: var(--wild-primary) !important;
+}
+
+/* Subheading / version */
+#controlPanel h2 + p,
+#controlPanel h3 + p {
+  color: var(--wild-text-muted) !important;
+}
+
+/* ===== BUILD TAG ===== */
+#statusOverlay {
+  background: var(--wild-bg-panel) !important;
+  color: var(--wild-primary) !important;
+  border: 1px solid var(--wild-border) !important;
+  border-radius: var(--wild-radius-sm) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  padding: 4px 10px !important;
+  box-shadow: var(--wild-glow) !important;
+}
+
+/* ===== DESIGN BUTTON ===== */
+.designButton,
+#mobileOpenBtn {
+  background: linear-gradient(135deg, var(--wild-primary) 0%, #0088FF 100%) !important;
+  color: #000 !important;
+  font-weight: 800 !important;
+  border: none !important;
+  border-radius: 50px !important;
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.35) !important;
+  transition: all var(--wild-transition) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.designButton:hover,
+#mobileOpenBtn:hover {
+  box-shadow: 0 6px 30px rgba(0, 212, 255, 0.5) !important;
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* ===== HINT TEXT ===== */
+#controlPanel .hint,
+#controlPanel small,
+#controlPanel .note {
+  color: var(--wild-text-muted) !important;
+  font-size: 11px !important;
+}
+
+/* ===== LINKS ===== */
+#controlPanel a {
+  color: var(--wild-primary) !important;
+}
+
+/* ===== HR / DIVIDERS ===== */
+#controlPanel hr {
+  border-color: var(--wild-border) !important;
+}
+
+/* ===== SCROLLBAR ===== */
+#controls::-webkit-scrollbar,
+#controlPanel::-webkit-scrollbar {
+  width: 6px;
+}
+
+#controls::-webkit-scrollbar-track,
+#controlPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#controls::-webkit-scrollbar-thumb,
+#controlPanel::-webkit-scrollbar-thumb {
+  background: var(--wild-border);
+  border-radius: 3px;
+}
+
+#controls::-webkit-scrollbar-thumb:hover,
+#controlPanel::-webkit-scrollbar-thumb:hover {
+  background: var(--wild-text-muted);
+}
+
+/* ===== PANEL HEADER AREA ===== */
+#controls .panelHeader,
+#controls header {
+  color: var(--wild-text) !important;
+}
+
+/* ===== DRAG HANDLE ===== */
+.drag-handle {
+  background: var(--wild-border) !important;
+}
+
+/* ===== RESIZE HANDLE ===== */
+.resize-handle {
+  opacity: 0.3;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+  #controls {
+    border-radius: 16px 16px 0 0 !important;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01s !important; }
+}
