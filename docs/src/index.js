@@ -2127,8 +2127,8 @@ function render(state) {
       }
 
       // ── Knee braces: 2 per post, 45° from 400mm down the post to the ring beam ──
-      var braceDropMm = 400;
-      var braceDrop = braceDropMm / 1000; // 0.4m
+      var braceDropMm = 600;
+      var braceDrop = braceDropMm / 1000; // 0.6m
       var braceSection = 0.075; // 75×75mm timber
       var braceLen = Math.sqrt(braceDrop * braceDrop + braceDrop * braceDrop); // diagonal length
       var braceAngle = Math.PI / 4; // 45°
