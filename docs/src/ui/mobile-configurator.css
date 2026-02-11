@@ -206,52 +206,61 @@ body.mobile-configurator #mcControls .boSection .boBox {
   box-shadow: var(--mc-shadow);
 }
 
-/* Form element styling — override #controlPanel base styles */
-body.mobile-configurator #mcControls .boSubhead,
-body.mobile-configurator #controlPanel .boSubhead {
+/* ===== GLOBAL FONT SIZE OVERRIDE =====
+   Nuclear approach: override ALL text inside #mobileConfigurator 
+   to guarantee readable sizes regardless of base CSS specificity */
+#mobileConfigurator {
+  font-size: 16px !important;
+  line-height: 1.4 !important;
+  color: var(--mc-text) !important;
+}
+
+#mobileConfigurator * {
+  font-size: inherit;
+}
+
+/* Subheadings */
+#mobileConfigurator .boSubhead {
   color: var(--mc-primary) !important;
   font-weight: 700 !important;
-  font-size: 17px !important;
+  font-size: 18px !important;
   margin-bottom: 12px !important;
   padding-bottom: 6px !important;
   border-bottom: 2px solid var(--mc-primary-light) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
 }
 
-body.mobile-configurator #mcControls label,
-body.mobile-configurator #controlPanel label {
+/* Labels */
+#mobileConfigurator label {
   color: var(--mc-text) !important;
-  font-size: 15px !important;
+  font-size: 16px !important;
   font-weight: 600 !important;
 }
 
-body.mobile-configurator #mcControls input[type="number"],
-body.mobile-configurator #mcControls input[type="text"],
-body.mobile-configurator #mcControls select,
-body.mobile-configurator #controlPanel input[type="number"],
-body.mobile-configurator #controlPanel input[type="text"],
-body.mobile-configurator #controlPanel select {
+/* Inputs and selects */
+#mobileConfigurator input[type="number"],
+#mobileConfigurator input[type="text"],
+#mobileConfigurator select {
   padding: 12px 14px !important;
-  font-size: 17px !important;
+  font-size: 18px !important;
   min-height: 48px !important;
   border: 1.5px solid var(--mc-border) !important;
   border-radius: var(--mc-radius-sm) !important;
   background: var(--mc-bg-panel) !important;
   color: var(--mc-text) !important;
-  transition: border-color var(--mc-transition) !important;
   box-sizing: border-box !important;
 }
 
-body.mobile-configurator #mcControls input:focus,
-body.mobile-configurator #mcControls select:focus,
-body.mobile-configurator #controlPanel input:focus,
-body.mobile-configurator #controlPanel select:focus {
+#mobileConfigurator input:focus,
+#mobileConfigurator select:focus {
   border-color: var(--mc-primary) !important;
   outline: none !important;
   box-shadow: 0 0 0 3px var(--mc-primary-light) !important;
 }
 
-body.mobile-configurator #mcControls button,
-body.mobile-configurator #controlPanel button {
+/* Buttons */
+#mobileConfigurator button:not(.mc-step-pill):not(.mc-footer-btn) {
   padding: 12px 16px !important;
   font-size: 16px !important;
   font-weight: 600 !important;
@@ -261,59 +270,60 @@ body.mobile-configurator #controlPanel button {
   background: var(--mc-bg-panel) !important;
   color: var(--mc-text) !important;
   cursor: pointer !important;
-  transition: all var(--mc-transition) !important;
 }
 
-body.mobile-configurator #mcControls button:active,
-body.mobile-configurator #controlPanel button:active {
+#mobileConfigurator button:not(.mc-step-pill):not(.mc-footer-btn):active {
   background: var(--mc-primary-light) !important;
   border-color: var(--mc-primary) !important;
 }
 
-body.mobile-configurator #mcControls .check,
-body.mobile-configurator #controlPanel .check {
+/* Checkboxes and radios */
+#mobileConfigurator .check {
   padding: 10px 0 !important;
   min-height: 44px !important;
   display: flex !important;
   align-items: center !important;
-  font-size: 15px !important;
+  font-size: 16px !important;
   gap: 10px !important;
 }
 
-body.mobile-configurator #mcControls .check input[type="checkbox"],
-body.mobile-configurator #mcControls .check input[type="radio"],
-body.mobile-configurator #controlPanel .check input[type="checkbox"],
-body.mobile-configurator #controlPanel .check input[type="radio"] {
+#mobileConfigurator .check input[type="checkbox"],
+#mobileConfigurator .check input[type="radio"] {
   width: 24px !important;
   height: 24px !important;
   accent-color: var(--mc-primary) !important;
   flex-shrink: 0 !important;
 }
 
-body.mobile-configurator .hint {
-  font-size: 13px !important;
+/* Radio button text (Metric/Imperial etc) */
+#mobileConfigurator input[type="radio"] + span,
+#mobileConfigurator label span {
+  font-size: 16px !important;
+}
+
+/* Hints */
+#mobileConfigurator .hint,
+#mobileConfigurator p.hint {
+  font-size: 14px !important;
   color: var(--mc-text-muted) !important;
 }
 
 /* Grid rows — keep 2-column on mobile, override 1fr collapse */
-body.mobile-configurator #mcControls .row,
-body.mobile-configurator #controlPanel .row {
+#mobileConfigurator .row {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
   gap: 10px !important;
   align-items: end !important;
 }
 
-body.mobile-configurator #mcControls .row3,
-body.mobile-configurator #controlPanel .row3 {
+#mobileConfigurator .row3 {
   display: grid !important;
   grid-template-columns: 1fr 1fr 1fr !important;
   gap: 10px !important;
   align-items: end !important;
 }
 
-body.mobile-configurator #mcControls .row4,
-body.mobile-configurator #controlPanel .row4 {
+#mobileConfigurator .row4 {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
   gap: 10px !important;
@@ -321,11 +331,17 @@ body.mobile-configurator #controlPanel .row4 {
 }
 
 /* Checkboxes grid — 2 columns */
-body.mobile-configurator #mcControls .checks,
-body.mobile-configurator #controlPanel .checks {
+#mobileConfigurator .checks {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
   gap: 6px 12px !important;
+}
+
+/* Title headings inside sections */
+#mobileConfigurator .boTitle,
+#mobileConfigurator .boTitle2 {
+  font-size: 16px !important;
+  color: var(--mc-text) !important;
 }
 
 /* ===== STEP FOOTER (NEXT/PREV) ===== */
