@@ -278,6 +278,43 @@
       background: #fafafa;
     }
 
+    /* Collapsible openings groups (Doors / Windows / Dividers) */
+    .openingsGroup{
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      margin-top: 8px;
+      background: #fff;
+    }
+    .openingsGroupSummary{
+      padding: 10px 14px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .openingsGroupSummary::-webkit-details-marker{ display:none; }
+    .openingsGroupSummary::before{
+      content: "▶";
+      font-size: 10px;
+      transition: transform 0.2s;
+      color: #888;
+    }
+    .openingsGroup[open] > .openingsGroupSummary::before{
+      transform: rotate(90deg);
+    }
+    .openingsCount{
+      font-weight: 400;
+      font-size: 12px;
+      color: #888;
+    }
+    .openingsGroupBody{
+      padding: 0 14px 14px;
+    }
+
     .doorItem, .windowItem{
       border: 1px solid #eee;
       border-radius: 10px;

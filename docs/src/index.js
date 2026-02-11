@@ -4113,9 +4113,22 @@ if (state && state.overhang) {
 
         renderDoorsUi(state, dv);
         renderWindowsUi(state, wv);
+        updateOpeningsCounts(state);
       } catch (e) {
         window.__dbg.lastError = "syncUiFromState failed: " + String(e && e.message ? e.message : e);
       }
+    }
+
+    function updateOpeningsCounts(state) {
+      var doors = getDoorsFromState(state);
+      var wins = getWindowsFromState(state);
+      var dividers = (state && state.walls && Array.isArray(state.walls.dividers)) ? state.walls.dividers : [];
+      var dc = document.getElementById("doorsCount");
+      var wc = document.getElementById("windowsCount");
+      var ic = document.getElementById("dividersCount");
+      if (dc) dc.textContent = "(" + doors.length + ")";
+      if (wc) wc.textContent = "(" + wins.length + ")";
+      if (ic) ic.textContent = "(" + dividers.length + ")";
     }
 
     // Expose a function to refresh dynamic controls after profile changes
@@ -6455,6 +6468,7 @@ function parseOverhangInput(val) {
       syncUiFromState(s, v);
       applyWallHeightUiLock(s);
       renderDividersUi(s, v);
+      updateOpeningsCounts(s);
       console.log("[store.onChange] About to call render()");
       render(s);
       console.log("[store.onChange] render() completed");

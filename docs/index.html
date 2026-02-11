@@ -155,29 +155,39 @@
               <div class="boBox">
                 <div class="boSubhead">Wall Construction</div>
 
-                <div class="boSubhead" style="margin-top:10px;">Doors</div>
-                <div class="row">
-                  <button id="addDoorBtn" type="button">+ Add Door</button>
-                  <button id="removeAllDoorsBtn" type="button">Remove All</button>
-                </div>
-                <div id="doorsList"></div>
-
-                <div class="boSubhead" style="margin-top:10px;">Windows</div>
-                <div class="row">
-                  <button id="addWindowBtn" type="button">+ Add Window</button>
-                  <button id="removeAllWindowsBtn" type="button">Remove All</button>
-                </div>
-                <div id="windowsList"></div>
-
-                <div id="internalDividersSection">
-                  <div class="boSubhead" style="margin-top:10px;">Internal Dividers</div>
-                  <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
-                  <div class="row">
-                    <button id="addDividerBtn" type="button">+ Add Divider</button>
-                    <button id="removeAllDividersBtn" type="button">Remove All</button>
+                <details class="openingsGroup" id="doorsGroup">
+                  <summary class="openingsGroupSummary">Doors <span id="doorsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addDoorBtn" type="button">+ Add Door</button>
+                      <button id="removeAllDoorsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="doorsList"></div>
                   </div>
-                  <div id="dividersList"></div>
-                </div>
+                </details>
+
+                <details class="openingsGroup" id="windowsGroup">
+                  <summary class="openingsGroupSummary">Windows <span id="windowsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addWindowBtn" type="button">+ Add Window</button>
+                      <button id="removeAllWindowsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="windowsList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="dividersGroup">
+                  <summary class="openingsGroupSummary">Internal Dividers <span id="dividersCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="internalDividersSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
+                    <div class="row">
+                      <button id="addDividerBtn" type="button">+ Add Divider</button>
+                      <button id="removeAllDividersBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="dividersList"></div>
+                  </div>
+                </details>
               </div>
             </details>
 
