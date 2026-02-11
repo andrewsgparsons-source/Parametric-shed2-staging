@@ -93,7 +93,7 @@
     const flyout = document.createElement('div');
     flyout.id = 'swFlyout';
     flyout.className = 'sw-flyout';
-    flyout.innerHTML = '<div class="sw-flyout-header"><span class="sw-flyout-title" id="swFlyoutTitle"></span><button class="sw-flyout-close" id="swFlyoutClose">✕</button></div><div class="sw-flyout-body" id="swFlyoutBody"></div>';
+    flyout.innerHTML = '<div class="sw-flyout-header"><span class="sw-flyout-title" id="swFlyoutTitle"></span><div class="sw-scene-views" id="swSceneViews"><span class="sw-scene-views-label">Select Scene View</span><div class="sw-scene-views-row"><button class="sw-view-btn" data-snap="snapPlanBtn" title="Plan view">Plan</button><button class="sw-view-btn" data-snap="snapFrontBtn" title="Front view">Front</button></div><div class="sw-scene-views-row"><button class="sw-view-btn" data-snap="snapBackBtn" title="Back view">Back</button><button class="sw-view-btn" data-snap="snapLeftBtn" title="Left view">Left</button><button class="sw-view-btn" data-snap="snapRightBtn" title="Right view">Right</button></div></div><button class="sw-flyout-close" id="swFlyoutClose">✕</button></div><div class="sw-flyout-body" id="swFlyoutBody"></div>';
 
     // Insert sidebar and flyout at the start of #controls
     controls.insertBefore(flyout, controls.firstChild);
@@ -147,6 +147,14 @@
     // Wire up flyout close button
     document.getElementById('swFlyoutClose').addEventListener('click', () => {
       closeFlyout();
+    });
+
+    // Wire up scene view buttons — trigger the original snap buttons
+    document.querySelectorAll('.sw-view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const origBtn = document.getElementById(btn.dataset.snap);
+        if (origBtn) origBtn.click();
+      });
     });
 
     // Wire up dashboard bubbles as shortcuts to flyouts
@@ -300,6 +308,10 @@
 
     // Update flyout title
     document.getElementById('swFlyoutTitle').textContent = STEPS[idx].label;
+
+    // Show scene view buttons for steps 1-6 (indices 0-5), hide for BOM/Save/Developer
+    var sceneViews = document.getElementById('swSceneViews');
+    if (sceneViews) sceneViews.style.display = idx <= 5 ? '' : 'none';
 
     // Show flyout
     const flyout = document.getElementById('swFlyout');
