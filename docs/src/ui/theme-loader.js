@@ -52,8 +52,9 @@
       '#mobileConfigurator .mc-step-pill { font-size: 15px !important; padding: 10px 16px !important; }',
       '#mobileConfigurator .mc-footer-btn { font-size: 17px !important; }',
       '/* Scale up the entire controls area */ #mcControls { zoom: 1.35 !important; -moz-transform: scale(1.35); -moz-transform-origin: top left; }',
-      '#mcStepNav { zoom: 1.2 !important; }',
-      '#mcStepFooter { zoom: 1.2 !important; }'
+      '#mcStepNav { zoom: 1.15 !important; }',
+      '#mcStepFooter { zoom: 1.15 !important; }',
+      '#mobileConfigurator #mcStepNav { border-top: none !important; }'
     ].join('\n');
     document.head.appendChild(mobileStyle);
   }
