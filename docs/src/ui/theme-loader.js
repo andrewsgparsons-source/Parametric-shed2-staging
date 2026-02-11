@@ -7,7 +7,7 @@
    ============================================================ */
 (function() {
   const params = new URLSearchParams(window.location.search);
-  const theme = (params.get('theme') || '').toLowerCase();
+  const theme = (params.get('theme') || 'sidebar').toLowerCase();
   
   const themes = {
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
