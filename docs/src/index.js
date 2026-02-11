@@ -2125,6 +2125,45 @@ function render(state) {
         beam.material = mat;
         beam.metadata = { dynamic: true };
       }
+
+      // Fascia boards around the roof perimeter
+      // 20mm thick x 150mm deep, positioned at eaves height extending to roof overhang
+      var fasciaThk = 0.020; // 20mm
+      var fasciaDepth = 0.150; // 150mm
+      var overhang = 0.075; // 75mm default overhang
+      var roofW = wM + 2 * overhang;
+      var roofD = dM + 2 * overhang;
+
+      // Fascia material — lighter timber colour
+      var fasciaMat = new BAB.StandardMaterial("gazeboFasciaMat", scene);
+      fasciaMat.diffuseColor = new BAB.Color3(0.72, 0.56, 0.38);
+      fasciaMat.specularColor = new BAB.Color3(0.1, 0.1, 0.1);
+
+      var fasciaTopY = postHeight + beamH / 2;
+      var fasciaCentreY = fasciaTopY - fasciaDepth / 2;
+
+      var fasciaBoards = [
+        // Front fascia (along x, at z = -overhang)
+        { w: roofW, h: fasciaDepth, d: fasciaThk, x: wM / 2, z: -overhang + fasciaThk / 2, name: "gazebo-fascia-front" },
+        // Back fascia
+        { w: roofW, h: fasciaDepth, d: fasciaThk, x: wM / 2, z: dM + overhang - fasciaThk / 2, name: "gazebo-fascia-back" },
+        // Left fascia (along z)
+        { w: fasciaThk, h: fasciaDepth, d: roofD, x: -overhang + fasciaThk / 2, z: dM / 2, name: "gazebo-fascia-left" },
+        // Right fascia
+        { w: fasciaThk, h: fasciaDepth, d: roofD, x: wM + overhang - fasciaThk / 2, z: dM / 2, name: "gazebo-fascia-right" }
+      ];
+
+      for (var f = 0; f < fasciaBoards.length; f++) {
+        var fb = fasciaBoards[f];
+        var fascia = BAB.MeshBuilder.CreateBox(fb.name, {
+          width: fb.w,
+          height: fb.h,
+          depth: fb.d
+        }, scene);
+        fascia.position = new BAB.Vector3(fb.x, fasciaCentreY, fb.z);
+        fascia.material = fasciaMat;
+        fascia.metadata = { dynamic: true };
+      }
     }
 
     function isGazeboMode(state) {
@@ -4306,7 +4345,13 @@ if (state && state.overhang) {
             patch.w = Math.max(curW, HIPPED_MIN_W);
             patch.d = Math.max(curD, HIPPED_MIN_D);
           }
-          patch.roof = { style: "hipped" };
+          patch.roof = {
+            style: "hipped",
+            hipped: {
+              heightToEaves_mm: 2400,
+              heightToCrest_mm: 3000
+            }
+          };
         }
 
         store.setState(patch);
