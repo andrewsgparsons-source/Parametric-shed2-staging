@@ -828,6 +828,14 @@ console.log("CLAD_COURSES_FINAL", {
     // ===============================================================
     // SHEET CLADDING (box-profile / corrugated): one piece per panel
     // ===============================================================
+    // Pre-compute door/window exclusion zones for sheet cladding (avoids CSG)
+    const sheetExclusions = [];
+    if (isSheetCladding) {
+      const _doors = doorIntervalsForWall(String(wallId || ""));
+      const _wins = windowIntervalsForWall(String(wallId || ""));
+      for (let di = 0; di < _doors.length; di++) sheetExclusions.push(_doors[di]);
+      for (let wi = 0; wi < _wins.length; wi++) sheetExclusions.push(_wins[wi]);
+    }
     if (isSheetCladding) {
       // Cap sheet height: apex gable → eaves; pent side → minH/maxH; pent slope → maxH
       let cappedH = panelHeightMm;
@@ -871,6 +879,15 @@ console.log("CLAD_COURSES_FINAL", {
         const numRibs = Math.floor(panelLenAdj / ribSpacing);
         for (let r = 0; r < numRibs; r++) {
           const ribX = origin.x + panelStart + xShift_mm + (r + 0.5) * ribSpacing;
+          // Skip ribs that fall within door/window exclusion zones
+          let ribExcluded = false;
+          for (let ei = 0; ei < sheetExclusions.length; ei++) {
+            const ex = sheetExclusions[ei];
+            if (ribX + ribW/2 > origin.x + ex.x0 && ribX - ribW/2 < origin.x + ex.x1) {
+              ribExcluded = true; break;
+            }
+          }
+          if (ribExcluded) continue;
           const ribZ = wallOutsideFaceWorld + outwardNormalZ * (baseThickness + ribDepth / 2);
           const bRib = mkBox(
             `${meshPrefix}clad-${wallId}-panel-${panelIndex}-rib-${r}`,
@@ -905,6 +922,15 @@ console.log("CLAD_COURSES_FINAL", {
         const numRibs = Math.floor(panelLenAdj / ribSpacing);
         for (let r = 0; r < numRibs; r++) {
           const ribZ = zStart_mm + (r + 0.5) * ribSpacing;
+          // Skip ribs in door/window exclusion zones (left/right walls use Z mapped from x0/x1)
+          let ribExcluded = false;
+          for (let ei = 0; ei < sheetExclusions.length; ei++) {
+            const ex = sheetExclusions[ei];
+            if (ribZ + ribW/2 > origin.z + ex.x0 && ribZ - ribW/2 < origin.z + ex.x1) {
+              ribExcluded = true; break;
+            }
+          }
+          if (ribExcluded) continue;
           const ribX = wallOutsideFaceWorld + outwardNormalX * (baseThickness + ribDepth / 2);
           const bRib = mkBox(
             `${meshPrefix}clad-${wallId}-panel-${panelIndex}-rib-${r}`,
@@ -1300,7 +1326,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
           BABYLON.CSG &&
           typeof BABYLON.CSG.FromMesh === "function";
 
-        if (hasCSG) {
+        if (hasCSG && !isSheetCladding) {
           const panelA0 = Math.floor(Number(panelStart || 0));
           const panelA1 = Math.floor(Number(panelStart || 0) + Number(panelLen || 0));
 
