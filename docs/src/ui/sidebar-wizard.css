@@ -334,6 +334,42 @@ body.sidebar-wizard-mode .boSection .boBox {
   background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Constrain all flyout content to prevent overflow */
+#swFlyoutBody {
+  overflow-x: hidden !important;
+}
+
+#swFlyoutBody *,
+#swFlyoutBody *::before,
+#swFlyoutBody *::after {
+  box-sizing: border-box !important;
+}
+
+#swFlyoutBody form,
+#swFlyoutBody .boSection,
+#swFlyoutBody .boBox,
+#swFlyoutBody fieldset,
+#swFlyoutBody .row,
+#swFlyoutBody label,
+#swFlyoutBody .inner {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+#swFlyoutBody fieldset {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+#swFlyoutBody input,
+#swFlyoutBody select {
+  min-width: 0 !important;
 }
 
 body.sidebar-wizard-mode .inner {
