@@ -180,6 +180,9 @@
     // Show first step
     goToStep(0);
 
+    // Apply inline styles to guarantee font sizes (CSS specificity can't beat inline)
+    applyMobileStyles(container);
+
     // Resize engine after layout change
     setTimeout(resizeEngine, 100);
     setTimeout(resizeEngine, 500);
@@ -286,6 +289,95 @@
       }
       lastTap = now;
     });
+  }
+
+  function applyMobileStyles(container) {
+    // Inline styles ALWAYS beat CSS — no specificity issues possible
+    var mc = {
+      text: '#1A1A1A',
+      muted: '#8A8A8A',
+      primary: '#2D5016',
+      primaryLight: '#E8F0E2',
+      border: '#E0D5C8',
+      bg: '#FFFFFF',
+      radius: '8px'
+    };
+
+    // Labels
+    container.querySelectorAll('label').forEach(function(el) {
+      el.style.setProperty('font-size', '16px', 'important');
+      el.style.setProperty('font-weight', '600', 'important');
+      el.style.setProperty('color', mc.text, 'important');
+    });
+
+    // Subheadings
+    container.querySelectorAll('.boSubhead').forEach(function(el) {
+      el.style.setProperty('font-size', '18px', 'important');
+      el.style.setProperty('font-weight', '700', 'important');
+      el.style.setProperty('color', mc.primary, 'important');
+      el.style.setProperty('text-transform', 'uppercase', 'important');
+      el.style.setProperty('letter-spacing', '0.03em', 'important');
+      el.style.setProperty('border-bottom', '2px solid ' + mc.primaryLight, 'important');
+      el.style.setProperty('padding-bottom', '6px', 'important');
+      el.style.setProperty('margin-bottom', '12px', 'important');
+    });
+
+    // Inputs and selects
+    container.querySelectorAll('input[type="number"], input[type="text"], select').forEach(function(el) {
+      el.style.setProperty('font-size', '18px', 'important');
+      el.style.setProperty('padding', '12px 14px', 'important');
+      el.style.setProperty('min-height', '48px', 'important');
+      el.style.setProperty('border', '1.5px solid ' + mc.border, 'important');
+      el.style.setProperty('border-radius', mc.radius, 'important');
+      el.style.setProperty('color', mc.text, 'important');
+      el.style.setProperty('background', mc.bg, 'important');
+      el.style.setProperty('box-sizing', 'border-box', 'important');
+    });
+
+    // Buttons (not step pills or footer)
+    container.querySelectorAll('#mcControls button').forEach(function(el) {
+      el.style.setProperty('font-size', '16px', 'important');
+      el.style.setProperty('font-weight', '600', 'important');
+      el.style.setProperty('padding', '12px 16px', 'important');
+      el.style.setProperty('min-height', '48px', 'important');
+      el.style.setProperty('border-radius', mc.radius, 'important');
+    });
+
+    // Checkboxes and radios
+    container.querySelectorAll('.check').forEach(function(el) {
+      el.style.setProperty('font-size', '16px', 'important');
+      el.style.setProperty('padding', '10px 0', 'important');
+      el.style.setProperty('min-height', '44px', 'important');
+      el.style.setProperty('gap', '10px', 'important');
+    });
+
+    container.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function(el) {
+      el.style.setProperty('width', '24px', 'important');
+      el.style.setProperty('height', '24px', 'important');
+    });
+
+    // Hints
+    container.querySelectorAll('.hint, p.hint').forEach(function(el) {
+      el.style.setProperty('font-size', '14px', 'important');
+      el.style.setProperty('color', mc.muted, 'important');
+    });
+
+    // Titles
+    container.querySelectorAll('.boTitle, .boTitle2').forEach(function(el) {
+      el.style.setProperty('font-size', '17px', 'important');
+      el.style.setProperty('color', mc.text, 'important');
+    });
+
+    // All spans and divs that might contain text
+    container.querySelectorAll('#mcControls span, #mcControls div').forEach(function(el) {
+      var current = window.getComputedStyle(el).fontSize;
+      var px = parseFloat(current);
+      if (px < 14) {
+        el.style.setProperty('font-size', '15px', 'important');
+      }
+    });
+
+    console.log('[mobile-configurator] Inline styles applied to all form elements');
   }
 
   function resizeEngine() {
