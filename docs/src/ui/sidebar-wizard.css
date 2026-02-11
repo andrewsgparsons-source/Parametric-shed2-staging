@@ -724,66 +724,54 @@ body.sidebar-wizard-mode #controlPanel p {
 
   /* Show mobile toggle button */
   .sw-mobile-toggle {
-    display: block;
+    display: block !important;
   }
 
   /* Show "View Shed" button in sidebar */
   .sw-mobile-view-shed {
-    display: block;
+    display: block !important;
   }
 
-  #sidebarWizard {
+  /* Completely hide the controls wrapper when panel is closed */
+  body.sidebar-wizard-mode #controls.sw-embedded {
+    display: none !important;
+  }
+
+  /* Canvas fills full screen */
+  body.sidebar-wizard-mode #renderCanvas {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 1 !important;
+  }
+
+  /* Hide original mobile buttons */
+  body.sidebar-wizard-mode #mobileOpenBtn,
+  body.sidebar-wizard-mode #mobileCloseBtn {
+    display: none !important;
+  }
+
+  /* When panel is open: show controls, hide toggle */
+  body.sidebar-wizard-mode.sw-panel-open #controls.sw-embedded {
+    display: flex !important;
+    width: 100% !important;
+  }
+
+  body.sidebar-wizard-mode.sw-panel-open #sidebarWizard {
     width: 100%;
     border-right: none;
-    transition: transform 0.3s ease;
   }
 
-  .sw-flyout {
+  body.sidebar-wizard-mode.sw-panel-open .sw-flyout {
     left: 0;
     z-index: 2147483001;
   }
 
-  /* Default: sidebar hidden, 3D view visible */
-  body.sidebar-wizard-mode #controls.sw-embedded {
-    pointer-events: none;
-    background: transparent !important;
-    width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  body.sidebar-wizard-mode #controls.sw-embedded #sidebarWizard,
-  body.sidebar-wizard-mode #controls.sw-embedded .sw-flyout {
-    pointer-events: auto;
-  }
-
-  body.sidebar-wizard-mode #sidebarWizard {
-    transform: translateY(100%);
-    visibility: hidden;
-  }
-
-  body.sidebar-wizard-mode.sw-panel-open #sidebarWizard {
-    visibility: visible;
-  }
-
-  body.sidebar-wizard-mode #renderCanvas {
-    display: block !important;
-    width: 100vw !important;
-    height: 100vh !important;
-  }
-
-  /* When panel is open: sidebar visible */
-  body.sidebar-wizard-mode.sw-panel-open #controls.sw-embedded {
-    pointer-events: auto;
-    width: 100% !important;
-    overflow: visible !important;
-  }
-
-  body.sidebar-wizard-mode.sw-panel-open #sidebarWizard {
-    transform: translateY(0);
-  }
-
   body.sidebar-wizard-mode.sw-panel-open .sw-mobile-toggle {
-    display: none;
+    display: none !important;
   }
 }
 
