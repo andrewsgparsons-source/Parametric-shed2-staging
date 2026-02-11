@@ -450,3 +450,5 @@ select.profile-options-restricted option:disabled {
   background: #fdd;
   border-color: #c00;
 }
+/* Hide redundant Remove All Attachments button */
+#removeAllAttachmentsBtn { display: none !important; }
