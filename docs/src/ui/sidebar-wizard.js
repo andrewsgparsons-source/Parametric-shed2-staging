@@ -106,11 +106,21 @@
       flyoutBody.appendChild(controlPanel);
     }
 
+    // Force-hide original mobile button (CSS specificity battles)
+    var origMobileBtn = document.getElementById('mobileOpenBtn');
+    if (origMobileBtn) origMobileBtn.style.setProperty('display', 'none', 'important');
+
     // Mobile: add floating toggle button over 3D view
     const mobileToggle = document.createElement('button');
     mobileToggle.className = 'sw-mobile-toggle';
+    mobileToggle.id = 'swMobileToggle';
     mobileToggle.textContent = '☰ Design Options';
+    // Apply critical styles inline as fallback (CSS media query may not apply)
+    if (window.innerWidth <= 768) {
+      mobileToggle.style.cssText = 'display:block!important;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:12px 24px;border:none;border-radius:28px;background:#2D5016;color:#fff;font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.25);cursor:pointer;';
+    }
     document.body.appendChild(mobileToggle);
+    console.log('[sidebar-wizard] Mobile toggle created, innerWidth:', window.innerWidth);
 
     // Mobile: add "View Shed" button at top of sidebar
     const viewShedBtn = document.createElement('button');
