@@ -181,7 +181,19 @@
     goToStep(0);
 
     // Apply inline styles to guarantee font sizes (CSS specificity can't beat inline)
-    applyMobileStyles(container);
+    try {
+      applyMobileStyles(container);
+    } catch (e) {
+      console.error('[mobile-configurator] applyMobileStyles FAILED:', e);
+      // Fallback: inject a style tag with brute force
+      var fallbackStyle = document.createElement('style');
+      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator div, #mobileConfigurator p, #mobileConfigurator .boSubhead, #mobileConfigurator .check, #mobileConfigurator .hint, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 16px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 18px !important; }';
+      document.head.appendChild(fallbackStyle);
+    }
+
+    // Also schedule a delayed re-apply in case elements weren't ready
+    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 2000);
+    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 4000);
 
     // Resize engine after layout change
     setTimeout(resizeEngine, 100);
@@ -377,7 +389,13 @@
       }
     });
 
-    console.log('[mobile-configurator] Inline styles applied to all form elements');
+    var labelCount = container.querySelectorAll('label').length;
+    var inputCount = container.querySelectorAll('input, select').length;
+    var subheadCount = container.querySelectorAll('.boSubhead').length;
+    console.log('[mobile-configurator] Inline styles applied — labels:' + labelCount + ' inputs:' + inputCount + ' subheads:' + subheadCount);
+    
+    // VISUAL DEBUG: mark container border so we know function ran
+    container.style.setProperty('border-top', '4px solid red', 'important');
   }
 
   function resizeEngine() {
