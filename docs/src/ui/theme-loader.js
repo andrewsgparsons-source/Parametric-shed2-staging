@@ -12,7 +12,8 @@
   const themes = {
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
     polished: { css: './src/ui/polished-theme.css' },
-    wild:     { css: './src/ui/wild-theme.css' }
+    wild:     { css: './src/ui/wild-theme.css' },
+    sidebar:  { css: './src/ui/sidebar-wizard.css', js: './src/ui/sidebar-wizard.js' }
   };
   
   const chosen = themes[theme];

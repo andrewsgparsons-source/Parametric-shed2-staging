@@ -1,0 +1,373 @@
+/* ============================================================
+   SIDEBAR WIZARD THEME — Left sidebar with summary + vertical steps
+   Colour Scheme: Earth tones (inherited from wizard theme)
+   ============================================================ */
+
+:root {
+  --sw-primary: #2D5016;
+  --sw-primary-light: #E8F0E2;
+  --sw-primary-hover: #1E3A0E;
+  --sw-accent: #D4A574;
+  --sw-accent-light: #F5E6D3;
+  --sw-bg: #FFF8F0;
+  --sw-bg-panel: #FFFFFF;
+  --sw-bg-section: #FEFCF8;
+  --sw-text: #1A1A1A;
+  --sw-text-secondary: #5C5C5C;
+  --sw-text-muted: #8A8A8A;
+  --sw-border: #E0D5C8;
+  --sw-shadow: 0 4px 24px rgba(45, 80, 22, 0.08);
+  --sw-radius: 12px;
+  --sw-radius-sm: 8px;
+  --sw-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --sw-sidebar-w: 380px;
+}
+
+/* ===== GLOBAL ===== */
+html, body {
+  background: var(--sw-bg) !important;
+}
+
+/* ===== HIDE ORIGINAL UI ELEMENTS ===== */
+body.sidebar-wizard-mode #mobileOpenBtn,
+body.sidebar-wizard-mode #mobileCloseBtn,
+body.sidebar-wizard-mode .designButton,
+body.sidebar-wizard-mode #statusOverlay {
+  display: none !important;
+}
+
+/* ===== SIDEBAR CONTAINER ===== */
+#sidebarWizard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sw-sidebar-w);
+  z-index: 2147483000;
+  background: var(--sw-bg-panel);
+  border-right: 1px solid var(--sw-border);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ===== PUSH 3D VIEW RIGHT ===== */
+body.sidebar-wizard-mode #renderCanvas {
+  margin-left: var(--sw-sidebar-w) !important;
+  width: calc(100% - var(--sw-sidebar-w)) !important;
+}
+
+/* ===== HEADER ===== */
+.sw-header {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid var(--sw-border);
+  flex-shrink: 0;
+}
+
+.sw-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--sw-text);
+  letter-spacing: -0.02em;
+}
+
+/* ===== SUMMARY DASHBOARD ===== */
+.sw-dashboard {
+  padding: 14px 16px;
+  background: var(--sw-primary-light);
+  border-bottom: 1px solid var(--sw-border);
+  flex-shrink: 0;
+}
+
+.sw-dash-row {
+  display: flex;
+  gap: 2px;
+}
+
+.sw-dash-row + .sw-dash-row {
+  margin-top: 2px;
+}
+
+.sw-dash-item {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  text-align: center;
+  transition: background var(--sw-transition);
+}
+
+.sw-dash-item:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.sw-dash-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--sw-primary);
+  margin-bottom: 2px;
+}
+
+.sw-dash-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sw-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== VERTICAL STEPS ===== */
+.sw-steps {
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--sw-border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sw-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--sw-radius-sm);
+  cursor: pointer;
+  transition: all var(--sw-transition);
+  text-align: left;
+  width: 100%;
+}
+
+.sw-step:hover {
+  background: var(--sw-bg);
+}
+
+.sw-step.active {
+  background: var(--sw-primary-light);
+}
+
+.sw-step.completed .sw-step-num {
+  background: var(--sw-accent);
+  color: #fff;
+  border-color: var(--sw-accent);
+}
+
+/* ===== STEP NUMBER DOTS ===== */
+.sw-step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid var(--sw-border);
+  color: var(--sw-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all var(--sw-transition);
+}
+
+.sw-step.active .sw-step-num {
+  background: var(--sw-primary);
+  border-color: var(--sw-primary);
+  color: #fff;
+}
+
+/* ===== STEP LABEL ===== */
+.sw-step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sw-text-secondary);
+  transition: color var(--sw-transition);
+}
+
+.sw-step.active .sw-step-label {
+  color: var(--sw-primary);
+  font-weight: 700;
+}
+
+.sw-step.completed .sw-step-label {
+  color: var(--sw-accent);
+}
+
+/* ===== CONTENT AREA ===== */
+.sw-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* ===== EMBEDDED CONTROLS ===== */
+#controls.sw-embedded {
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  height: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+#controls.sw-embedded #controlPanel {
+  padding: 0 !important;
+}
+
+/* Fix boSection constraints */
+body.sidebar-wizard-mode .boSection {
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+body.sidebar-wizard-mode .boSection .boBox {
+  opacity: 1 !important;
+  max-height: none !important;
+  padding: 16px 20px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+body.sidebar-wizard-mode .inner {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.sidebar-wizard-mode #controlPanel > details:not(.boSection) {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Hide "Design your shed" heading block */
+body.sidebar-wizard-mode #controlPanel h2,
+body.sidebar-wizard-mode #controlPanel h3 {
+  display: none !important;
+}
+
+/* Hide version/subtitle text below heading */
+body.sidebar-wizard-mode .inner > div:first-child:not(form),
+body.sidebar-wizard-mode .inner > header {
+  display: none !important;
+}
+
+/* ===== FORM STYLING ===== */
+body.sidebar-wizard-mode #controlPanel input[type="number"],
+body.sidebar-wizard-mode #controlPanel input[type="text"],
+body.sidebar-wizard-mode #controlPanel select {
+  padding: 9px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--sw-text) !important;
+  background: #fff !important;
+  border: 1.5px solid var(--sw-border) !important;
+  border-radius: var(--sw-radius-sm) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  transition: border-color var(--sw-transition), box-shadow var(--sw-transition) !important;
+}
+
+body.sidebar-wizard-mode #controlPanel input:focus,
+body.sidebar-wizard-mode #controlPanel select:focus {
+  outline: none !important;
+  border-color: var(--sw-primary) !important;
+  box-shadow: 0 0 0 3px var(--sw-primary-light) !important;
+}
+
+body.sidebar-wizard-mode #controlPanel label {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: var(--sw-text-secondary) !important;
+}
+
+body.sidebar-wizard-mode #controlPanel button {
+  padding: 7px 12px !important;
+  border: 1.5px solid var(--sw-border) !important;
+  border-radius: var(--sw-radius-sm) !important;
+  background: #fff !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--sw-text) !important;
+  transition: all var(--sw-transition) !important;
+}
+
+body.sidebar-wizard-mode #controlPanel button:hover {
+  background: var(--sw-bg) !important;
+  border-color: var(--sw-primary) !important;
+  color: var(--sw-primary) !important;
+}
+
+/* ===== HINT TEXT ===== */
+body.sidebar-wizard-mode #controlPanel .hint,
+body.sidebar-wizard-mode #controlPanel small,
+body.sidebar-wizard-mode #controlPanel p {
+  font-size: 11px !important;
+  color: var(--sw-text-muted) !important;
+}
+
+/* ===== RADIO/CHECKBOX ===== */
+body.sidebar-wizard-mode #controlPanel input[type="radio"],
+body.sidebar-wizard-mode #controlPanel input[type="checkbox"] {
+  accent-color: var(--sw-primary) !important;
+}
+
+/* ===== SCROLLBAR ===== */
+.sw-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sw-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sw-content::-webkit-scrollbar-thumb {
+  background: var(--sw-border);
+  border-radius: 3px;
+}
+
+.sw-content::-webkit-scrollbar-thumb:hover {
+  background: var(--sw-text-muted);
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+  :root {
+    --sw-sidebar-w: 100vw;
+  }
+
+  #sidebarWizard {
+    width: 100%;
+    border-right: none;
+  }
+
+  body.sidebar-wizard-mode #renderCanvas {
+    display: none !important;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01s !important; }
+}
