@@ -2142,7 +2142,7 @@ function render(state) {
 
       var fasciaThk = 0.020; // 20mm
       var fasciaDepth = 0.100; // 100mm
-      var fasciaInset = 0.050; // 50mm — tiles overhang past the fascia (30mm + 20mm standoff from rafters)
+      var fasciaInset = 0.015; // 15mm — tiles overhang just past the fascia
 
       // Find the lowest Y of roof rafter meshes (hip + common rafters)
       var rafterMinY = Infinity;
