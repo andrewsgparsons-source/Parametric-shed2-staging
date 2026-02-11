@@ -740,10 +740,10 @@ body.sidebar-wizard-mode #controlPanel p {
 
   /* Override cream background on mobile */
   html, body {
-    background: #e8e8e8 !important;
+    background: #d4d4d4 !important;
   }
 
-  /* Canvas fills full screen */
+  /* Canvas fills full screen with opaque background */
   body.sidebar-wizard-mode #renderCanvas {
     display: block !important;
     position: fixed !important;
@@ -752,6 +752,12 @@ body.sidebar-wizard-mode #controlPanel p {
     width: 100vw !important;
     height: 100vh !important;
     z-index: 1 !important;
+    background: #d4d4d4 !important;
+  }
+
+  /* Kill ui-layer overlay on mobile */
+  body.sidebar-wizard-mode #ui-layer {
+    display: none !important;
   }
 
   /* Hide original mobile buttons */
