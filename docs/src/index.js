@@ -2145,6 +2145,7 @@ function render(state) {
 
       // Find the lowest Y of roof rafter meshes (hip + common rafters)
       var rafterMinY = Infinity;
+      var coveringMinY = Infinity; // bottom of tiles/felt/OSB
       var roofMinX = Infinity, roofMaxX = -Infinity;
       var roofMinZ = Infinity, roofMaxZ = -Infinity;
 
@@ -2153,7 +2154,7 @@ function render(state) {
         var m = meshes[i];
         if (!m || !m.name) continue;
         var nm = m.name;
-        // Match hip rafters, common rafters, jack rafters
+        // Match hip rafters, common rafters, jack rafters for extent
         if (nm.indexOf("roof-hipped-hip-") === 0 || nm.indexOf("roof-hipped-common-") === 0 || nm.indexOf("roof-hipped-jack-") === 0) {
           try {
             m.computeWorldMatrix(true);
@@ -2167,6 +2168,14 @@ function render(state) {
             if (max.z > roofMaxZ) roofMaxZ = max.z;
           } catch (e) {}
         }
+        // Match tiles/felt/OSB covering for the bottom edge (fascia meets the visible covering)
+        if (nm.indexOf("roof-tiles-tiles") === 0 || nm.indexOf("roof-tiles-membrane") === 0 || nm.indexOf("roof-hipped-osb") === 0 || nm.indexOf("roof-felt") === 0) {
+          try {
+            m.computeWorldMatrix(true);
+            var bi2 = m.getBoundingInfo();
+            if (bi2.boundingBox.minimumWorld.y < coveringMinY) coveringMinY = bi2.boundingBox.minimumWorld.y;
+          } catch (e) {}
+        }
       }
 
       if (rafterMinY === Infinity) {
@@ -2174,13 +2183,18 @@ function render(state) {
         return;
       }
 
+      // Fascia top = bottom of tiles/covering (so it meets the tiles)
+      // Fascia bottom = below the rafter ends
+      var fasciaTopY = (coveringMinY < Infinity) ? coveringMinY : rafterMinY;
+      var fasciaBottomY = rafterMinY - fasciaDepth;
+      var actualFasciaH = fasciaTopY - fasciaBottomY;
+      var fasciaCentreY = (fasciaTopY + fasciaBottomY) / 2;
+
       console.log("[Gazebo] Fascia: rafterMinY=" + rafterMinY.toFixed(3) +
+        " coveringMinY=" + coveringMinY.toFixed(3) +
+        " fasciaH=" + actualFasciaH.toFixed(3) +
         " roofX=" + roofMinX.toFixed(3) + "-" + roofMaxX.toFixed(3) +
         " roofZ=" + roofMinZ.toFixed(3) + "-" + roofMaxZ.toFixed(3));
-
-      // Fascia hangs from the bottom of the rafters at the perimeter
-      var fasciaTopY = rafterMinY;
-      var fasciaCentreY = fasciaTopY - fasciaDepth / 2;
 
       // Fascia material
       var fasciaMat = new BAB.StandardMaterial("gazeboFasciaMat", scene);
@@ -2194,13 +2208,13 @@ function render(state) {
 
       var fasciaBoards = [
         // Front fascia (along x)
-        { w: roofW + fasciaThk * 2, h: fasciaDepth, d: fasciaThk, x: centreX, z: roofMinZ - fasciaThk / 2, name: "gazebo-fascia-front" },
+        { w: roofW + fasciaThk * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMinZ - fasciaThk / 2, name: "gazebo-fascia-front" },
         // Back fascia
-        { w: roofW + fasciaThk * 2, h: fasciaDepth, d: fasciaThk, x: centreX, z: roofMaxZ + fasciaThk / 2, name: "gazebo-fascia-back" },
+        { w: roofW + fasciaThk * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMaxZ + fasciaThk / 2, name: "gazebo-fascia-back" },
         // Left fascia (along z)
-        { w: fasciaThk, h: fasciaDepth, d: roofD + fasciaThk * 2, x: roofMinX - fasciaThk / 2, z: centreZ, name: "gazebo-fascia-left" },
+        { w: fasciaThk, h: actualFasciaH, d: roofD + fasciaThk * 2, x: roofMinX - fasciaThk / 2, z: centreZ, name: "gazebo-fascia-left" },
         // Right fascia
-        { w: fasciaThk, h: fasciaDepth, d: roofD + fasciaThk * 2, x: roofMaxX + fasciaThk / 2, z: centreZ, name: "gazebo-fascia-right" }
+        { w: fasciaThk, h: actualFasciaH, d: roofD + fasciaThk * 2, x: roofMaxX + fasciaThk / 2, z: centreZ, name: "gazebo-fascia-right" }
       ];
 
       for (var f = 0; f < fasciaBoards.length; f++) {
