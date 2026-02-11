@@ -146,6 +146,22 @@
       closeFlyout();
     });
 
+    // Wire up dashboard bubbles as shortcuts to flyouts
+    const dashMap = {
+      dashSize: 0,      // → Size & Shape
+      dashRoof: 1,      // → Roof
+      dashCladding: 2,  // → Appearance
+      dashDoors: 3,     // → Walls & Openings
+      dashWindows: 3    // → Walls & Openings
+    };
+    Object.entries(dashMap).forEach(function([id, stepIdx]) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', function() { toggleStep(stepIdx); });
+      }
+    });
+
     // Initial state — all closed
     updateDashboard();
 

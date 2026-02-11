@@ -167,11 +167,14 @@ body.sidebar-wizard-mode #renderCanvas {
   background: rgba(255, 255, 255, 0.7);
   border-radius: 6px;
   text-align: center;
-  transition: background var(--sw-transition);
+  transition: all var(--sw-transition);
+  cursor: pointer;
 }
 
 .sw-dash-item:hover {
   background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(45, 80, 22, 0.12);
+  transform: translateY(-1px);
 }
 
 .sw-dash-label {
