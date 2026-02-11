@@ -1,0 +1,368 @@
+/* ============================================================
+   MOBILE CONFIGURATOR — Split View Layout
+   Colour Scheme: Same earth tones as desktop sidebar wizard
+   Only active at ≤768px viewport width
+   ============================================================ */
+
+/* Shared design tokens (same as sidebar wizard) */
+:root {
+  --mc-primary: #2D5016;
+  --mc-primary-light: #E8F0E2;
+  --mc-primary-hover: #1E3A0E;
+  --mc-accent: #D4A574;
+  --mc-accent-light: #F5E6D3;
+  --mc-bg: #FFF8F0;
+  --mc-bg-panel: #FFFFFF;
+  --mc-text: #1A1A1A;
+  --mc-text-secondary: #5C5C5C;
+  --mc-text-muted: #8A8A8A;
+  --mc-border: #E0D5C8;
+  --mc-shadow: 0 2px 12px rgba(45, 80, 22, 0.08);
+  --mc-radius: 12px;
+  --mc-radius-sm: 8px;
+  --mc-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== BODY SETUP ===== */
+body.mobile-configurator {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  background: var(--mc-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ===== HIDE ORIGINAL UI ELEMENTS ===== */
+body.mobile-configurator #mobileOpenBtn,
+body.mobile-configurator #mobileCloseBtn,
+body.mobile-configurator .designButton,
+body.mobile-configurator #statusOverlay,
+body.mobile-configurator #ui-layer {
+  display: none !important;
+}
+
+/* Hide the original #controls panel — we repackage its contents */
+body.mobile-configurator #controls {
+  position: absolute !important;
+  left: -9999px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* ===== MAIN LAYOUT CONTAINER ===== */
+#mobileConfigurator {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* ===== 3D PREVIEW (TOP) ===== */
+#mcPreview {
+  position: relative;
+  flex: 0 0 auto;
+  height: 40vh;
+  height: 40dvh;
+  min-height: 25vh;
+  max-height: 70vh;
+  background: #d4d4d4;
+  overflow: hidden;
+  touch-action: none; /* Let Babylon.js handle all touch */
+}
+
+#mcPreview #renderCanvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  touch-action: none !important;
+}
+
+/* Build code overlay */
+#mcPreview .mc-build-code {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 10px;
+  color: rgba(0,0,0,0.35);
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ===== DRAG HANDLE (DIVIDER) ===== */
+#mcDragHandle {
+  flex: 0 0 auto;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mc-bg-panel);
+  border-top: 1px solid var(--mc-border);
+  border-bottom: 1px solid var(--mc-border);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#mcDragHandle .mc-handle-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mc-border);
+  transition: background var(--mc-transition);
+}
+
+#mcDragHandle:active .mc-handle-bar {
+  background: var(--mc-primary);
+}
+
+/* ===== STEP NAVIGATION (PILLS) ===== */
+#mcStepNav {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  background: var(--mc-bg-panel);
+  border-bottom: 1px solid var(--mc-border);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+#mcStepNav::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.mc-step-pill {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1.5px solid var(--mc-border);
+  border-radius: 20px;
+  background: var(--mc-bg-panel);
+  color: var(--mc-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--mc-transition);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mc-step-pill.active {
+  background: var(--mc-primary);
+  border-color: var(--mc-primary);
+  color: #fff;
+}
+
+.mc-step-pill:not(.active):hover {
+  border-color: var(--mc-accent);
+  color: var(--mc-text);
+}
+
+/* ===== CONTROLS AREA (BOTTOM) ===== */
+#mcControls {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: var(--mc-bg);
+  padding: 0;
+  min-height: 0; /* Allow flex shrinking */
+}
+
+/* Section content styling */
+#mcControls .boSection {
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#mcControls .boSection > summary {
+  display: none !important; /* We use step pills instead */
+}
+
+#mcControls .boSection .boBox {
+  padding: 16px !important;
+  opacity: 1 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  display: block !important;
+  background: var(--mc-bg-panel);
+  margin: 8px;
+  border-radius: var(--mc-radius);
+  box-shadow: var(--mc-shadow);
+}
+
+/* Form element styling to match earth tones */
+#mcControls .boSubhead {
+  color: var(--mc-primary) !important;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--mc-primary-light);
+}
+
+#mcControls label {
+  color: var(--mc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#mcControls input[type="number"],
+#mcControls input[type="text"],
+#mcControls select {
+  padding: 12px 14px;
+  font-size: 16px; /* Prevents iOS zoom on focus */
+  min-height: 48px;
+  border: 1.5px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg-panel);
+  color: var(--mc-text);
+  transition: border-color var(--mc-transition);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#mcControls input:focus,
+#mcControls select:focus {
+  border-color: var(--mc-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--mc-primary-light);
+}
+
+#mcControls button {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 48px;
+  border: 1.5px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg-panel);
+  color: var(--mc-text);
+  cursor: pointer;
+  transition: all var(--mc-transition);
+}
+
+#mcControls button:active {
+  background: var(--mc-primary-light);
+  border-color: var(--mc-primary);
+}
+
+#mcControls .check {
+  padding: 10px 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+#mcControls .check input[type="checkbox"],
+#mcControls .check input[type="radio"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--mc-primary);
+}
+
+/* Grid rows — ensure they work on mobile */
+#mcControls .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+#mcControls .row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* ===== STEP FOOTER (NEXT/PREV) ===== */
+#mcStepFooter {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--mc-bg-panel);
+  border-top: 1px solid var(--mc-border);
+}
+
+.mc-footer-btn {
+  flex: 1;
+  padding: 14px 20px !important;
+  border: none !important;
+  border-radius: 24px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  transition: all var(--mc-transition);
+  text-align: center;
+}
+
+.mc-footer-btn.mc-next {
+  background: var(--mc-primary) !important;
+  color: #fff !important;
+}
+
+.mc-footer-btn.mc-next:active {
+  background: var(--mc-primary-hover) !important;
+}
+
+.mc-footer-btn.mc-prev {
+  background: var(--mc-bg) !important;
+  color: var(--mc-text-secondary) !important;
+  border: 1.5px solid var(--mc-border) !important;
+  flex: 0.6;
+}
+
+.mc-footer-btn.mc-prev:active {
+  background: var(--mc-primary-light) !important;
+}
+
+/* ===== SUMMARY BAR ===== */
+#mcSummary {
+  display: none; /* Shown via JS when useful */
+  padding: 8px 16px;
+  background: var(--mc-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* ===== FIRST-LOAD HINT ===== */
+.mc-touch-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+.mc-touch-hint.fade-out {
+  opacity: 0;
+}

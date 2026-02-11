@@ -16,14 +16,18 @@
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
     polished: { css: './src/ui/polished-theme.css' },
     wild:     { css: './src/ui/wild-theme.css' },
-    sidebar:  { css: './src/ui/sidebar-wizard.css', js: './src/ui/sidebar-wizard.js' }
+    sidebar:  { css: './src/ui/sidebar-wizard.css', js: './src/ui/sidebar-wizard.js' },
+    mobile:   { css: './src/ui/mobile-configurator.css', js: './src/ui/mobile-configurator.js' }
   };
+
+  // Mobile auto-selects 'mobile' theme (unless user explicitly chose something)
+  const finalTheme = (isMobile && !explicitTheme) ? 'mobile' : theme;
   
-  const chosen = themes[theme];
+  const chosen = themes[finalTheme];
   if (!chosen) return; // baseline — no extra theme
 
   // For sidebar theme: inject critical inline styles immediately to prevent FOUC
-  if (theme === 'sidebar') {
+  if (finalTheme === 'sidebar') {
     const style = document.createElement('style');
     style.textContent = '#controls { opacity: 0 !important; transition: opacity 0.3s; } #controls.sw-embedded { opacity: 1 !important; }';
     document.head.appendChild(style);
