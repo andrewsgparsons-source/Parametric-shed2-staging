@@ -2045,6 +2045,92 @@ function render(state) {
       }
     }
 
+    // ── Gazebo: build 4 corner posts ──
+    function buildGazeboPosts(state, scene) {
+      var BAB = window.BABYLON;
+      if (!BAB || !scene) return;
+
+      var R = resolveDims(state);
+      var w = Math.max(1, R.base.w_mm);
+      var d = Math.max(1, R.base.d_mm);
+
+      // Post dimensions
+      var postSize = 150; // 150x150mm
+      var postSizeMeter = postSize / 1000;
+
+      // Wall height (eaves height) — same as shed
+      var eaves = 2000;
+      try {
+        var rs = (state && state.roof && state.roof.style) ? String(state.roof.style) : "hipped";
+        if (rs === "hipped" && state.roof && state.roof.hipped && state.roof.hipped.heightToEaves_mm) {
+          eaves = Math.max(1000, state.roof.hipped.heightToEaves_mm);
+        } else if (rs === "apex" && state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm) {
+          eaves = Math.max(1000, state.roof.apex.heightToEaves_mm);
+        }
+      } catch (e) {}
+
+      var postHeight = eaves / 1000; // convert to meters for Babylon
+
+      // Timber material
+      var mat = new BAB.StandardMaterial("gazeboPostMat", scene);
+      mat.diffuseColor = new BAB.Color3(0.76, 0.60, 0.42); // Douglas fir colour
+      mat.specularColor = new BAB.Color3(0.1, 0.1, 0.1);
+
+      // Half-post inset from edge (post centre sits at corner of frame)
+      var halfPost = postSizeMeter / 2;
+      var wM = w / 1000;
+      var dM = d / 1000;
+
+      // 4 corner positions (x, z) — posts sit at frame corners
+      var corners = [
+        { x: halfPost,      z: halfPost,      name: "gazebo-post-fl" },
+        { x: wM - halfPost, z: halfPost,      name: "gazebo-post-fr" },
+        { x: halfPost,      z: dM - halfPost, name: "gazebo-post-bl" },
+        { x: wM - halfPost, z: dM - halfPost, name: "gazebo-post-br" }
+      ];
+
+      for (var i = 0; i < corners.length; i++) {
+        var c = corners[i];
+        var post = BAB.MeshBuilder.CreateBox(c.name, {
+          width: postSizeMeter,
+          height: postHeight,
+          depth: postSizeMeter
+        }, scene);
+        post.position = new BAB.Vector3(c.x, postHeight / 2, c.z);
+        post.material = mat;
+        post.metadata = { dynamic: true };
+      }
+
+      // Top plate / ring beam connecting the posts (4 beams)
+      var beamH = postSizeMeter; // same thickness as posts
+      var beams = [
+        // Front beam (along x)
+        { w: wM, h: beamH, d: postSizeMeter, x: wM / 2, z: halfPost, name: "gazebo-beam-front" },
+        // Back beam
+        { w: wM, h: beamH, d: postSizeMeter, x: wM / 2, z: dM - halfPost, name: "gazebo-beam-back" },
+        // Left beam (along z)
+        { w: postSizeMeter, h: beamH, d: dM, x: halfPost, z: dM / 2, name: "gazebo-beam-left" },
+        // Right beam
+        { w: postSizeMeter, h: beamH, d: dM, x: wM - halfPost, z: dM / 2, name: "gazebo-beam-right" }
+      ];
+
+      for (var b = 0; b < beams.length; b++) {
+        var bm = beams[b];
+        var beam = BAB.MeshBuilder.CreateBox(bm.name, {
+          width: bm.w,
+          height: bm.h,
+          depth: bm.d
+        }, scene);
+        beam.position = new BAB.Vector3(bm.x, postHeight - beamH / 2, bm.z);
+        beam.material = mat;
+        beam.metadata = { dynamic: true };
+      }
+    }
+
+    function isGazeboMode(state) {
+      return state && state.buildingType === "gazebo";
+    }
+
     // Legacy single-building render path - preserved unchanged from original render()
     function renderLegacyMode(state) {
         console.log("[RENDER_DEBUG] renderLegacyMode called");
@@ -2090,6 +2176,23 @@ function render(state) {
           }
         }
 
+        var _isGazebo = isGazeboMode(state);
+
+        if (_isGazebo) {
+          // Gazebo mode: corner posts + ring beam instead of walls
+          console.log("[RENDER_DEBUG] GAZEBO MODE — building posts");
+          buildGazeboPosts(state, ctx.scene);
+          // Shift posts same as walls
+          var postMeshes = ctx.scene.meshes.filter(function(m) {
+            return m && m.name && (m.name.indexOf("gazebo-") === 0);
+          });
+          for (var pm = 0; pm < postMeshes.length; pm++) {
+            postMeshes[pm].position.x -= WALL_OVERHANG_MM / 1000;
+            postMeshes[pm].position.y += WALL_RISE_MM / 1000;
+            postMeshes[pm].position.z -= WALL_OVERHANG_MM / 1000;
+          }
+        } else {
+          // Standard shed mode: walls, dividers, doors, windows
 if (getWallsEnabled(state)) {
           console.log("[RENDER_DEBUG] Building walls with wallState.w/d:", wallState.w, wallState.d);
           try {
@@ -2110,8 +2213,10 @@ if (getWallsEnabled(state)) {
         // Build door and window geometry into openings (always build regardless of wall visibility)
         if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
         if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
+        } // end shed mode
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
+        if (_isGazebo) roofStyle = "hipped"; // Gazebo always uses hipped roof
         var roofEnabled = getRoofEnabled(state);
         console.log("[RENDER_LEGACY] Roof check:", { roofEnabled, roofStyle, visRoof: state?.vis?.roof });
 
@@ -4114,6 +4219,10 @@ if (state && state.overhang) {
         renderDoorsUi(state, dv);
         renderWindowsUi(state, wv);
         updateOpeningsCounts(state);
+        // Update building type UI visibility
+        if (typeof updateBuildingTypeUI === "function") {
+          updateBuildingTypeUI(state && state.buildingType ? state.buildingType : "shed");
+        }
       } catch (e) {
         window.__dbg.lastError = "syncUiFromState failed: " + String(e && e.message ? e.message : e);
       }
@@ -4165,6 +4274,77 @@ if (state && state.overhang) {
         "BuildCalls: " + window.__dbg.buildCalls + "\n" +
         "Meshes: " + meshes + "\n" +
         "LastError: " + err;
+    }
+
+    // ── Building Type selector ──
+    // Wire up with polling to ensure sidebar-wizard has built the DOM
+    var _buildingTypeWired = false;
+    function wireBuildingTypeSelect() {
+      if (_buildingTypeWired) return;
+      var buildingTypeSel = document.getElementById("buildingTypeSelect");
+      if (!buildingTypeSel) return;
+      _buildingTypeWired = true;
+
+      // Set initial value from state
+      var s0 = store.getState();
+      if (s0 && s0.buildingType) buildingTypeSel.value = s0.buildingType;
+
+      buildingTypeSel.addEventListener("change", function () {
+        var newType = String(buildingTypeSel.value || "shed");
+        console.log("[BuildingType] Changed to:", newType);
+        var patch = { buildingType: newType };
+
+        // Gazebo: force hipped roof + minimum dimensions
+        if (newType === "gazebo") {
+          var HIPPED_MIN_W = 2500;
+          var HIPPED_MIN_D = 3000;
+          var curState = store.getState();
+          var curW = (curState && curState.dim && curState.dim.frameW_mm) ? curState.dim.frameW_mm : 1800;
+          var curD = (curState && curState.dim && curState.dim.frameD_mm) ? curState.dim.frameD_mm : 2400;
+          if (curW < HIPPED_MIN_W || curD < HIPPED_MIN_D) {
+            patch.dim = { frameW_mm: Math.max(curW, HIPPED_MIN_W), frameD_mm: Math.max(curD, HIPPED_MIN_D) };
+            patch.w = Math.max(curW, HIPPED_MIN_W);
+            patch.d = Math.max(curD, HIPPED_MIN_D);
+          }
+          patch.roof = { style: "hipped" };
+        }
+
+        store.setState(patch);
+        updateBuildingTypeUI(newType);
+      });
+      console.log("[BuildingType] Wired select listener");
+    }
+    // Try immediately, then retry every 500ms up to 10s
+    wireBuildingTypeSelect();
+    var _btInterval = setInterval(function () {
+      wireBuildingTypeSelect();
+      if (_buildingTypeWired) clearInterval(_btInterval);
+    }, 500);
+    setTimeout(function () { clearInterval(_btInterval); }, 10000);
+
+    function updateBuildingTypeUI(type) {
+      var isGaz = (type === "gazebo");
+      // Sync the dropdown value
+      var sel = document.getElementById("buildingTypeSelect");
+      if (sel && sel.value !== type) sel.value = type;
+      // Hide/show sidebar wizard steps based on building type
+      var steps = document.querySelectorAll('.sw-step');
+      steps.forEach(function (btn) {
+        var label = btn.querySelector('.sw-step-label');
+        if (!label) return;
+        var text = label.textContent.trim();
+        // Hide these for gazebo: Appearance, Walls & Openings, Attachments
+        if (text === "Appearance" || text === "Walls & Openings" || text === "Attachments") {
+          btn.style.display = isGaz ? "none" : "";
+        }
+      });
+      // Hide/show dashboard items
+      var dashCladding = document.getElementById("dashCladding");
+      var dashDoors = document.getElementById("dashDoors");
+      var dashWindows = document.getElementById("dashWindows");
+      if (dashCladding) dashCladding.style.display = isGaz ? "none" : "";
+      if (dashDoors) dashDoors.style.display = isGaz ? "none" : "";
+      if (dashWindows) dashWindows.style.display = isGaz ? "none" : "";
     }
 
      if (roofStyleEl) {

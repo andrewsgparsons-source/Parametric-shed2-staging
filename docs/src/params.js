@@ -11,6 +11,7 @@ export const CONFIG = {
 
 /** Walls + Dimension Mode defaults + Base visibility */
 export const DEFAULTS = {
+  buildingType: "shed",
   w: 1800,
   d: 2400,
   vis: {

@@ -184,6 +184,27 @@ body.sidebar-wizard-mode #renderCanvas {
   font-weight: 800;
   color: var(--sw-text);
   letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sw-type-select {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--sw-text);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #ccc;
+  padding: 2px 4px;
+  cursor: pointer;
+  letter-spacing: -0.02em;
+  outline: none;
+}
+.sw-type-select:hover {
+  border-bottom-color: var(--sw-accent, #4a7c59);
+}
+.sw-type-select:focus {
+  border-bottom-color: var(--sw-accent, #4a7c59);
 }
 
 /* ===== SUMMARY DASHBOARD ===== */
