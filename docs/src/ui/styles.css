@@ -290,7 +290,12 @@
       display:flex;
       gap:8px;
       align-items:flex-end;
-      justify-content:space-between;
+    }
+    .doorRow2{
+      display:flex;
+      gap:8px;
+      align-items:flex-end;
+      flex-wrap:wrap;
     }
     .doorActions, .windowActions{
       display:flex;

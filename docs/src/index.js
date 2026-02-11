@@ -3302,12 +3302,18 @@ var styleSel = document.createElement("select");
 
           actions.appendChild(snapBtn);
           actions.appendChild(rmBtn);
+
+          // Row 1: Wall, Position, Style
           top.appendChild(wallLabel);
           top.appendChild(snapPosLabel);
           top.appendChild(styleLabel);
-          top.appendChild(hingeLabel);
-          top.appendChild(openLabel);
-          top.appendChild(actions);
+
+          // Row 2: Hinge, Open, Actions
+          var row2 = document.createElement("div");
+          row2.className = "doorRow2";
+          row2.appendChild(hingeLabel);
+          row2.appendChild(openLabel);
+          row2.appendChild(actions);
 
           var row = document.createElement("div");
           row.className = "row3";
@@ -3453,6 +3459,7 @@ function parseOpeningDim(val, defaultMm) {
           });
 
           item.appendChild(top);
+          item.appendChild(row2);
           item.appendChild(row);
           item.appendChild(msg);
 
