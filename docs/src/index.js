@@ -2141,7 +2141,7 @@ function render(state) {
       delete scene._gazeboFasciaPending;
 
       var fasciaThk = 0.020; // 20mm
-      var fasciaDepth = 0.150; // 150mm
+      var fasciaDepth = 0.100; // 100mm
 
       // Find the lowest Y of roof rafter meshes (hip + common rafters)
       var rafterMinY = Infinity;
@@ -2331,7 +2331,9 @@ if (getWallsEnabled(state)) {
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
-          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+          // Gazebo: lift roof an extra 50mm so it sits on top of the ring beam, not submerged in it
+          var roofRise = _isGazebo ? (WALL_RISE_MM + 50) : WALL_RISE_MM;
+          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, roofRise, -WALL_OVERHANG_MM);
 
           // Build gazebo fascia boards now that roof meshes exist and are positioned
           if (_isGazebo) buildGazeboFascia(ctx.scene);
