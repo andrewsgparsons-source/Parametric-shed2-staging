@@ -146,6 +146,13 @@ export function build3D(state, ctx, sectionContext) {
   let CLAD_Rt, CLAD_Ht, CLAD_Rb, CLAD_Hb;
   let CLAD_T_TOP, CLAD_T_BOTTOM; // For overlap wedge profile
 
+  // Sheet-based cladding flag (box-profile, corrugated = one piece per panel, not courses)
+  const isSheetCladding = (claddingStyle === "box-profile" || claddingStyle === "corrugated");
+  // Composite slatted flag (groups of 4 thin slats with shadow gaps)
+  const isSlattedCladding = (claddingStyle === "composite-slatted");
+  // Composite panel (like shiplap but consistent depth, no taper)
+  const isCompositePanel = (claddingStyle === "composite-panel");
+
   if (claddingStyle === "overlap") {
     // Overlap (featheredge) cladding - wedge profile
     CLAD_H = 150;           // Board height (exposed face)
@@ -159,6 +166,33 @@ export function build3D(state, ctx, sectionContext) {
     CLAD_Ht = 0;
     CLAD_Rb = 0;
     CLAD_Hb = CLAD_H;       // Entire board is one piece
+  } else if (isSheetCladding) {
+    // Box profile / Corrugated: single sheet per wall panel
+    CLAD_H = 0;             // Not used — full height sheet
+    CLAD_T = (claddingStyle === "box-profile") ? 34 : 18;  // Rib depth
+    CLAD_T_TOP = CLAD_T;
+    CLAD_T_BOTTOM = CLAD_T;
+    CLAD_DRIP = 15;
+    CLAD_BOTTOM_DROP_MM = 30;
+    CLAD_Rt = 0; CLAD_Ht = 0; CLAD_Rb = 0; CLAD_Hb = 0;
+  } else if (isSlattedCladding) {
+    // Composite slatted: 4 slats per group, 200mm coverage
+    CLAD_H = 200;           // Panel coverage (4 slats + 3 gaps)
+    CLAD_T = 22;            // Board depth
+    CLAD_T_TOP = 22;
+    CLAD_T_BOTTOM = 22;
+    CLAD_DRIP = 20;
+    CLAD_BOTTOM_DROP_MM = 40;
+    CLAD_Rt = 0; CLAD_Ht = 0; CLAD_Rb = 0; CLAD_Hb = CLAD_H;
+  } else if (isCompositePanel) {
+    // Composite panel: consistent-depth horizontal boards
+    CLAD_H = 150;           // Board face height
+    CLAD_T = 22;            // Consistent depth (no taper)
+    CLAD_T_TOP = 22;
+    CLAD_T_BOTTOM = 22;
+    CLAD_DRIP = 25;
+    CLAD_BOTTOM_DROP_MM = 50;
+    CLAD_Rt = 0; CLAD_Ht = 0; CLAD_Rb = 0; CLAD_Hb = CLAD_H;
   } else {
     // Shiplap (default) - rabbeted profile
     CLAD_H = 140;
@@ -460,7 +494,13 @@ if (isPent) {
       mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
       mat.emissiveColor = new BABYLON.Color3(0.14, 0.10, 0.06);
     }
-    console.log("CLADDING_MAT_RESULT", mat ? mat.name : "NULL");
+    // Budget range: override material for new cladding styles
+    const claddingColour = state?.cladding?.colour || "natural-wood";
+    if (scene && scene.getCladdingMaterial && (isSheetCladding || isSlattedCladding || isCompositePanel)) {
+      const budgetMat = scene.getCladdingMaterial(claddingStyle, claddingColour);
+      if (budgetMat) mat = budgetMat;
+    }
+
     const ph = Number(panelHeight);
     const panelHeightMm = Number.isFinite(ph) ? ph : height;
 
@@ -469,7 +509,8 @@ if (isPent) {
     // For apex roofs, only front/back (gable) walls need extra courses - left/right stop at eaves
     const isApexGableWall = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
     const needsExtraCourses = roofStyle === "pent" || isApexGableWall;
-    let courses = Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0));
+    let courses = (CLAD_H > 0) ? Math.max(1, Math.ceil(panelHeightMm / CLAD_H) + (needsExtraCourses ? 2 : 0)) : 0;
+    if (isSheetCladding) courses = 0; // Sheet cladding uses its own rib generation, not courses
     if (__DIAG_ONE_FRONT_ONE_BOARD) courses = 1;
     
     console.log("CLAD_DEBUG", {
@@ -785,6 +826,135 @@ console.log("CLAD_COURSES_FINAL", {
   courses,
 });
 
+    // ===============================================================
+    // SHEET CLADDING (box-profile / corrugated): one piece per panel
+    // ===============================================================
+    // Pre-compute door/window exclusion zones for sheet cladding (avoids CSG)
+    const sheetExclusions = [];
+    if (isSheetCladding) {
+      const _doors = doorIntervalsForWall(String(wallId || ""));
+      const _wins = windowIntervalsForWall(String(wallId || ""));
+      for (let di = 0; di < _doors.length; di++) sheetExclusions.push(_doors[di]);
+      for (let wi = 0; wi < _wins.length; wi++) sheetExclusions.push(_wins[wi]);
+    }
+    if (isSheetCladding) {
+      // Cap sheet height: apex gable → eaves; pent side → minH/maxH; pent slope → maxH
+      let cappedH = panelHeightMm;
+      const isApexGable = roofStyle === "apex" && (String(wallId) === "front" || String(wallId) === "back");
+      if (isApexGable) {
+        cappedH = Math.min(panelHeightMm, height);
+      } else if (isPent && !isAlongX) {
+        // Left/right pent walls: use their specific height
+        const targetH = (String(wallId) === "left") ? minH : maxH;
+        cappedH = Math.min(panelHeightMm, targetH);
+      } else if (isPent && isAlongX) {
+        // Front/back slope walls: use the max height (tallest end) — CSG will trim the slope
+        cappedH = Math.min(panelHeightMm, maxH);
+      }
+      const sheetH = cappedH + CLAD_DRIP;
+      const ySheet = claddingAnchorY_mm - CLAD_DRIP;
+      const ribDepth = CLAD_T;   // 34mm box-profile, 18mm corrugated
+      const ribSpacing = (claddingStyle === "box-profile") ? 167 : 76;
+      const baseThickness = 2;   // thin steel sheet base
+      const sheetOutwardOffset = 5; // push sheet cladding 5mm past stud face so studs don't show through
+
+      if (isAlongX) {
+        const wallOutsideFaceWorld = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk)) + outwardSignZ * sheetOutwardOffset;
+        const outwardNormalZ = outwardSignZ;
+        const xShift_mm = (Number.isFinite(xMin_mm) ? Math.max(0, xMin_mm - (origin.x + panelStart)) : 0);
+        const panelLenAdj = Math.max(1, panelLen - xShift_mm);
+
+        // Base sheet (thin flat panel)
+        const baseZ = wallOutsideFaceWorld + outwardNormalZ * (baseThickness / 2);
+        const bBase = mkBox(
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-sheet-base`,
+          panelLenAdj, sheetH, baseThickness,
+          { x: origin.x + panelStart + xShift_mm, y: ySheet, z: baseZ - baseThickness/2 },
+          mat,
+          { wallId, panelIndex, course: 0, type: "cladding", style: claddingStyle }
+        );
+        parts.push(bBase);
+
+        // Ribs: repeating raised sections
+        const ribW = (claddingStyle === "box-profile") ? ribSpacing * 0.5 : ribSpacing * 0.35;
+        const numRibs = Math.floor(panelLenAdj / ribSpacing);
+        for (let r = 0; r < numRibs; r++) {
+          const ribX = origin.x + panelStart + xShift_mm + (r + 0.5) * ribSpacing;
+          // Skip ribs that fall within door/window exclusion zones
+          let ribExcluded = false;
+          for (let ei = 0; ei < sheetExclusions.length; ei++) {
+            const ex = sheetExclusions[ei];
+            if (ribX + ribW/2 > origin.x + ex.x0 && ribX - ribW/2 < origin.x + ex.x1) {
+              ribExcluded = true; break;
+            }
+          }
+          if (ribExcluded) continue;
+          const ribZ = wallOutsideFaceWorld + outwardNormalZ * (baseThickness + ribDepth / 2);
+          const bRib = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-rib-${r}`,
+            ribW, sheetH, ribDepth,
+            { x: ribX - ribW/2, y: ySheet, z: ribZ - ribDepth/2 },
+            mat,
+            { wallId, panelIndex, course: 0, type: "cladding", style: claddingStyle, rib: r }
+          );
+          parts.push(bRib);
+        }
+      } else {
+        // LEFT/RIGHT walls (along Z)
+        const wallOutsideFaceWorld = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk)) + outwardSignX * sheetOutwardOffset;
+        const outwardNormalX = outwardSignX;
+        const zStart_mm = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
+        const zEnd_mm = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
+        const panelLenAdj = Math.max(1, zEnd_mm - zStart_mm);
+
+        // Base sheet
+        const baseX = wallOutsideFaceWorld + outwardNormalX * (baseThickness / 2);
+        const bBase = mkBox(
+          `${meshPrefix}clad-${wallId}-panel-${panelIndex}-sheet-base`,
+          baseThickness, sheetH, panelLenAdj,
+          { x: baseX - baseThickness/2, y: ySheet, z: zStart_mm },
+          mat,
+          { wallId, panelIndex, course: 0, type: "cladding", style: claddingStyle }
+        );
+        parts.push(bBase);
+
+        // Ribs
+        const ribW = (claddingStyle === "box-profile") ? ribSpacing * 0.5 : ribSpacing * 0.35;
+        const numRibs = Math.floor(panelLenAdj / ribSpacing);
+        for (let r = 0; r < numRibs; r++) {
+          const ribZ = zStart_mm + (r + 0.5) * ribSpacing;
+          // Skip ribs in door/window exclusion zones (left/right walls use Z mapped from x0/x1)
+          let ribExcluded = false;
+          for (let ei = 0; ei < sheetExclusions.length; ei++) {
+            const ex = sheetExclusions[ei];
+            if (ribZ + ribW/2 > origin.z + ex.x0 && ribZ - ribW/2 < origin.z + ex.x1) {
+              ribExcluded = true; break;
+            }
+          }
+          if (ribExcluded) continue;
+          const ribX = wallOutsideFaceWorld + outwardNormalX * (baseThickness + ribDepth / 2);
+          const bRib = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-rib-${r}`,
+            ribDepth, sheetH, ribW,
+            { x: ribX - ribDepth/2, y: ySheet, z: ribZ - ribW/2 },
+            mat,
+            { wallId, panelIndex, course: 0, type: "cladding", style: claddingStyle, rib: r }
+          );
+          parts.push(bRib);
+        }
+      }
+      // Fall through to merge → opening cut pipeline
+      // (Roof clip is skipped for sheet cladding — height is already capped)
+    }
+
+    // ===============================================================
+    // COMPOSITE SLATTED CLADDING: groups of 4 thin slats with gaps
+    // ===============================================================
+    // (Falls through to the course loop below — handled per-course)
+
+    // SAFETY: sheet cladding uses rib generation above, NOT courses
+    if (isSheetCladding) courses = 0;
+
     for (let i = 0; i < courses; i++) {
       const isFirst = i === 0;
 const yBase = claddingAnchorY_mm + i * CLAD_H;
@@ -875,6 +1045,95 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
           parts.push(b1);
         }
         continue; // Skip the shiplap code below
+      }
+
+      // COMPOSITE SLATTED CLADDING: 4 slats per course with shadow gaps
+      if (isSlattedCladding) {
+        const slatCount = 4;
+        const slatFace = 40;     // mm per slat visible face
+        const slatGap = 10;      // mm shadow gap between slats
+        const slatDepth = CLAD_T; // 22mm
+        const yGroup = yBase - (isFirst ? CLAD_DRIP : 0);
+
+        for (let s = 0; s < slatCount; s++) {
+          const slatY = yGroup + s * (slatFace + slatGap);
+          const slatH = slatFace + (isFirst && s === 0 ? CLAD_DRIP : 0);
+
+          if (isAlongX) {
+            const wallOutsideFaceWorld = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+            const outwardNormalZ = outwardSignZ;
+            const xShift_mm = (Number.isFinite(xMin_mm) ? Math.max(0, xMin_mm - (origin.x + panelStart)) : 0);
+            const panelLenAdj = Math.max(1, panelLen - xShift_mm);
+            const slatZ = wallOutsideFaceWorld + outwardNormalZ * (slatDepth / 2);
+
+            const b = mkBox(
+              `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-slat-${s}`,
+              panelLenAdj, slatH, slatDepth,
+              { x: origin.x + panelStart + xShift_mm, y: slatY, z: slatZ - slatDepth/2 },
+              mat,
+              { wallId, panelIndex, course: i, type: "cladding", style: "composite-slatted", slat: s }
+            );
+            parts.push(b);
+          } else {
+            const wallOutsideFaceWorld = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+            const outwardNormalX = outwardSignX;
+            const zStart_mm2 = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
+            const zEnd_mm2 = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
+            const panelLenAdj = Math.max(1, zEnd_mm2 - zStart_mm2);
+            const slatX = wallOutsideFaceWorld + outwardNormalX * (slatDepth / 2);
+
+            const b = mkBox(
+              `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}-slat-${s}`,
+              slatDepth, slatH, panelLenAdj,
+              { x: slatX - slatDepth/2, y: slatY, z: zStart_mm2 },
+              mat,
+              { wallId, panelIndex, course: i, type: "cladding", style: "composite-slatted", slat: s }
+            );
+            parts.push(b);
+          }
+        }
+        continue; // Skip shiplap code
+      }
+
+      // COMPOSITE PANEL CLADDING: consistent-depth boards (like shiplap but flat)
+      if (isCompositePanel) {
+        const boardH = CLAD_H + (isFirst ? CLAD_DRIP : 0);
+        const yBoard = yBase - (isFirst ? CLAD_DRIP : 0);
+        const boardDepth = CLAD_T; // 22mm consistent
+
+        if (isAlongX) {
+          const wallOutsideFaceWorld = (outsidePlaneZ_mm !== null ? outsidePlaneZ_mm : (origin.z + wallThk));
+          const outwardNormalZ = outwardSignZ;
+          const xShift_mm = (Number.isFinite(xMin_mm) ? Math.max(0, xMin_mm - (origin.x + panelStart)) : 0);
+          const panelLenAdj = Math.max(1, panelLen - xShift_mm);
+          const boardZ = wallOutsideFaceWorld + outwardNormalZ * (boardDepth / 2);
+
+          const b = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}`,
+            panelLenAdj, boardH, boardDepth,
+            { x: origin.x + panelStart + xShift_mm, y: yBoard, z: boardZ - boardDepth/2 },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", style: "composite-panel" }
+          );
+          parts.push(b);
+        } else {
+          const wallOutsideFaceWorld = (outsidePlaneX_mm !== null ? outsidePlaneX_mm : (origin.x + wallThk));
+          const outwardNormalX = outwardSignX;
+          const zStart_mm2 = (Number.isFinite(zMin_mm) ? zMin_mm : (origin.z + panelStart));
+          const zEnd_mm2 = (Number.isFinite(zMax_mm) ? zMax_mm : (origin.z + panelStart + panelLen));
+          const panelLenAdj = Math.max(1, zEnd_mm2 - zStart_mm2);
+          const boardX = wallOutsideFaceWorld + outwardNormalX * (boardDepth / 2);
+
+          const b = mkBox(
+            `${meshPrefix}clad-${wallId}-panel-${panelIndex}-c${i}`,
+            boardDepth, boardH, panelLenAdj,
+            { x: boardX - boardDepth/2, y: yBoard, z: zStart_mm2 },
+            mat,
+            { wallId, panelIndex, course: i, type: "cladding", style: "composite-panel" }
+          );
+          parts.push(b);
+        }
+        continue; // Skip shiplap code
       }
 
       // SHIPLAP CLADDING (default): Two-part profile with rabbets
@@ -1071,7 +1330,7 @@ const yBase = claddingAnchorY_mm + i * CLAD_H;
           BABYLON.CSG &&
           typeof BABYLON.CSG.FromMesh === "function";
 
-        if (hasCSG) {
+        if (hasCSG && !isSheetCladding) {
           const panelA0 = Math.floor(Number(panelStart || 0));
           const panelA1 = Math.floor(Number(panelStart || 0) + Number(panelLen || 0));
 
@@ -1220,15 +1479,16 @@ for (let i = 0; i < wins.length; i++) {
       // ---- END openings cut-outs ----
 
       // ---- NEW: clip cladding to roof underside (pent) / gable line (apex) ----
+      // Skip roof clip for sheet cladding — height is already capped geometrically
       try {
-        console.log('DEBUG ROOF CLIP ENTRY: merged=', !!merged);
+        console.log('DEBUG ROOF CLIP ENTRY: merged=', !!merged, 'isSheet=', isSheetCladding);
         const hasCSG =
           typeof BABYLON !== "undefined" &&
           BABYLON &&
           BABYLON.CSG &&
           typeof BABYLON.CSG.FromMesh === "function";
 
-        if (hasCSG && merged) {
+        if (hasCSG && merged && !isSheetCladding) {
          const roofStyle = state && state.roof ? String(state.roof.style || "") : "";
 console.log('DEBUG CSG roofStyle:', roofStyle, 'state.roof=', state?.roof);
 
@@ -1690,8 +1950,12 @@ merged.name = `${meshPrefix}clad-${wallId}-panel-${panelIndex}`;
 // Anchor: search for `function scheduleDeferredCladdingPass()` and replace
 // from that line down to its matching closing `}`.
 function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPent, materials, apexRoofModel) {
+  const claddingStyle = state?.cladding?.style || "shiplap";
+  const isBudgetStyle = (claddingStyle === "box-profile" || claddingStyle === "corrugated" ||
+                         claddingStyle === "composite-panel" || claddingStyle === "composite-slatted");
   const CLAD_T = 20;
-  const CORNER_BOARD_THICKNESS = 20;
+  // Budget styles use thin metal angle flashings (3mm); timber uses 20mm boards
+  const CORNER_BOARD_THICKNESS = isBudgetStyle ? 3 : 20;
   const CLAD_BOTTOM_DROP_MM = 60;
   const WALL_RISE_MM = 168;
   
@@ -1775,8 +2039,10 @@ function addCornerBoards(scene, state, wallThk, plateY, height, minH, maxH, isPe
       zPos / 1000
     );
     
-    // Apply material directly from scene cache
-    if (scene._claddingMatLight) {
+    // Apply material: galvanised grey for budget styles, wood for timber
+    if (isBudgetStyle && scene._galvanisedGreyMat) {
+      mesh.material = scene._galvanisedGreyMat;
+    } else if (scene._claddingMatLight) {
       mesh.material = scene._claddingMatLight;
     }
     
@@ -1828,33 +2094,55 @@ function ensureCladdingMaterialOnMeshes() {
 
       const mat = scene._claddingMatLight;
 
+      // Check if budget cladding is active
+      const claddingStyle = state?.cladding?.style || "shiplap";
+      const isBudgetStyle = (claddingStyle === "box-profile" || claddingStyle === "corrugated" ||
+                             claddingStyle === "composite-panel" || claddingStyle === "composite-slatted");
+      const galvMat = isBudgetStyle && scene._galvanisedGreyMat ? scene._galvanisedGreyMat : null;
+
       let cladHits = 0;
       let cornerHits = 0;
       let attachmentHits = 0;
+      let fasciaHits = 0;
       for (let i = 0; i < scene.meshes.length; i++) {
         const mesh = scene.meshes[i];
         if (!mesh || !mesh.name) continue;
 
         // Apply to main building cladding meshes
+        // Skip if mesh already has a budget cladding material (box-profile, corrugated, etc.)
+        const hasBudgetMat = mesh.material && mesh.material.name && (
+          mesh.material.name.indexOf("box-profile") >= 0 ||
+          mesh.material.name.indexOf("corrugated") >= 0 ||
+          mesh.material.name.indexOf("composite-panel") >= 0 ||
+          mesh.material.name.indexOf("composite-slatted") >= 0
+        );
+
         if (mesh.name.startsWith("clad-")) {
-          mesh.material = mat;
+          if (!hasBudgetMat) mesh.material = mat;
           cladHits++;
         }
 
-        // Apply to corner board meshes
+        // Corner boards: galvanised grey for budget styles, wood for timber styles
         if (mesh.name.startsWith("corner-board-")) {
-          mesh.material = mat;
+          mesh.material = galvMat || mat;
           cornerHits++;
+        }
+
+        // Fascia and barge boards: galvanised grey for budget styles
+        if (mesh.name.indexOf("roof-fascia") >= 0 || mesh.name.indexOf("roof-barge") >= 0) {
+          if (galvMat) {
+            mesh.material = galvMat;
+            fasciaHits++;
+          }
         }
 
         // Apply to attachment cladding meshes (att-{id}-clad-...)
         if (mesh.name.indexOf("-clad-") >= 0 || (mesh.metadata && mesh.metadata.type === "cladding")) {
-          mesh.material = mat;
+          if (!hasBudgetMat) mesh.material = mat;
           attachmentHits++;
         }
       }
 
-      console.log("CLAD_MATERIAL_FINALIZED cladding=", cladHits, "cornerBoards=", cornerHits, "attachments=", attachmentHits);
     } catch (e) {
       console.warn("ensureCladdingMaterialOnMeshes failed", e);
     }

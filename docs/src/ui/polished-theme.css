@@ -1,0 +1,288 @@
+/* ============================================================
+   POLISHED THEME — Refined developer panel
+   Colour Scheme: Cool sophistication (slate + teal + light grey)
+   ============================================================ */
+
+:root {
+  /* Slate + Teal palette */
+  --pol-primary: #0D9488;
+  --pol-primary-light: #CCFBF1;
+  --pol-primary-hover: #0F766E;
+  --pol-primary-dark: #134E4A;
+  --pol-bg: #F8FAFC;
+  --pol-bg-panel: #FFFFFF;
+  --pol-text: #0F172A;
+  --pol-text-secondary: #475569;
+  --pol-text-muted: #94A3B8;
+  --pol-border: #E2E8F0;
+  --pol-border-focus: var(--pol-primary);
+  --pol-section-bg: #F1F5F9;
+  --pol-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+  --pol-shadow-lg: 0 8px 40px rgba(15, 23, 42, 0.12);
+  --pol-radius: 10px;
+  --pol-radius-sm: 6px;
+  --pol-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== GLOBAL ===== */
+html, body {
+  background: var(--pol-bg) !important;
+}
+
+/* ===== PANEL STYLING ===== */
+#controls {
+  background: var(--pol-bg-panel) !important;
+  border: 1px solid var(--pol-border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--pol-shadow-lg) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
+  overflow-y: auto !important;
+  max-height: 90vh !important;
+}
+
+/* ===== FIX BASE STYLE CONSTRAINTS ===== */
+.boSection {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ===== SECTION HEADERS ===== */
+.boSection > summary {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  color: var(--pol-text) !important;
+  padding: 14px 16px !important;
+  background: var(--pol-bg) !important;
+  border-radius: var(--pol-radius) !important;
+  margin: 4px 0 !important;
+  cursor: pointer !important;
+  transition: all var(--pol-transition) !important;
+  border: 1px solid transparent !important;
+  list-style: none !important;
+}
+
+.boSection > summary::-webkit-details-marker {
+  display: none;
+}
+
+.boSection > summary::after {
+  content: '\25BE';
+  float: right;
+  font-size: 14px;
+  color: var(--pol-text-muted);
+  transition: transform var(--pol-transition);
+}
+
+.boSection[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.boSection > summary:hover {
+  background: var(--pol-primary-light) !important;
+  border-color: var(--pol-primary) !important;
+  color: var(--pol-primary-dark) !important;
+}
+
+.boSection[open] > summary {
+  background: var(--pol-primary-light) !important;
+  color: var(--pol-primary-dark) !important;
+  border-color: var(--pol-primary) !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* ===== SECTION CONTENT ===== */
+.boSection .boBox {
+  padding: 16px !important;
+  background: #fff !important;
+  border: 1px solid var(--pol-border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--pol-radius) var(--pol-radius) !important;
+  margin-bottom: 8px !important;
+  opacity: 1 !important;
+  max-height: none !important;
+}
+
+/* Fix inner wrapper constraints */
+.inner {
+  max-height: none !important;
+}
+
+/* Fix the Controls wrapper details element */
+#controlPanel > details:not(.boSection) {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ===== FORM INPUTS ===== */
+#controlPanel input[type="number"],
+#controlPanel input[type="text"],
+#controlPanel select {
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--pol-text) !important;
+  background: var(--pol-bg) !important;
+  border: 1.5px solid var(--pol-border) !important;
+  border-radius: var(--pol-radius-sm) !important;
+  transition: border-color var(--pol-transition), box-shadow var(--pol-transition) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+#controlPanel input[type="number"]:focus,
+#controlPanel input[type="text"]:focus,
+#controlPanel select:focus {
+  outline: none !important;
+  border-color: var(--pol-primary) !important;
+  box-shadow: 0 0 0 3px var(--pol-primary-light) !important;
+  background: #fff !important;
+}
+
+/* ===== LABELS ===== */
+#controlPanel label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: var(--pol-text-secondary) !important;
+  margin-bottom: 4px !important;
+}
+
+/* ===== RADIO/CHECKBOX ===== */
+#controlPanel input[type="radio"],
+#controlPanel input[type="checkbox"] {
+  accent-color: var(--pol-primary) !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.check {
+  font-size: 13px !important;
+  color: var(--pol-text) !important;
+}
+
+/* ===== BUTTONS ===== */
+#controlPanel button {
+  padding: 8px 14px !important;
+  border: 1.5px solid var(--pol-border) !important;
+  border-radius: var(--pol-radius-sm) !important;
+  background: var(--pol-bg) !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--pol-text-secondary) !important;
+  transition: all var(--pol-transition) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+#controlPanel button:hover {
+  background: var(--pol-primary-light) !important;
+  border-color: var(--pol-primary) !important;
+  color: var(--pol-primary-dark) !important;
+}
+
+/* ===== ROW LAYOUT ===== */
+.row {
+  gap: 12px !important;
+}
+
+/* ===== PANEL HEADING ===== */
+#controlPanel h2, 
+#controlPanel h3 {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--pol-primary-dark) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ===== BUILD TAG ===== */
+#statusOverlay {
+  background: var(--pol-primary-dark) !important;
+  color: var(--pol-primary-light) !important;
+  border-radius: var(--pol-radius-sm) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  padding: 4px 10px !important;
+  opacity: 0.8;
+}
+
+/* ===== DESIGN BUTTON ===== */
+.designButton,
+#mobileOpenBtn {
+  background: var(--pol-primary) !important;
+  color: #fff !important;
+  border-radius: 50px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.3) !important;
+  transition: all var(--pol-transition) !important;
+}
+
+.designButton:hover,
+#mobileOpenBtn:hover {
+  background: var(--pol-primary-hover) !important;
+  box-shadow: 0 6px 24px rgba(13, 148, 136, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+/* ===== SCROLLBAR ===== */
+#controls::-webkit-scrollbar,
+#controlPanel::-webkit-scrollbar {
+  width: 6px;
+}
+
+#controls::-webkit-scrollbar-track,
+#controlPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#controls::-webkit-scrollbar-thumb,
+#controlPanel::-webkit-scrollbar-thumb {
+  background: var(--pol-border);
+  border-radius: 3px;
+}
+
+#controls::-webkit-scrollbar-thumb:hover,
+#controlPanel::-webkit-scrollbar-thumb:hover {
+  background: var(--pol-text-muted);
+}
+
+/* ===== RESIZE HANDLE ===== */
+.resize-handle {
+  opacity: 0.3;
+}
+
+.resize-handle:hover {
+  opacity: 0.6;
+}
+
+/* ===== DRAG HANDLE ===== */
+.drag-handle {
+  background: var(--pol-border) !important;
+  border-radius: 3px !important;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+  #controls {
+    border-radius: 16px 16px 0 0 !important;
+  }
+  
+  .boSection > summary {
+    padding: 12px !important;
+  }
+  
+  .boSection .boBox {
+    padding: 12px !important;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01s !important; }
+}

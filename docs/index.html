@@ -6,6 +6,7 @@
   <title>Parametric Shed — Views</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="./styles.css">
+  <script src="./src/ui/theme-loader.js"></script>
 </head>
 
 <body data-view="3d">
@@ -80,9 +81,9 @@
                   <label>
                     Dimension Mode
                     <select id="dimMode" aria-label="Dimension Mode (Base / Frame / Roof)">
-                      <option value="base" selected>base</option>
-                      <option value="frame">frame</option>
-                      <option value="roof">roof</option>
+                      <option value="base" selected>Base</option>
+                      <option value="frame">Frame</option>
+                      <option value="roof">Roof</option>
                     </select>
                   </label>
                   <div></div>
@@ -319,8 +320,31 @@
                     <select id="claddingStyle" aria-label="Cladding style">
                       <option value="shiplap">Shiplap</option>
                       <option value="overlap">Overlap (Featheredge)</option>
-                      <option value="loglap" disabled>Log Lap (coming soon)</option>
+                      <!-- Budget styles: code ready but disabled until #125 resolved
+                      <option value="loglap">Log Lap</option>
+                      <option value="box-profile">Box Profile (Steel)</option>
+                      <option value="corrugated">Corrugated (Steel)</option>
+                      <option value="composite-panel">Composite Panel</option>
+                      <option value="composite-slatted">Composite Slatted</option>
+                      -->
                     </select>
+                  </label>
+                </div>
+                <div class="row" id="claddingColourRow">
+                  <label>
+                    Colour — <em style="color:#999; font-weight:normal">coming soon</em>
+                    <!-- Colour picker: code ready but disabled until #125 resolved
+                    <select id="claddingColour" aria-label="Cladding colour">
+                      <option value="natural-wood">Natural Wood</option>
+                      <option value="pale-blue">Pale Blue</option>
+                      <option value="sage-green">Sage Green</option>
+                      <option value="anthracite">Anthracite Grey</option>
+                      <option value="goosewing-grey">Goosewing Grey</option>
+                      <option value="vandyke-brown">Vandyke Brown</option>
+                      <option value="charcoal">Charcoal</option>
+                      <option value="stone-grey">Stone Grey</option>
+                    </select>
+                    -->
                   </label>
                 </div>
 
