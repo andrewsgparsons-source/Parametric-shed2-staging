@@ -677,3 +677,6 @@ body.sidebar-wizard-mode #controlPanel p {
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01s !important; }
 }
+
+/* Hide redundant Remove All Attachments button */
+#removeAllAttachmentsBtn { display: none !important; }

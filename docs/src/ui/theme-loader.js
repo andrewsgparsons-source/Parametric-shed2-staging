@@ -54,7 +54,8 @@
       '/* Scale up the entire controls area */ #mcControls { zoom: 1.65 !important; -moz-transform: scale(1.65); -moz-transform-origin: top left; }',
       '#mcStepNav { zoom: 1.6 !important; }',
       '#mcStepFooter { zoom: 1.4 !important; }',
-      '#mobileConfigurator #mcStepNav { border-top: none !important; }'
+      '#mobileConfigurator #mcStepNav { border-top: none !important; }',
+      '#removeAllAttachmentsBtn { display: none !important; }'
     ].join('\n');
     document.head.appendChild(mobileStyle);
   }
