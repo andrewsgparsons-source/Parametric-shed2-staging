@@ -26,6 +26,7 @@
     { label: 'Appearance', section: 'Appearance' },
     { label: 'Attachments',section: 'Building Attachments' },
     { label: 'Visibility', section: 'Visibility' },
+    { label: 'BOM',        section: '__bom__' },
     { label: 'Save',       section: 'Save / Load Design' }
     // Developer section hidden on mobile
   ];
@@ -219,10 +220,46 @@
     if (idx < 0 || idx >= STEPS.length) return;
     activeStep = idx;
 
-    // Show/hide sections
+    var isBom = STEPS[idx].section === '__bom__';
+
+    // Hide all sections
     sections.forEach(function(s, i) {
-      if (s) s.style.display = (i === idx) ? '' : 'none';
+      if (s) s.style.display = 'none';
     });
+
+    // Remove any previous BOM content
+    var existingBom = document.getElementById('mcBomContent');
+    if (existingBom) existingBom.remove();
+
+    if (isBom) {
+      // Inject BOM buttons
+      var bomDiv = document.createElement('div');
+      bomDiv.id = 'mcBomContent';
+      bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
+      bomDiv.innerHTML = '<p style="font-size:15px;color:#5C5C5C;margin:0 0 16px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<button class="mc-bom-btn" data-view="base" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
+        '<button class="mc-bom-btn" data-view="walls" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
+        '<button class="mc-bom-btn" data-view="roof" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
+        '<button class="mc-bom-btn" data-view="openings" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
+        '</div>';
+      var controls = document.getElementById('mcControls');
+      if (controls) controls.appendChild(bomDiv);
+
+      // Wire BOM buttons to switch view
+      bomDiv.querySelectorAll('.mc-bom-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var viewSelect = document.getElementById('viewSelect');
+          if (viewSelect) {
+            viewSelect.value = btn.dataset.view;
+            viewSelect.dispatchEvent(new Event('change'));
+          }
+        });
+      });
+    } else {
+      // Show active section
+      if (sections[idx]) sections[idx].style.display = '';
+    }
 
     // Update pills
     var pills = document.querySelectorAll('.mc-step-pill');
