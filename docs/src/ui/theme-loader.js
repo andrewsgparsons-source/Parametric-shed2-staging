@@ -18,6 +18,13 @@
   
   const chosen = themes[theme];
   if (!chosen) return; // baseline — no extra theme
+
+  // For sidebar theme: inject critical inline styles immediately to prevent FOUC
+  if (theme === 'sidebar') {
+    const style = document.createElement('style');
+    style.textContent = '#controls { opacity: 0 !important; transition: opacity 0.3s; } #controls.sw-embedded { opacity: 1 !important; }';
+    document.head.appendChild(style);
+  }
   
   // Load CSS
   if (chosen.css) {

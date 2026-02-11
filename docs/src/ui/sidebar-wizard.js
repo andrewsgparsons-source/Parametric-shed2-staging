@@ -167,6 +167,11 @@
     // Initial state — all closed
     updateDashboard();
 
+    // Trigger Babylon.js engine resize so the 3D view adjusts to the narrower canvas
+    setTimeout(resizeEngine, 100);
+    // Also retry after a longer delay in case engine isn't ready yet
+    setTimeout(resizeEngine, 1000);
+
     // Live update dashboard on changes
     document.addEventListener('change', () => setTimeout(updateDashboard, 50));
     document.addEventListener('input', () => setTimeout(updateDashboard, 100));
@@ -238,6 +243,14 @@
     }
   }
 
+  function resizeEngine() {
+    try {
+      const engine = window.__dbg && window.__dbg.engine ? window.__dbg.engine :
+                     (typeof BABYLON !== 'undefined' && BABYLON.Engine && BABYLON.Engine.Instances ? BABYLON.Engine.Instances[0] : null);
+      if (engine && typeof engine.resize === 'function') engine.resize();
+    } catch (e) {}
+  }
+
   function openFlyout(idx) {
     if (idx < 0 || idx >= sections.length) return;
 
@@ -298,6 +311,9 @@
     document.querySelectorAll('.sw-step').forEach((btn, j) => {
       btn.classList.toggle('active', j === idx);
     });
+
+    // Resize engine after flyout animation
+    setTimeout(resizeEngine, 350);
   }
 
   function closeFlyout() {
@@ -318,6 +334,9 @@
     document.querySelectorAll('.sw-step').forEach(btn => {
       btn.classList.remove('active');
     });
+
+    // Resize engine after flyout animation
+    setTimeout(resizeEngine, 350);
   }
 
   function updateDashboard() {
