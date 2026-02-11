@@ -2894,6 +2894,135 @@ if (getWallsEnabled(state)) {
       return best == null ? clamp(desired, minX, maxX) : best;
     }
 
+    // ── Snap-to-Position: evenly distribute openings on a wall ──
+
+    /**
+     * Compute evenly-spaced snap positions for all openings on a given wall.
+     * Positions are calculated so gaps between openings (and wall edges) are equal.
+     * Both doors and windows on the same wall share the position pool.
+     *
+     * Returns an array of { label, x_mm, openingId } sorted left-to-right,
+     * where openingId is the opening currently closest to that slot (or null).
+     */
+    function computeEvenSnapPositions(state, wall) {
+      var minGap = 50;
+      var lens = getWallLengthsForOpenings(state);
+      var wallLen = lens[wall] != null ? Math.max(1, Math.floor(lens[wall])) : 1;
+
+      // Gather ALL openings on this wall (doors + windows)
+      var allOpenings = getOpeningsFromState(state).filter(function (o) {
+        return o && String(o.wall || "front") === wall;
+      });
+
+      var n = allOpenings.length;
+      if (n === 0) return [];
+
+      // Sort by current x_mm so position assignment is stable
+      allOpenings.sort(function (a, b) {
+        return (Number(a.x_mm) || 0) - (Number(b.x_mm) || 0);
+      });
+
+      // Calculate total width consumed by all openings
+      var totalOpeningWidth = 0;
+      for (var i = 0; i < n; i++) {
+        totalOpeningWidth += Math.max(1, Math.floor(Number(allOpenings[i].width_mm || 900)));
+      }
+
+      // Available space for gaps = wallLen - totalOpeningWidth
+      // Number of gaps = n + 1 (before first, between each pair, after last)
+      var totalGapSpace = wallLen - totalOpeningWidth;
+      var gapCount = n + 1;
+      var gap = Math.max(minGap, Math.floor(totalGapSpace / gapCount));
+
+      // Calculate x_mm for each position slot (left-to-right)
+      var positions = [];
+      var currentX = gap;
+      for (var j = 0; j < n; j++) {
+        var openingWidth = Math.max(1, Math.floor(Number(allOpenings[j].width_mm || 900)));
+        positions.push({
+          label: getSnapPositionLabel(j, n),
+          x_mm: Math.max(minGap, Math.min(currentX, wallLen - openingWidth - minGap)),
+          openingId: String(allOpenings[j].id || ""),
+          index: j
+        });
+        currentX += openingWidth + gap;
+      }
+
+      return positions;
+    }
+
+    /**
+     * Human-friendly label for a snap position.
+     * 1 opening:  "Centre"
+     * 2 openings: "Left", "Right"
+     * 3 openings: "Left", "Centre", "Right"
+     * 4+:         "Position 1", "Position 2", ...
+     */
+    function getSnapPositionLabel(index, total) {
+      if (total === 1) return "Centre";
+      if (total === 2) return index === 0 ? "Left" : "Right";
+      if (total === 3) {
+        if (index === 0) return "Left";
+        if (index === 1) return "Centre";
+        return "Right";
+      }
+      return "Position " + (index + 1);
+    }
+
+    /**
+     * Apply a snap position to an opening, auto-swapping if the target slot
+     * is occupied by a different opening.
+     */
+    function applySnapPosition(openingId, targetIndex, wall) {
+      var s = store.getState();
+      var positions = computeEvenSnapPositions(s, wall);
+      if (!positions.length || targetIndex < 0 || targetIndex >= positions.length) return;
+
+      var targetSlot = positions[targetIndex];
+      var currentSlot = null;
+
+      // Find which slot this opening currently occupies
+      for (var i = 0; i < positions.length; i++) {
+        if (positions[i].openingId === openingId) {
+          currentSlot = positions[i];
+          break;
+        }
+      }
+
+      if (!currentSlot) return;
+
+      // If target slot is occupied by a different opening, swap them
+      if (targetSlot.openingId !== openingId) {
+        var otherOpeningId = targetSlot.openingId;
+        // Swap: move other opening to our current slot's x_mm
+        // and move us to the target slot's x_mm
+        // We need to recalculate positions assuming the widths are swapped
+        var thisOpening = getOpeningById(s, openingId);
+        var otherOpening = getOpeningById(s, otherOpeningId);
+        if (!thisOpening || !otherOpening) return;
+
+        // For a clean swap, recalculate positions with openings in swapped order
+        var openings = getOpeningsFromState(s);
+        var updated = [];
+        for (var k = 0; k < openings.length; k++) {
+          var o = openings[k];
+          if (String(o.id || "") === openingId) {
+            // Put this opening at target index position
+            updated.push(Object.assign({}, o, { x_mm: targetSlot.x_mm }));
+          } else if (String(o.id || "") === otherOpeningId) {
+            // Put other opening at our current position
+            updated.push(Object.assign({}, o, { x_mm: currentSlot.x_mm }));
+          } else {
+            updated.push(o);
+          }
+        }
+        setOpenings(updated);
+      } else {
+        // Already in this slot — just ensure x_mm is exact
+        patchOpeningById(openingId, { x_mm: targetSlot.x_mm });
+      }
+    }
+
     var _invalidSyncGuard = false;
 
     function syncInvalidOpeningsIntoState() {
@@ -3098,6 +3227,22 @@ function wireCommitOnly(inputEl, onCommit) {
           wallSel.value = String(door.wall || "front");
           wallLabel.appendChild(wallSel);
 
+          // ── Snap Position dropdown ──
+          var snapPosLabel = document.createElement("label");
+          snapPosLabel.textContent = "Position";
+          var snapPosSel = document.createElement("select");
+          var doorWall = String(door.wall || "front");
+          var snapPositions = computeEvenSnapPositions(state, doorWall);
+          var snapHtml = '<option value="">—</option>';
+          var currentSnapIdx = -1;
+          for (var sp = 0; sp < snapPositions.length; sp++) {
+            snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
+            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+          }
+          snapPosSel.innerHTML = snapHtml;
+          if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
+          snapPosLabel.appendChild(snapPosSel);
+
 var styleLabel = document.createElement("label");
           styleLabel.textContent = "Style";
 var styleSel = document.createElement("select");
@@ -3158,6 +3303,7 @@ var styleSel = document.createElement("select");
           actions.appendChild(snapBtn);
           actions.appendChild(rmBtn);
           top.appendChild(wallLabel);
+          top.appendChild(snapPosLabel);
           top.appendChild(styleLabel);
           top.appendChild(hingeLabel);
           top.appendChild(openLabel);
@@ -3203,6 +3349,7 @@ var unitMode = getUnitMode(state);
 
           // Apply profile field restrictions
           applyFieldRestriction(wallSel, "door.wall");
+          applyFieldRestriction(snapPosSel, "door.snapPos");
           applyFieldRestriction(styleSel, "door.style");
           applyFieldRestriction(hingeSel, "door.hinge");
           applyFieldRestriction(openCheck, "door.open");
@@ -3258,6 +3405,13 @@ function parseOpeningDim(val, defaultMm) {
 
           wallSel.addEventListener("change", function () {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
+          });
+
+          snapPosSel.addEventListener("change", function () {
+            var idx = parseInt(snapPosSel.value, 10);
+            if (isFinite(idx) && idx >= 0) {
+              applySnapPosition(id, idx, String(door.wall || "front"));
+            }
           });
 
           styleSel.addEventListener("change", function () {
@@ -3341,6 +3495,22 @@ function parseOpeningDim(val, defaultMm) {
           wallSel.value = String(win.wall || "front");
           wallLabel.appendChild(wallSel);
 
+          // ── Snap Position dropdown (windows) ──
+          var snapPosLabel = document.createElement("label");
+          snapPosLabel.textContent = "Position";
+          var snapPosSel = document.createElement("select");
+          var winWall = String(win.wall || "front");
+          var snapPositions = computeEvenSnapPositions(state, winWall);
+          var snapHtml = '<option value="">—</option>';
+          var currentSnapIdx = -1;
+          for (var sp = 0; sp < snapPositions.length; sp++) {
+            snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
+            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+          }
+          snapPosSel.innerHTML = snapHtml;
+          if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
+          snapPosLabel.appendChild(snapPosSel);
+
           var actions = document.createElement("div");
           actions.className = "windowActions";
 
@@ -3357,6 +3527,7 @@ function parseOpeningDim(val, defaultMm) {
           actions.appendChild(rmBtn);
 
           top.appendChild(wallLabel);
+          top.appendChild(snapPosLabel);
           top.appendChild(actions);
 
           var row = document.createElement("div");
@@ -3401,6 +3572,7 @@ var unitMode = getUnitMode(state);
 
           // Apply profile field restrictions for windows
           applyFieldRestriction(wallSel, "window.wall");
+          applyFieldRestriction(snapPosSel, "window.snapPos");
           applyFieldRestriction(xField.inp, "window.x");
           applyFieldRestriction(yField.inp, "window.y");
           applyFieldRestriction(wField.inp, "window.width");
@@ -3456,6 +3628,13 @@ function parseOpeningDim(val, defaultMm) {
 
           wallSel.addEventListener("change", function () {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
+          });
+
+          snapPosSel.addEventListener("change", function () {
+            var idx = parseInt(snapPosSel.value, 10);
+            if (isFinite(idx) && idx >= 0) {
+              applySnapPosition(id, idx, String(win.wall || "front"));
+            }
           });
 
           snapBtn.addEventListener("click", function () {
