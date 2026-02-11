@@ -51,9 +51,9 @@
       '#mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 17px !important; }',
       '#mobileConfigurator .mc-step-pill { font-size: 15px !important; padding: 10px 16px !important; }',
       '#mobileConfigurator .mc-footer-btn { font-size: 17px !important; }',
-      '/* Scale up the entire controls area */ #mcControls { zoom: 1.55 !important; -moz-transform: scale(1.55); -moz-transform-origin: top left; }',
-      '#mcStepNav { zoom: 1.3 !important; }',
-      '#mcStepFooter { zoom: 1.3 !important; }',
+      '/* Scale up the entire controls area */ #mcControls { zoom: 1.65 !important; -moz-transform: scale(1.65); -moz-transform-origin: top left; }',
+      '#mcStepNav { zoom: 1.6 !important; }',
+      '#mcStepFooter { zoom: 1.4 !important; }',
       '#mobileConfigurator #mcStepNav { border-top: none !important; }'
     ].join('\n');
     document.head.appendChild(mobileStyle);
