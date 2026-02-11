@@ -51,7 +51,9 @@
       '#mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 17px !important; }',
       '#mobileConfigurator .mc-step-pill { font-size: 15px !important; padding: 10px 16px !important; }',
       '#mobileConfigurator .mc-footer-btn { font-size: 17px !important; }',
-      '/* VISUAL DEBUG */ #mobileConfigurator #mcStepNav { border-top: 5px solid red !important; }'
+      '/* Scale up the entire controls area */ #mcControls { zoom: 1.35 !important; -moz-transform: scale(1.35); -moz-transform-origin: top left; }',
+      '#mcStepNav { zoom: 1.2 !important; }',
+      '#mcStepFooter { zoom: 1.2 !important; }'
     ].join('\n');
     document.head.appendChild(mobileStyle);
   }
