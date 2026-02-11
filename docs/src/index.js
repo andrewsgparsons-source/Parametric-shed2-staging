@@ -2142,6 +2142,7 @@ function render(state) {
 
       var fasciaThk = 0.020; // 20mm
       var fasciaDepth = 0.100; // 100mm
+      var fasciaInset = 0.030; // 30mm — tiles overhang past the fascia
 
       // Find the lowest Y of roof rafter meshes (hip + common rafters)
       var rafterMinY = Infinity;
@@ -2208,13 +2209,13 @@ function render(state) {
 
       var fasciaBoards = [
         // Front fascia (along x)
-        { w: roofW + fasciaThk * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMinZ - fasciaThk / 2, name: "gazebo-fascia-front" },
+        { w: roofW - fasciaInset * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMinZ + fasciaInset, name: "gazebo-fascia-front" },
         // Back fascia
-        { w: roofW + fasciaThk * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMaxZ + fasciaThk / 2, name: "gazebo-fascia-back" },
+        { w: roofW - fasciaInset * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMaxZ - fasciaInset, name: "gazebo-fascia-back" },
         // Left fascia (along z)
-        { w: fasciaThk, h: actualFasciaH, d: roofD + fasciaThk * 2, x: roofMinX - fasciaThk / 2, z: centreZ, name: "gazebo-fascia-left" },
+        { w: fasciaThk, h: actualFasciaH, d: roofD - fasciaInset * 2, x: roofMinX + fasciaInset, z: centreZ, name: "gazebo-fascia-left" },
         // Right fascia
-        { w: fasciaThk, h: actualFasciaH, d: roofD + fasciaThk * 2, x: roofMaxX + fasciaThk / 2, z: centreZ, name: "gazebo-fascia-right" }
+        { w: fasciaThk, h: actualFasciaH, d: roofD - fasciaInset * 2, x: roofMaxX - fasciaInset, z: centreZ, name: "gazebo-fascia-right" }
       ];
 
       for (var f = 0; f < fasciaBoards.length; f++) {
