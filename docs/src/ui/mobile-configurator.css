@@ -148,12 +148,12 @@ body.mobile-configurator #controls {
 
 .mc-step-pill {
   flex: 0 0 auto;
-  padding: 7px 14px;
+  padding: 10px 18px;
   border: 1.5px solid var(--mc-border);
   border-radius: 20px;
   background: var(--mc-bg-panel);
   color: var(--mc-text-secondary);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--mc-transition);
@@ -195,7 +195,7 @@ body.mobile-configurator #mcControls .boSection > summary {
 }
 
 body.mobile-configurator #mcControls .boSection .boBox {
-  padding: 12px !important;
+  padding: 16px !important;
   opacity: 1 !important;
   max-height: none !important;
   overflow: visible !important;
@@ -251,10 +251,10 @@ body.mobile-configurator #mcControls .boSection .boBox {
 
 .mc-footer-btn {
   flex: 1;
-  padding: 12px 18px !important;
+  padding: 16px 22px !important;
   border: none !important;
   border-radius: 24px !important;
-  font-size: 14px !important;
+  font-size: 18px !important;
   font-weight: 700 !important;
   cursor: pointer;
   transition: all var(--mc-transition);
