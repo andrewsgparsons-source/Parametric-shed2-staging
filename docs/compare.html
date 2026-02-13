@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>UI Theme Comparison — Parametric Shed</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: #0F1117;
+      color: #E8ECF4;
+      min-height: 100vh;
+    }
+    
+    header {
+      text-align: center;
+      padding: 24px 16px 8px;
+    }
+    
+    header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    
+    header p {
+      color: #9CA3B4;
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .tab-btn {
+      padding: 10px 24px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 2px solid #2E3347;
+      border-radius: 50px;
+      background: transparent;
+      color: #9CA3B4;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    
+    .tab-btn:hover {
+      border-color: #00D4FF;
+      color: #00D4FF;
+    }
+    
+    .tab-btn.active {
+      background: #00D4FF;
+      border-color: #00D4FF;
+      color: #000;
+    }
+    
+    .tab-btn[data-theme="baseline"].active { background: #6B7280; border-color: #6B7280; color: #fff; }
+    .tab-btn[data-theme="wizard"].active { background: #D97706; border-color: #D97706; color: #fff; }
+    .tab-btn[data-theme="polished"].active { background: #0D9488; border-color: #0D9488; color: #fff; }
+    .tab-btn[data-theme="wild"].active { background: #00D4FF; border-color: #00D4FF; color: #000; }
+    .tab-btn[data-theme="sidebar"].active { background: #2D5016; border-color: #2D5016; color: #fff; }
+    
+    .tab-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-transform: none;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+    
+    .frame-wrapper {
+      padding: 0 16px 16px;
+    }
+    
+    iframe {
+      width: 100%;
+      height: calc(100vh - 140px);
+      border: 2px solid #2E3347;
+      border-radius: 12px;
+      background: #fff;
+    }
+    
+    .split-view {
+      display: none;
+      padding: 0 16px 16px;
+      gap: 8px;
+    }
+    
+    .split-view.active {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    
+    .split-frame {
+      position: relative;
+    }
+    
+    .split-frame iframe {
+      height: calc(100vh - 180px);
+    }
+    
+    .split-label {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      z-index: 10;
+    }
+    
+    .mode-toggle {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding-bottom: 12px;
+    }
+    
+    .mode-btn {
+      padding: 6px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid #2E3347;
+      border-radius: 20px;
+      background: transparent;
+      color: #5C6378;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .mode-btn:hover { color: #9CA3B4; border-color: #5C6378; }
+    .mode-btn.active { background: #232736; color: #E8ECF4; border-color: #5C6378; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏠 UI Theme Comparison</h1>
+    <p>Click a theme to preview, or use Split View to compare two side by side</p>
+  </header>
+  
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="single">Single View</button>
+    <button class="mode-btn" data-mode="split">Split View (pick 2)</button>
+  </div>
+  
+  <div class="tabs">
+    <button class="tab-btn active" data-theme="baseline">
+      1. Baseline
+      <span class="tab-label">Current (no changes)</span>
+    </button>
+    <button class="tab-btn" data-theme="wizard">
+      2. Wizard
+      <span class="tab-label">Bottom panel + steps</span>
+    </button>
+    <button class="tab-btn" data-theme="polished">
+      3. Polished
+      <span class="tab-label">Slate + teal, refined</span>
+    </button>
+    <button class="tab-btn" data-theme="wild">
+      4. Wild
+      <span class="tab-label">Dark + blue/gold</span>
+    </button>
+    <button class="tab-btn" data-theme="sidebar">
+      5. Sidebar ★
+      <span class="tab-label">Left panel + steps</span>
+    </button>
+  </div>
+  
+  <div class="frame-wrapper" id="singleView">
+    <iframe id="mainFrame" src="./index.html?profile=admin&theme=baseline#view=3d"></iframe>
+  </div>
+  
+  <div class="split-view" id="splitView">
+    <div class="split-frame">
+      <span class="split-label" id="splitLabelA">Baseline</span>
+      <iframe id="splitFrameA" src="./index.html?profile=admin&theme=baseline#view=3d"></iframe>
+    </div>
+    <div class="split-frame">
+      <span class="split-label" id="splitLabelB">Polished</span>
+      <iframe id="splitFrameB" src="./index.html?profile=admin&theme=polished#view=3d"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const BASE = './index.html?profile=admin&theme=';
+    const VIEW = '#view=3d';
+    let mode = 'single';
+    let splitSelections = [];
+    
+    // Tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const theme = btn.dataset.theme;
+        
+        if (mode === 'single') {
+          // Single mode — switch active tab + iframe
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('mainFrame').src = BASE + theme + VIEW;
+        } else {
+          // Split mode — select up to 2
+          if (btn.classList.contains('active')) {
+            btn.classList.remove('active');
+            splitSelections = splitSelections.filter(t => t !== theme);
+          } else {
+            if (splitSelections.length >= 2) {
+              // Remove oldest
+              const oldest = splitSelections.shift();
+              document.querySelector(`.tab-btn[data-theme="${oldest}"]`).classList.remove('active');
+            }
+            splitSelections.push(theme);
+            btn.classList.add('active');
+          }
+          updateSplit();
+        }
+      });
+    });
+    
+    // Mode toggle
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        mode = btn.dataset.mode;
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        if (mode === 'single') {
+          document.getElementById('singleView').style.display = 'block';
+          document.getElementById('splitView').classList.remove('active');
+          // Reset to first active tab
+          const active = document.querySelector('.tab-btn.active');
+          if (active) {
+            document.getElementById('mainFrame').src = BASE + active.dataset.theme + VIEW;
+          }
+        } else {
+          document.getElementById('singleView').style.display = 'none';
+          // Pre-select first two if none selected
+          if (splitSelections.length < 2) {
+            splitSelections = ['baseline', 'polished'];
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            splitSelections.forEach(t => {
+              document.querySelector(`.tab-btn[data-theme="${t}"]`).classList.add('active');
+            });
+          }
+          updateSplit();
+          document.getElementById('splitView').classList.add('active');
+        }
+      });
+    });
+    
+    function updateSplit() {
+      if (splitSelections.length >= 1) {
+        document.getElementById('splitFrameA').src = BASE + splitSelections[0] + VIEW;
+        document.getElementById('splitLabelA').textContent = splitSelections[0].charAt(0).toUpperCase() + splitSelections[0].slice(1);
+      }
+      if (splitSelections.length >= 2) {
+        document.getElementById('splitFrameB').src = BASE + splitSelections[1] + VIEW;
+        document.getElementById('splitLabelB').textContent = splitSelections[1].charAt(0).toUpperCase() + splitSelections[1].slice(1);
+      }
+    }
+  </script>
+</body>
+</html>

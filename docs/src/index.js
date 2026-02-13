@@ -58,16 +58,18 @@ import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
-import * as Walls from "./elements/walls.js";
+import * as Walls from "./elements/walls.js?_v=2";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js?_v=7";
+import * as Roof from "./elements/roof.js?_v=8";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
+import * as Skylights from "./elements/skylights.js?_v=9";
+import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
-import { initViews } from "./views.js";
+import { initViews } from "./views.js?_v=2";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";
@@ -174,6 +176,71 @@ function updateOpeningsBOM(state) {
   }
 }
 
+/**
+ * Update the Shelving BOM table
+ */
+function updateShelvingBOM(state) {
+  var shelvingBom = (Shelving && typeof Shelving.updateBOM === "function") ? Shelving.updateBOM(state) : { sections: [] };
+  var sections = (shelvingBom && shelvingBom.sections) ? shelvingBom.sections : [];
+
+  var tbody = $("shelvingBomTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  // Flatten all rows from all sections
+  var allRows = [];
+  for (var s = 0; s < sections.length; s++) {
+    var sec = sections[s];
+    if (sec && sec.title) {
+      // Add section header row
+      allRows.push({ isHeader: true, title: sec.title });
+    }
+    var rows = (sec && sec.rows) ? sec.rows : [];
+    for (var r = 0; r < rows.length; r++) {
+      allRows.push(rows[r]);
+    }
+  }
+
+  if (allRows.length === 0) {
+    var emptyRow = document.createElement("tr");
+    var emptyCell = document.createElement("td");
+    emptyCell.colSpan = 6;
+    emptyCell.textContent = "No shelves configured.";
+    emptyRow.appendChild(emptyCell);
+    tbody.appendChild(emptyRow);
+    return;
+  }
+
+  for (var i = 0; i < allRows.length; i++) {
+    var row = allRows[i];
+    var tr = document.createElement("tr");
+
+    if (row.isHeader) {
+      var th = document.createElement("td");
+      th.colSpan = 6;
+      th.style.fontWeight = "bold";
+      th.style.paddingTop = "12px";
+      th.textContent = row.title;
+      tr.appendChild(th);
+    } else {
+      var vals = [
+        row.item || "",
+        String(row.qty || ""),
+        row.section || "",
+        String(row.length_mm || ""),
+        row.material || "",
+        row.notes || ""
+      ];
+      for (var v = 0; v < vals.length; v++) {
+        var td = document.createElement("td");
+        td.textContent = vals[v];
+        tr.appendChild(td);
+      }
+    }
+    tbody.appendChild(tr);
+  }
+}
+
 var WALL_OVERHANG_MM = 25;
 var WALL_RISE_MM = 168;
 
@@ -213,6 +280,8 @@ function shiftRoofMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
     var m = scene.meshes[i];
     if (!m || !m.metadata || m.metadata.dynamic !== true) continue;
     if (typeof m.name !== "string" || m.name.indexOf("roof-") !== 0) continue;
+    // Skip skylight meshes — they are children of roof-root and must not be double-shifted
+    if (m.name.indexOf("roof-skylight-") === 0) continue;
     // If section context provided, only shift meshes belonging to this section
     if (sectionId) {
       if (m.metadata.sectionId !== sectionId) continue;
@@ -265,10 +334,12 @@ function ensureRequiredDomScaffolding() {
   var wallsPage = $("wallsBomPage") || ensureEl("div", "wallsBomPage", document.body);
   var roofPage = $("roofBomPage") || ensureEl("div", "roofBomPage", document.body);
   var openingsPage = $("openingsBomPage") || ensureEl("div", "openingsBomPage", document.body);
+  var shelvingPage = $("shelvingBomPage") || ensureEl("div", "shelvingBomPage", document.body);
 
   // Make sure they start hidden (view system will show/hide).
   if (bomPage && bomPage.style && bomPage.style.display === "") bomPage.style.display = "none";
   if (wallsPage && wallsPage.style && wallsPage.style.display === "") wallsPage.style.display = "none";
+  if (shelvingPage && shelvingPage.style && shelvingPage.style.display === "") shelvingPage.style.display = "none";
   if (roofPage && roofPage.style && roofPage.style.display === "") roofPage.style.display = "none";
   if (openingsPage && openingsPage.style && openingsPage.style.display === "") openingsPage.style.display = "none";
 
@@ -539,6 +610,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallsVariantEl = $("wallsVariant");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
+    var claddingColourEl = $("claddingColour");
     var roofCoveringStyleEl = $("roofCoveringStyle");
 
     var addDoorBtnEl = $("addDoorBtn");
@@ -559,6 +631,12 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var addDividerBtnEl = $("addDividerBtn");
     var removeAllDividersBtnEl = $("removeAllDividersBtn");
     var dividersListEl = $("dividersList");
+
+    // Shelving controls
+    var addShelfBtnEl = $("addShelfBtn");
+    var removeAllShelvesBtnEl = $("removeAllShelvesBtn");
+    var shelvesListEl = $("shelvesList");
+    var shelfSeq = 1;
 
     var instanceSelectEl = $("instanceSelect");
     var saveInstanceBtnEl = $("saveInstanceBtn");
@@ -1617,12 +1695,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (engine && typeof engine.resize === "function") engine.resize(); } catch (e) {}
       try { if (camera && typeof camera.attachControl === "function") camera.attachControl(canvas, true); } catch (e) {}
@@ -1637,12 +1718,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "block");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, false);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -1656,12 +1740,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "block");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, false);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -1675,12 +1762,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "block");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, false);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -2044,6 +2134,242 @@ function render(state) {
       }
     }
 
+    // ── Gazebo: build 4 corner posts ──
+    function buildGazeboPosts(state, scene) {
+      var BAB = window.BABYLON;
+      if (!BAB || !scene) return;
+
+      var R = resolveDims(state);
+      var w = Math.max(1, R.base.w_mm);
+      var d = Math.max(1, R.base.d_mm);
+
+      // Post dimensions
+      var postSize = 150; // 150x150mm
+      var postSizeMeter = postSize / 1000;
+
+      // Wall height (eaves height) — same as shed
+      var eaves = 2000;
+      try {
+        var rs = (state && state.roof && state.roof.style) ? String(state.roof.style) : "hipped";
+        if (rs === "hipped" && state.roof && state.roof.hipped && state.roof.hipped.heightToEaves_mm) {
+          eaves = Math.max(1000, state.roof.hipped.heightToEaves_mm);
+        } else if (rs === "apex" && state.roof && state.roof.apex && state.roof.apex.heightToEaves_mm) {
+          eaves = Math.max(1000, state.roof.apex.heightToEaves_mm);
+        }
+      } catch (e) {}
+
+      var postHeight = eaves / 1000; // convert to meters for Babylon
+
+      // Timber material
+      var mat = new BAB.StandardMaterial("gazeboPostMat", scene);
+      mat.diffuseColor = new BAB.Color3(0.76, 0.60, 0.42); // Douglas fir colour
+      mat.specularColor = new BAB.Color3(0.1, 0.1, 0.1);
+
+      // Half-post inset from edge (post centre sits at corner of frame)
+      var halfPost = postSizeMeter / 2;
+      var wM = w / 1000;
+      var dM = d / 1000;
+
+      // 4 corner positions (x, z) — posts sit at frame corners
+      var corners = [
+        { x: halfPost,      z: halfPost,      name: "gazebo-post-fl" },
+        { x: wM - halfPost, z: halfPost,      name: "gazebo-post-fr" },
+        { x: halfPost,      z: dM - halfPost, name: "gazebo-post-bl" },
+        { x: wM - halfPost, z: dM - halfPost, name: "gazebo-post-br" }
+      ];
+
+      for (var i = 0; i < corners.length; i++) {
+        var c = corners[i];
+        var post = BAB.MeshBuilder.CreateBox(c.name, {
+          width: postSizeMeter,
+          height: postHeight,
+          depth: postSizeMeter
+        }, scene);
+        post.position = new BAB.Vector3(c.x, postHeight / 2, c.z);
+        post.material = mat;
+        post.metadata = { dynamic: true };
+      }
+
+      // Top plate / ring beam connecting the posts (4 beams)
+      var beamH = postSizeMeter; // same thickness as posts
+      var beams = [
+        // Front beam (along x)
+        { w: wM, h: beamH, d: postSizeMeter, x: wM / 2, z: halfPost, name: "gazebo-beam-front" },
+        // Back beam
+        { w: wM, h: beamH, d: postSizeMeter, x: wM / 2, z: dM - halfPost, name: "gazebo-beam-back" },
+        // Left beam (along z)
+        { w: postSizeMeter, h: beamH, d: dM, x: halfPost, z: dM / 2, name: "gazebo-beam-left" },
+        // Right beam
+        { w: postSizeMeter, h: beamH, d: dM, x: wM - halfPost, z: dM / 2, name: "gazebo-beam-right" }
+      ];
+
+      for (var b = 0; b < beams.length; b++) {
+        var bm = beams[b];
+        var beam = BAB.MeshBuilder.CreateBox(bm.name, {
+          width: bm.w,
+          height: bm.h,
+          depth: bm.d
+        }, scene);
+        beam.position = new BAB.Vector3(bm.x, postHeight - beamH / 2, bm.z);
+        beam.material = mat;
+        beam.metadata = { dynamic: true };
+      }
+
+      // ── Knee braces: 2 per post, 45° from 400mm down the post to the ring beam ──
+      var braceDropMm = 600;
+      var braceDrop = braceDropMm / 1000; // 0.6m
+      var braceSection = 0.075; // 75×75mm timber
+      var braceLen = Math.sqrt(braceDrop * braceDrop + braceDrop * braceDrop); // diagonal length
+      var braceAngle = Math.PI / 4; // 45°
+
+      // Each corner gets 2 braces — along the two adjacent beams
+      // Direction vectors: +x, -x, +z, -z from each corner toward the next post
+      var braceTopY = postHeight - beamH / 2; // centre of ring beam
+      var braceBotY = braceTopY - braceDrop;
+
+      var braces = [
+        // FL post: brace toward FR (+x) and toward BL (+z)
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-fl-x" },
+        { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-fl-z" },
+        // FR post: brace toward FL (-x) and toward BR (+z)
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-fr-x" },
+        { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: halfPost + braceDrop / 2, rotAxis: "x", rotSign: 1, name: "gazebo-brace-fr-z" },
+        // BL post: brace toward BR (+x) and toward FL (-z)
+        { cx: halfPost + braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: -1, name: "gazebo-brace-bl-x" },
+        { cx: halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-bl-z" },
+        // BR post: brace toward BL (-x) and toward FR (-z)
+        { cx: wM - halfPost - braceDrop / 2, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost, rotAxis: "z", rotSign: 1, name: "gazebo-brace-br-x" },
+        { cx: wM - halfPost, cy: (braceTopY + braceBotY) / 2, cz: dM - halfPost - braceDrop / 2, rotAxis: "x", rotSign: -1, name: "gazebo-brace-br-z" }
+      ];
+
+      for (var br = 0; br < braces.length; br++) {
+        var b = braces[br];
+        var brace = BAB.MeshBuilder.CreateBox(b.name, {
+          width: braceSection,
+          height: braceLen,
+          depth: braceSection
+        }, scene);
+        brace.position = new BAB.Vector3(b.cx, b.cy, b.cz);
+        // Rotate 45° around the appropriate axis
+        if (b.rotAxis === "z") {
+          brace.rotation.z = b.rotSign * braceAngle;
+        } else {
+          brace.rotation.x = b.rotSign * braceAngle;
+        }
+        brace.material = mat;
+        brace.metadata = { dynamic: true };
+      }
+
+      // Fascia boards — built AFTER roof so we can read rafter positions
+      // Flag to build fascia in a second pass (after roof is rendered)
+      scene._gazeboFasciaPending = {
+        wM: wM, dM: dM, mat: mat, postHeight: postHeight, beamH: beamH
+      };
+    }
+
+    // Build gazebo fascia boards by reading actual roof mesh positions
+    function buildGazeboFascia(scene) {
+      var BAB = window.BABYLON;
+      if (!BAB || !scene || !scene._gazeboFasciaPending) return;
+      var data = scene._gazeboFasciaPending;
+      delete scene._gazeboFasciaPending;
+
+      var fasciaThk = 0.020; // 20mm
+      var fasciaDepth = 0.100; // 100mm
+      var fasciaInset = 0.015; // 15mm — tiles overhang just past the fascia
+
+      // Find the lowest Y of roof rafter meshes (hip + common rafters)
+      var rafterMinY = Infinity;
+      var coveringMinY = Infinity; // bottom of tiles/felt/OSB
+      var roofMinX = Infinity, roofMaxX = -Infinity;
+      var roofMinZ = Infinity, roofMaxZ = -Infinity;
+
+      var meshes = scene.meshes || [];
+      for (var i = 0; i < meshes.length; i++) {
+        var m = meshes[i];
+        if (!m || !m.name) continue;
+        var nm = m.name;
+        // Match hip rafters, common rafters, jack rafters for extent
+        if (nm.indexOf("roof-hipped-hip-") === 0 || nm.indexOf("roof-hipped-common-") === 0 || nm.indexOf("roof-hipped-jack-") === 0) {
+          try {
+            m.computeWorldMatrix(true);
+            var bi = m.getBoundingInfo();
+            var min = bi.boundingBox.minimumWorld;
+            var max = bi.boundingBox.maximumWorld;
+            if (min.y < rafterMinY) rafterMinY = min.y;
+            if (min.x < roofMinX) roofMinX = min.x;
+            if (max.x > roofMaxX) roofMaxX = max.x;
+            if (min.z < roofMinZ) roofMinZ = min.z;
+            if (max.z > roofMaxZ) roofMaxZ = max.z;
+          } catch (e) {}
+        }
+        // Match tiles/felt/OSB covering for the bottom edge (fascia meets the visible covering)
+        if (nm.indexOf("roof-tiles-tiles") === 0 || nm.indexOf("roof-tiles-membrane") === 0 || nm.indexOf("roof-hipped-osb") === 0 || nm.indexOf("roof-felt") === 0) {
+          try {
+            m.computeWorldMatrix(true);
+            var bi2 = m.getBoundingInfo();
+            if (bi2.boundingBox.minimumWorld.y < coveringMinY) coveringMinY = bi2.boundingBox.minimumWorld.y;
+          } catch (e) {}
+        }
+      }
+
+      if (rafterMinY === Infinity) {
+        console.log("[Gazebo] No rafter meshes found, skipping fascia");
+        return;
+      }
+
+      // Fascia top = bottom of tiles/covering (so it meets the tiles)
+      // Fascia bottom = below the rafter ends
+      // Top of fascia = covering bottom + 25mm (batten thickness) to close the gap
+      var fasciaTopY = ((coveringMinY < Infinity) ? coveringMinY : rafterMinY) + 0.025;
+      var fasciaBottomY = rafterMinY - fasciaDepth;
+      var actualFasciaH = fasciaTopY - fasciaBottomY;
+      var fasciaCentreY = (fasciaTopY + fasciaBottomY) / 2;
+
+      console.log("[Gazebo] Fascia: rafterMinY=" + rafterMinY.toFixed(3) +
+        " coveringMinY=" + coveringMinY.toFixed(3) +
+        " fasciaH=" + actualFasciaH.toFixed(3) +
+        " roofX=" + roofMinX.toFixed(3) + "-" + roofMaxX.toFixed(3) +
+        " roofZ=" + roofMinZ.toFixed(3) + "-" + roofMaxZ.toFixed(3));
+
+      // Fascia material
+      var fasciaMat = new BAB.StandardMaterial("gazeboFasciaMat", scene);
+      fasciaMat.diffuseColor = new BAB.Color3(0.72, 0.56, 0.38);
+      fasciaMat.specularColor = new BAB.Color3(0.1, 0.1, 0.1);
+
+      var roofW = roofMaxX - roofMinX;
+      var roofD = roofMaxZ - roofMinZ;
+      var centreX = (roofMinX + roofMaxX) / 2;
+      var centreZ = (roofMinZ + roofMaxZ) / 2;
+
+      var fasciaBoards = [
+        // Front fascia (along x)
+        { w: roofW - fasciaInset * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMinZ + fasciaInset, name: "gazebo-fascia-front" },
+        // Back fascia
+        { w: roofW - fasciaInset * 2, h: actualFasciaH, d: fasciaThk, x: centreX, z: roofMaxZ - fasciaInset, name: "gazebo-fascia-back" },
+        // Left fascia (along z)
+        { w: fasciaThk, h: actualFasciaH, d: roofD - fasciaInset * 2, x: roofMinX + fasciaInset, z: centreZ, name: "gazebo-fascia-left" },
+        // Right fascia
+        { w: fasciaThk, h: actualFasciaH, d: roofD - fasciaInset * 2, x: roofMaxX - fasciaInset, z: centreZ, name: "gazebo-fascia-right" }
+      ];
+
+      for (var f = 0; f < fasciaBoards.length; f++) {
+        var fb = fasciaBoards[f];
+        var fascia = BAB.MeshBuilder.CreateBox(fb.name, {
+          width: fb.w,
+          height: fb.h,
+          depth: fb.d
+        }, scene);
+        fascia.position = new BAB.Vector3(fb.x, fasciaCentreY, fb.z);
+        fascia.material = fasciaMat;
+        fascia.metadata = { dynamic: true };
+      }
+    }
+
+    function isGazeboMode(state) {
+      return state && state.buildingType === "gazebo";
+    }
+
     // Legacy single-building render path - preserved unchanged from original render()
     function renderLegacyMode(state) {
         console.log("[RENDER_DEBUG] renderLegacyMode called");
@@ -2089,6 +2415,23 @@ function render(state) {
           }
         }
 
+        var _isGazebo = isGazeboMode(state);
+
+        if (_isGazebo) {
+          // Gazebo mode: corner posts + ring beam instead of walls
+          console.log("[RENDER_DEBUG] GAZEBO MODE — building posts");
+          buildGazeboPosts(state, ctx.scene);
+          // Shift posts same as walls
+          var postMeshes = ctx.scene.meshes.filter(function(m) {
+            return m && m.name && (m.name.indexOf("gazebo-") === 0);
+          });
+          for (var pm = 0; pm < postMeshes.length; pm++) {
+            postMeshes[pm].position.x -= WALL_OVERHANG_MM / 1000;
+            postMeshes[pm].position.y += WALL_RISE_MM / 1000;
+            postMeshes[pm].position.z -= WALL_OVERHANG_MM / 1000;
+          }
+        } else {
+          // Standard shed mode: walls, dividers, doors, windows
 if (getWallsEnabled(state)) {
           console.log("[RENDER_DEBUG] Building walls with wallState.w/d:", wallState.w, wallState.d);
           try {
@@ -2109,8 +2452,11 @@ if (getWallsEnabled(state)) {
         // Build door and window geometry into openings (always build regardless of wall visibility)
         if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
         if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
+        if (Shelving && typeof Shelving.build3D === "function") Shelving.build3D(wallState, ctx, undefined);
+        } // end shed mode
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
+        if (_isGazebo) roofStyle = "hipped"; // Gazebo always uses hipped roof
         var roofEnabled = getRoofEnabled(state);
         console.log("[RENDER_LEGACY] Roof check:", { roofEnabled, roofStyle, visRoof: state?.vis?.roof });
 
@@ -2122,7 +2468,14 @@ if (getWallsEnabled(state)) {
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
-          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+          // Gazebo: lift roof an extra 50mm so it sits on top of the ring beam, not submerged in it
+          var roofRise = _isGazebo ? (WALL_RISE_MM + 50) : WALL_RISE_MM;
+          shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, roofRise, -WALL_OVERHANG_MM);
+          // Build skylights AFTER shift — they parent to roof-root, must not be double-shifted
+          if (Skylights && typeof Skylights.build3D === "function") Skylights.build3D(roofState, ctx, undefined);
+
+          // Build gazebo fascia boards now that roof meshes exist and are positioned
+          if (_isGazebo) buildGazeboFascia(ctx.scene);
 
           if (Roof && typeof Roof.updateBOM === "function") Roof.updateBOM(roofState);
         } else {
@@ -2138,6 +2491,7 @@ if (getWallsEnabled(state)) {
 
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
         updateOpeningsBOM(state);
+        updateShelvingBOM(state);
 
        // Apply all visibility settings
         try {
@@ -2236,9 +2590,10 @@ if (getWallsEnabled(state)) {
         shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
       }
 
-      // Build doors/windows
+      // Build doors/windows/shelving
       if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
       if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
+      if (Shelving && typeof Shelving.build3D === "function") Shelving.build3D(wallState, ctx, undefined);
 
       // Build main building roof
       var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
@@ -2251,6 +2606,8 @@ if (getWallsEnabled(state)) {
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
         shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
+        // Build skylights AFTER shift — they parent to roof-root, must not be double-shifted
+        if (Skylights && typeof Skylights.build3D === "function") Skylights.build3D(roofState, ctx, undefined);
       }
 
       // STEP 2: Render all attachments using the new Attachments module
@@ -2283,6 +2640,7 @@ if (getWallsEnabled(state)) {
       }
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
       updateOpeningsBOM(state);
+      updateShelvingBOM(state);
 
       // Apply all visibility settings to main building AND attachments
       try {
@@ -2893,6 +3251,135 @@ if (getWallsEnabled(state)) {
       return best == null ? clamp(desired, minX, maxX) : best;
     }
 
+    // ── Snap-to-Position: evenly distribute openings on a wall ──
+
+    /**
+     * Compute evenly-spaced snap positions for all openings on a given wall.
+     * Positions are calculated so gaps between openings (and wall edges) are equal.
+     * Both doors and windows on the same wall share the position pool.
+     *
+     * Returns an array of { label, x_mm, openingId } sorted left-to-right,
+     * where openingId is the opening currently closest to that slot (or null).
+     */
+    function computeEvenSnapPositions(state, wall) {
+      var minGap = 50;
+      var lens = getWallLengthsForOpenings(state);
+      var wallLen = lens[wall] != null ? Math.max(1, Math.floor(lens[wall])) : 1;
+
+      // Gather ALL openings on this wall (doors + windows)
+      var allOpenings = getOpeningsFromState(state).filter(function (o) {
+        return o && String(o.wall || "front") === wall;
+      });
+
+      var n = allOpenings.length;
+      if (n === 0) return [];
+
+      // Sort by current x_mm so position assignment is stable
+      allOpenings.sort(function (a, b) {
+        return (Number(a.x_mm) || 0) - (Number(b.x_mm) || 0);
+      });
+
+      // Calculate total width consumed by all openings
+      var totalOpeningWidth = 0;
+      for (var i = 0; i < n; i++) {
+        totalOpeningWidth += Math.max(1, Math.floor(Number(allOpenings[i].width_mm || 900)));
+      }
+
+      // Available space for gaps = wallLen - totalOpeningWidth
+      // Number of gaps = n + 1 (before first, between each pair, after last)
+      var totalGapSpace = wallLen - totalOpeningWidth;
+      var gapCount = n + 1;
+      var gap = Math.max(minGap, Math.floor(totalGapSpace / gapCount));
+
+      // Calculate x_mm for each position slot (left-to-right)
+      var positions = [];
+      var currentX = gap;
+      for (var j = 0; j < n; j++) {
+        var openingWidth = Math.max(1, Math.floor(Number(allOpenings[j].width_mm || 900)));
+        positions.push({
+          label: getSnapPositionLabel(j, n),
+          x_mm: Math.max(minGap, Math.min(currentX, wallLen - openingWidth - minGap)),
+          openingId: String(allOpenings[j].id || ""),
+          index: j
+        });
+        currentX += openingWidth + gap;
+      }
+
+      return positions;
+    }
+
+    /**
+     * Human-friendly label for a snap position.
+     * 1 opening:  "Centre"
+     * 2 openings: "Left", "Right"
+     * 3 openings: "Left", "Centre", "Right"
+     * 4+:         "Position 1", "Position 2", ...
+     */
+    function getSnapPositionLabel(index, total) {
+      if (total === 1) return "Centre";
+      if (total === 2) return index === 0 ? "Left" : "Right";
+      if (total === 3) {
+        if (index === 0) return "Left";
+        if (index === 1) return "Centre";
+        return "Right";
+      }
+      return "Position " + (index + 1);
+    }
+
+    /**
+     * Apply a snap position to an opening, auto-swapping if the target slot
+     * is occupied by a different opening.
+     */
+    function applySnapPosition(openingId, targetIndex, wall) {
+      var s = store.getState();
+      var positions = computeEvenSnapPositions(s, wall);
+      if (!positions.length || targetIndex < 0 || targetIndex >= positions.length) return;
+
+      var targetSlot = positions[targetIndex];
+      var currentSlot = null;
+
+      // Find which slot this opening currently occupies
+      for (var i = 0; i < positions.length; i++) {
+        if (positions[i].openingId === openingId) {
+          currentSlot = positions[i];
+          break;
+        }
+      }
+
+      if (!currentSlot) return;
+
+      // If target slot is occupied by a different opening, swap them
+      if (targetSlot.openingId !== openingId) {
+        var otherOpeningId = targetSlot.openingId;
+        // Swap: move other opening to our current slot's x_mm
+        // and move us to the target slot's x_mm
+        // We need to recalculate positions assuming the widths are swapped
+        var thisOpening = getOpeningById(s, openingId);
+        var otherOpening = getOpeningById(s, otherOpeningId);
+        if (!thisOpening || !otherOpening) return;
+
+        // For a clean swap, recalculate positions with openings in swapped order
+        var openings = getOpeningsFromState(s);
+        var updated = [];
+        for (var k = 0; k < openings.length; k++) {
+          var o = openings[k];
+          if (String(o.id || "") === openingId) {
+            // Put this opening at target index position
+            updated.push(Object.assign({}, o, { x_mm: targetSlot.x_mm }));
+          } else if (String(o.id || "") === otherOpeningId) {
+            // Put other opening at our current position
+            updated.push(Object.assign({}, o, { x_mm: currentSlot.x_mm }));
+          } else {
+            updated.push(o);
+          }
+        }
+        setOpenings(updated);
+      } else {
+        // Already in this slot — just ensure x_mm is exact
+        patchOpeningById(openingId, { x_mm: targetSlot.x_mm });
+      }
+    }
+
     var _invalidSyncGuard = false;
 
     function syncInvalidOpeningsIntoState() {
@@ -3097,6 +3584,22 @@ function wireCommitOnly(inputEl, onCommit) {
           wallSel.value = String(door.wall || "front");
           wallLabel.appendChild(wallSel);
 
+          // ── Snap Position dropdown ──
+          var snapPosLabel = document.createElement("label");
+          snapPosLabel.textContent = "Position";
+          var snapPosSel = document.createElement("select");
+          var doorWall = String(door.wall || "front");
+          var snapPositions = computeEvenSnapPositions(state, doorWall);
+          var snapHtml = '<option value="">—</option>';
+          var currentSnapIdx = -1;
+          for (var sp = 0; sp < snapPositions.length; sp++) {
+            snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
+            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+          }
+          snapPosSel.innerHTML = snapHtml;
+          if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
+          snapPosLabel.appendChild(snapPosSel);
+
 var styleLabel = document.createElement("label");
           styleLabel.textContent = "Style";
 var styleSel = document.createElement("select");
@@ -3156,11 +3659,18 @@ var styleSel = document.createElement("select");
 
           actions.appendChild(snapBtn);
           actions.appendChild(rmBtn);
+
+          // Row 1: Wall, Position, Style
           top.appendChild(wallLabel);
+          top.appendChild(snapPosLabel);
           top.appendChild(styleLabel);
-          top.appendChild(hingeLabel);
-          top.appendChild(openLabel);
-          top.appendChild(actions);
+
+          // Row 2: Hinge, Open, Actions
+          var row2 = document.createElement("div");
+          row2.className = "doorRow2";
+          row2.appendChild(hingeLabel);
+          row2.appendChild(openLabel);
+          row2.appendChild(actions);
 
           var row = document.createElement("div");
           row.className = "row3";
@@ -3202,6 +3712,7 @@ var unitMode = getUnitMode(state);
 
           // Apply profile field restrictions
           applyFieldRestriction(wallSel, "door.wall");
+          applyFieldRestriction(snapPosSel, "door.snapPos");
           applyFieldRestriction(styleSel, "door.style");
           applyFieldRestriction(hingeSel, "door.hinge");
           applyFieldRestriction(openCheck, "door.open");
@@ -3259,6 +3770,13 @@ function parseOpeningDim(val, defaultMm) {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
           });
 
+          snapPosSel.addEventListener("change", function () {
+            var idx = parseInt(snapPosSel.value, 10);
+            if (isFinite(idx) && idx >= 0) {
+              applySnapPosition(id, idx, String(door.wall || "front"));
+            }
+          });
+
           styleSel.addEventListener("change", function () {
             patchOpeningById(id, { style: String(styleSel.value || "standard") });
           });
@@ -3298,6 +3816,7 @@ function parseOpeningDim(val, defaultMm) {
           });
 
           item.appendChild(top);
+          item.appendChild(row2);
           item.appendChild(row);
           item.appendChild(msg);
 
@@ -3340,6 +3859,22 @@ function parseOpeningDim(val, defaultMm) {
           wallSel.value = String(win.wall || "front");
           wallLabel.appendChild(wallSel);
 
+          // ── Snap Position dropdown (windows) ──
+          var snapPosLabel = document.createElement("label");
+          snapPosLabel.textContent = "Position";
+          var snapPosSel = document.createElement("select");
+          var winWall = String(win.wall || "front");
+          var snapPositions = computeEvenSnapPositions(state, winWall);
+          var snapHtml = '<option value="">—</option>';
+          var currentSnapIdx = -1;
+          for (var sp = 0; sp < snapPositions.length; sp++) {
+            snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
+            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+          }
+          snapPosSel.innerHTML = snapHtml;
+          if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
+          snapPosLabel.appendChild(snapPosSel);
+
           var actions = document.createElement("div");
           actions.className = "windowActions";
 
@@ -3356,6 +3891,7 @@ function parseOpeningDim(val, defaultMm) {
           actions.appendChild(rmBtn);
 
           top.appendChild(wallLabel);
+          top.appendChild(snapPosLabel);
           top.appendChild(actions);
 
           var row = document.createElement("div");
@@ -3400,6 +3936,7 @@ var unitMode = getUnitMode(state);
 
           // Apply profile field restrictions for windows
           applyFieldRestriction(wallSel, "window.wall");
+          applyFieldRestriction(snapPosSel, "window.snapPos");
           applyFieldRestriction(xField.inp, "window.x");
           applyFieldRestriction(yField.inp, "window.y");
           applyFieldRestriction(wField.inp, "window.width");
@@ -3455,6 +3992,13 @@ function parseOpeningDim(val, defaultMm) {
 
           wallSel.addEventListener("change", function () {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
+          });
+
+          snapPosSel.addEventListener("change", function () {
+            var idx = parseInt(snapPosSel.value, 10);
+            if (isFinite(idx) && idx >= 0) {
+              applySnapPosition(id, idx, String(win.wall || "front"));
+            }
           });
 
           snapBtn.addEventListener("click", function () {
@@ -3876,6 +4420,7 @@ if (state && state.overhang) {
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
+        if (claddingColourEl && state && state.cladding && state.cladding.colour) claddingColourEl.value = state.cladding.colour;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
         // Update visibility toggle display based on covering type
         updateRoofCoveringToggles(state?.roof?.covering || "felt");
@@ -3925,9 +4470,30 @@ if (state && state.overhang) {
 
         renderDoorsUi(state, dv);
         renderWindowsUi(state, wv);
+        renderShelvingUi(state);
+        updateOpeningsCounts(state);
+        // Update building type UI visibility
+        if (typeof updateBuildingTypeUI === "function") {
+          updateBuildingTypeUI(state && state.buildingType ? state.buildingType : "shed");
+        }
       } catch (e) {
         window.__dbg.lastError = "syncUiFromState failed: " + String(e && e.message ? e.message : e);
       }
+    }
+
+    function updateOpeningsCounts(state) {
+      var doors = getDoorsFromState(state);
+      var wins = getWindowsFromState(state);
+      var dividers = (state && state.walls && Array.isArray(state.walls.dividers)) ? state.walls.dividers : [];
+      var dc = document.getElementById("doorsCount");
+      var wc = document.getElementById("windowsCount");
+      var ic = document.getElementById("dividersCount");
+      var shelves = Array.isArray(state.shelving) ? state.shelving : [];
+      if (dc) dc.textContent = "(" + doors.length + ")";
+      if (wc) wc.textContent = "(" + wins.length + ")";
+      if (ic) ic.textContent = "(" + dividers.length + ")";
+      var sc = document.getElementById("shelvingCount");
+      if (sc) sc.textContent = "(" + shelves.length + ")";
     }
 
     // Expose a function to refresh dynamic controls after profile changes
@@ -3964,6 +4530,83 @@ if (state && state.overhang) {
         "BuildCalls: " + window.__dbg.buildCalls + "\n" +
         "Meshes: " + meshes + "\n" +
         "LastError: " + err;
+    }
+
+    // ── Building Type selector ──
+    // Wire up with polling to ensure sidebar-wizard has built the DOM
+    var _buildingTypeWired = false;
+    function wireBuildingTypeSelect() {
+      if (_buildingTypeWired) return;
+      var buildingTypeSel = document.getElementById("buildingTypeSelect");
+      if (!buildingTypeSel) return;
+      _buildingTypeWired = true;
+
+      // Set initial value from state
+      var s0 = store.getState();
+      if (s0 && s0.buildingType) buildingTypeSel.value = s0.buildingType;
+
+      buildingTypeSel.addEventListener("change", function () {
+        var newType = String(buildingTypeSel.value || "shed");
+        console.log("[BuildingType] Changed to:", newType);
+        var patch = { buildingType: newType };
+
+        // Gazebo: force hipped roof + minimum dimensions
+        if (newType === "gazebo") {
+          var HIPPED_MIN_W = 2500;
+          var HIPPED_MIN_D = 3000;
+          var curState = store.getState();
+          var curW = (curState && curState.dim && curState.dim.frameW_mm) ? curState.dim.frameW_mm : 1800;
+          var curD = (curState && curState.dim && curState.dim.frameD_mm) ? curState.dim.frameD_mm : 2400;
+          if (curW < HIPPED_MIN_W || curD < HIPPED_MIN_D) {
+            patch.dim = { frameW_mm: Math.max(curW, HIPPED_MIN_W), frameD_mm: Math.max(curD, HIPPED_MIN_D) };
+            patch.w = Math.max(curW, HIPPED_MIN_W);
+            patch.d = Math.max(curD, HIPPED_MIN_D);
+          }
+          patch.roof = {
+            style: "hipped",
+            hipped: {
+              heightToEaves_mm: 2400,
+              heightToCrest_mm: 3000
+            }
+          };
+        }
+
+        store.setState(patch);
+        updateBuildingTypeUI(newType);
+      });
+      console.log("[BuildingType] Wired select listener");
+    }
+    // Try immediately, then retry every 500ms up to 10s
+    wireBuildingTypeSelect();
+    var _btInterval = setInterval(function () {
+      wireBuildingTypeSelect();
+      if (_buildingTypeWired) clearInterval(_btInterval);
+    }, 500);
+    setTimeout(function () { clearInterval(_btInterval); }, 10000);
+
+    function updateBuildingTypeUI(type) {
+      var isGaz = (type === "gazebo");
+      // Sync the dropdown value
+      var sel = document.getElementById("buildingTypeSelect");
+      if (sel && sel.value !== type) sel.value = type;
+      // Hide/show sidebar wizard steps based on building type
+      var steps = document.querySelectorAll('.sw-step');
+      steps.forEach(function (btn) {
+        var label = btn.querySelector('.sw-step-label');
+        if (!label) return;
+        var text = label.textContent.trim();
+        // Hide these for gazebo: Appearance, Walls & Openings, Attachments
+        if (text === "Appearance" || text === "Walls & Openings" || text === "Attachments") {
+          btn.style.display = isGaz ? "none" : "";
+        }
+      });
+      // Hide/show dashboard items
+      var dashCladding = document.getElementById("dashCladding");
+      var dashDoors = document.getElementById("dashDoors");
+      var dashWindows = document.getElementById("dashWindows");
+      if (dashCladding) dashCladding.style.display = isGaz ? "none" : "";
+      if (dashDoors) dashDoors.style.display = isGaz ? "none" : "";
+      if (dashWindows) dashWindows.style.display = isGaz ? "none" : "";
     }
 
      if (roofStyleEl) {
@@ -4740,7 +5383,8 @@ function parseOverhangInput(val) {
     }
 
     if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
-    if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value } }); });
+    if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value, colour: (claddingColourEl ? claddingColourEl.value : "natural-wood") } }); });
+    if (claddingColourEl) claddingColourEl.addEventListener("change", function () { store.setState({ cladding: { style: (claddingStyleEl ? claddingStyleEl.value : "shiplap"), colour: claddingColourEl.value } }); });
     if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
       store.setState({ roof: { covering: roofCoveringStyleEl.value } }); 
       // Toggle visibility toggles based on covering type
@@ -6190,6 +6834,493 @@ function parseOverhangInput(val) {
 
     // ==================== END DIVIDER HANDLERS ====================
 
+    // ==================== SHELVING HANDLERS ====================
+
+    function getShelvingFromState(s) {
+      return Array.isArray(s && s.shelving) ? s.shelving.slice() : [];
+    }
+
+    function setShelving(arr) {
+      store.setState({ shelving: arr });
+    }
+
+    function renderShelvingUi(state) {
+      if (!shelvesListEl) return;
+      var shelves = getShelvingFromState(state);
+      shelvesListEl.innerHTML = "";
+
+      if (shelves.length === 0) {
+        shelvesListEl.innerHTML = '<div class="hint">(No shelves added)</div>';
+        return;
+      }
+
+      shelves.forEach(function(shelf, idx) {
+        var item = document.createElement("div");
+        item.className = "openingCard";
+        item.style.cssText = "border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin:0 0 6px 0;background:#fafafa;";
+
+        // Header row with title and remove button
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;";
+        var title = document.createElement("strong");
+        title.textContent = "Shelf " + (idx + 1);
+        title.style.fontSize = "11px";
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "✕";
+        removeBtn.style.cssText = "padding:0 4px;font-size:10px;cursor:pointer;border:1px solid #ccc;border-radius:2px;background:#fff;";
+        removeBtn.addEventListener("click", (function(i) {
+          return function() {
+            var arr = getShelvingFromState(store.getState());
+            arr.splice(i, 1);
+            setShelving(arr);
+          };
+        })(idx));
+        header.appendChild(title);
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+
+        // Wall select
+        var wallRow = document.createElement("div");
+        wallRow.className = "row";
+        wallRow.style.cssText = "margin-bottom:3px;";
+        var wallLabel = document.createElement("label");
+        wallLabel.style.fontSize = "10px";
+        wallLabel.textContent = "Wall ";
+        var wallSel = document.createElement("select");
+        wallSel.style.cssText = "font-size:10px;padding:1px 2px;";
+        ["back", "front", "left", "right"].forEach(function(w) {
+          var opt = document.createElement("option");
+          opt.value = w;
+          opt.textContent = w.charAt(0).toUpperCase() + w.slice(1);
+          if (shelf.wall === w) opt.selected = true;
+          wallSel.appendChild(opt);
+        });
+        wallSel.addEventListener("change", (function(i) {
+          return function(e) {
+            var arr = getShelvingFromState(store.getState());
+            arr[i] = Object.assign({}, arr[i], { wall: e.target.value });
+            setShelving(arr);
+          };
+        })(idx));
+        wallLabel.appendChild(wallSel);
+        wallRow.appendChild(wallLabel);
+
+        // Side select (inside/outside)
+        var sideLabel = document.createElement("label");
+        sideLabel.style.cssText = "font-size:10px;margin-left:8px;";
+        sideLabel.textContent = "Side ";
+        var sideSel = document.createElement("select");
+        sideSel.style.cssText = "font-size:10px;padding:1px 2px;";
+        ["inside", "outside"].forEach(function(s) {
+          var opt = document.createElement("option");
+          opt.value = s;
+          opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+          if ((shelf.side || "inside") === s) opt.selected = true;
+          sideSel.appendChild(opt);
+        });
+        sideSel.addEventListener("change", (function(i) {
+          return function(e) {
+            var arr = getShelvingFromState(store.getState());
+            arr[i] = Object.assign({}, arr[i], { side: e.target.value });
+            setShelving(arr);
+          };
+        })(idx));
+        sideLabel.appendChild(sideSel);
+        wallRow.appendChild(sideLabel);
+
+        item.appendChild(wallRow);
+
+        // Numeric inputs: position along wall, height, length, depth
+        var fields = [
+          { key: "x_mm", label: "Position along wall (mm)", min: 0, max: 8000, step: 50, val: shelf.x_mm || 0 },
+          { key: "y_mm", label: "Height from floor (mm)", min: 200, max: 2500, step: 50, val: shelf.y_mm || 1200 },
+          { key: "length_mm", label: "Length (mm)", min: 200, max: 4000, step: 50, val: shelf.length_mm || 800 },
+          { key: "depth_mm", label: "Depth (mm)", min: 100, max: 600, step: 25, val: shelf.depth_mm || 300 }
+        ];
+
+        fields.forEach(function(f) {
+          var row = document.createElement("div");
+          row.className = "row";
+          row.style.cssText = "margin-bottom:2px;";
+          var lbl = document.createElement("label");
+          lbl.style.fontSize = "10px";
+          lbl.textContent = f.label + " ";
+          var inp = document.createElement("input");
+          inp.type = "number";
+          inp.min = f.min;
+          inp.max = f.max;
+          inp.step = f.step;
+          inp.value = f.val;
+          inp.style.cssText = "width:70px;font-size:10px;padding:1px 3px;";
+          inp.addEventListener("change", (function(i, key) {
+            return function(e) {
+              var v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+              var arr = getShelvingFromState(store.getState());
+              var patch = {};
+              patch[key] = v;
+              arr[i] = Object.assign({}, arr[i], patch);
+              setShelving(arr);
+            };
+          })(idx, f.key));
+          lbl.appendChild(inp);
+          row.appendChild(lbl);
+          item.appendChild(row);
+        });
+
+        shelvesListEl.appendChild(item);
+      });
+    }
+
+    // Add Shelf button handler
+    if (addShelfBtnEl) {
+      addShelfBtnEl.addEventListener("click", function() {
+        var s = store.getState();
+        var shelves = getShelvingFromState(s);
+
+        shelves.push({
+          wall: "back",
+          side: "inside",
+          x_mm: 200,
+          y_mm: 1200,
+          length_mm: 800,
+          depth_mm: 300,
+          thickness_mm: 25,
+          bracket_size_mm: 250,
+          enabled: true
+        });
+
+        setShelving(shelves);
+      });
+    }
+
+    // Remove All Shelves button handler
+    if (removeAllShelvesBtnEl) {
+      removeAllShelvesBtnEl.addEventListener("click", function() {
+        setShelving([]);
+      });
+    }
+
+    // ==================== END SHELVING HANDLERS ====================
+
+    // ==================== SKYLIGHT HANDLERS ====================
+    // Skylights appear in both Roof and Walls & Openings sections — same data, linked UI.
+
+    var skylightsListRoofEl = $("skylightsListRoof");
+    var skylightsListOpeningsEl = $("skylightsListOpenings");
+    var skylightsCountRoofEl = $("skylightsCountRoof");
+    var skylightsCountOpeningsEl = $("skylightsCountOpenings");
+    var addSkylightBtnRoofEl = $("addSkylightBtnRoof");
+    var addSkylightBtnOpeningsEl = $("addSkylightBtnOpenings");
+    var removeAllSkylightsBtnRoofEl = $("removeAllSkylightsBtnRoof");
+    var removeAllSkylightsBtnOpeningsEl = $("removeAllSkylightsBtnOpenings");
+
+    var __skylightSeq = 1;
+
+    function getSkylightsFromState(s) {
+      return (s && s.roof && Array.isArray(s.roof.skylights)) ? s.roof.skylights : [];
+    }
+
+    function setSkylights(arr) {
+      store.setState({ roof: { skylights: arr } });
+    }
+
+    function getFacesForRoofStyle(s) {
+      var style = (s && s.roof && s.roof.style) ? s.roof.style : "apex";
+      if (style === "pent") return [{ value: "pent", label: "Roof" }];
+      if (style === "hipped") return [
+        { value: "front", label: "Front" },
+        { value: "back", label: "Back" },
+        { value: "left", label: "Left" },
+        { value: "right", label: "Right" }
+      ];
+      // apex: slopes face left and right (ridge runs front-to-back)
+      return [
+        { value: "front", label: "Left" },
+        { value: "back", label: "Right" }
+      ];
+    }
+
+    /**
+     * Compute the slope length for the current roof — used to set max constraints
+     * on skylight Y position and height so they can't extend past the ridge.
+     */
+    function getSlopeLength(state) {
+      var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+      var dims = typeof resolveDims === "function" ? resolveDims(state) : null;
+      var roofW = dims ? (dims.roof ? dims.roof.w_mm : (dims.frame ? dims.frame.w_mm : 1800)) : 1800;
+      if (roofStyle === "apex") {
+        var apex = (state && state.roof && state.roof.apex) ? state.roof.apex : {};
+        var eavesH = Number(apex.heightToEaves_mm || apex.eavesHeight_mm || apex.eaves_mm) || 1850;
+        var crestH = Number(apex.heightToCrest_mm || apex.crestHeight_mm || apex.crest_mm) || 2200;
+        var halfSpan = roofW / 2;
+        var rise = Math.max(18, crestH - eavesH);
+        return Math.round(Math.sqrt(halfSpan * halfSpan + rise * rise));
+      } else if (roofStyle === "pent") {
+        var pent = (state && state.roof && state.roof.pent) ? state.roof.pent : {};
+        var maxH = Number(pent.maxHeight_mm) || 2500;
+        var minH = Number(pent.minHeight_mm) || 2300;
+        var pRise = Math.max(0, maxH - minH);
+        return Math.round(Math.sqrt(roofW * roofW + pRise * pRise));
+      }
+      return 2000; // fallback
+    }
+
+    /**
+     * Get the frame depth (wall length along eaves) for X/width constraints.
+     * x_mm is measured from the left wall, so max x+width = frameD.
+     */
+    function getFrameDepth(state) {
+      var dims = typeof resolveDims === "function" ? resolveDims(state) : null;
+      return dims && dims.frame ? dims.frame.d_mm : 2400;
+    }
+
+    /** Attach a blur handler that clamps value to min/max and updates state */
+    function clampOnBlur(input, idx, field, getFn) {
+      input.addEventListener("blur", function() {
+        var mn = Number(this.min) || 0;
+        var mx = Number(this.max) || Infinity;
+        var raw = parseInt(this.value) || 0;
+        var val = Math.max(mn, Math.min(mx, raw));
+        if (val !== raw) {
+          this.value = val;
+          var arr = getSkylightsFromState(store.getState());
+          if (arr[idx]) { arr[idx][field] = val; setSkylights(arr); }
+        }
+      });
+    }
+
+    function renderSkylightsUi(state) {
+      var skylights = getSkylightsFromState(state);
+      var faces = getFacesForRoofStyle(state);
+      var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+      var slopeLen = getSlopeLength(state);
+      var frameDepth = getFrameDepth(state);
+      var MIN_EDGE_GAP = 30;
+
+      // Update both count badges
+      var countText = "(" + skylights.length + ")";
+      if (skylightsCountRoofEl) skylightsCountRoofEl.textContent = countText;
+      if (skylightsCountOpeningsEl) skylightsCountOpeningsEl.textContent = countText;
+
+      // Render into both containers
+      [skylightsListRoofEl, skylightsListOpeningsEl].forEach(function(container) {
+        if (!container) return;
+        container.innerHTML = "";
+
+        if (skylights.length === 0) {
+          container.innerHTML = '<div class="hint">(No skylights added)</div>';
+          return;
+        }
+
+        skylights.forEach(function(sky, idx) {
+          var card = document.createElement("div");
+          card.className = "openingCard";
+          card.style.cssText = "border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin:0 0 6px 0;background:#fafafa;";
+
+          // Header: title + remove button
+          var header = document.createElement("div");
+          header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;";
+          var title = document.createElement("strong");
+          title.textContent = "Skylight " + (idx + 1);
+          title.style.fontSize = "11px";
+          var removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.textContent = "✕";
+          removeBtn.style.cssText = "padding:0 4px;font-size:10px;cursor:pointer;border:1px solid #ccc;border-radius:2px;background:#fff;";
+          removeBtn.addEventListener("click", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              arr = arr.filter(function(_, j) { return j !== i; });
+              setSkylights(arr);
+            };
+          })(idx));
+          header.appendChild(title);
+          header.appendChild(removeBtn);
+          card.appendChild(header);
+
+          // Face selector (hidden for pent)
+          if (roofStyle !== "pent") {
+            var faceRow = document.createElement("div");
+            faceRow.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:4px;";
+            var faceLabel = document.createElement("span");
+            faceLabel.textContent = "Face:";
+            faceLabel.style.cssText = "font-size:10px;min-width:35px;";
+            var faceSelect = document.createElement("select");
+            faceSelect.style.cssText = "font-size:10px;padding:2px 4px;flex:1;";
+            faces.forEach(function(f) {
+              var opt = document.createElement("option");
+              opt.value = f.value;
+              opt.textContent = f.label;
+              if ((sky.face || "front") === f.value) opt.selected = true;
+              faceSelect.appendChild(opt);
+            });
+            faceSelect.addEventListener("change", (function(i) {
+              return function() {
+                var arr = getSkylightsFromState(store.getState());
+                if (arr[i]) { arr[i].face = this.value; setSkylights(arr); }
+              };
+            })(idx));
+            faceRow.appendChild(faceLabel);
+            faceRow.appendChild(faceSelect);
+            card.appendChild(faceRow);
+          }
+
+          // Position: X (from left wall) and Y (up from wall plate)
+          var posRow = document.createElement("div");
+          posRow.style.cssText = "display:flex;gap:6px;margin-bottom:4px;";
+
+          var xLabel = document.createElement("label");
+          xLabel.style.cssText = "font-size:10px;flex:1;";
+          xLabel.textContent = "X from left wall (mm) ";
+          var xInput = document.createElement("input");
+          xInput.type = "number";
+          var maxX = Math.max(0, frameDepth - (sky.width_mm || 600));
+          xInput.min = "0";
+          xInput.max = String(maxX);
+          xInput.step = "10";
+          xInput.value = Math.min(sky.x_mm || 500, maxX);
+          xInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          xInput.addEventListener("change", (function(i, mX) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              var val = Math.max(0, Math.min(mX, parseInt(this.value) || 0));
+              if (arr[i]) { arr[i].x_mm = val; setSkylights(arr); }
+              this.value = val;
+            };
+          })(idx, maxX));
+          clampOnBlur(xInput, idx, "x_mm");
+          xLabel.appendChild(xInput);
+          posRow.appendChild(xLabel);
+
+          var yLabel = document.createElement("label");
+          yLabel.style.cssText = "font-size:10px;flex:1;";
+          yLabel.textContent = "Y up from plate (mm) ";
+          var yInput = document.createElement("input");
+          yInput.type = "number";
+          var maxY = Math.max(0, slopeLen - MIN_EDGE_GAP - 100);
+          yInput.min = "0";
+          yInput.max = String(maxY);
+          yInput.step = "10";
+          yInput.value = Math.min(sky.y_mm || 300, maxY);
+          yInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          yInput.addEventListener("change", (function(i, mY) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              var val = Math.max(0, Math.min(mY, parseInt(this.value) || 0));
+              if (arr[i]) { arr[i].y_mm = val; setSkylights(arr); }
+              this.value = val;
+            };
+          })(idx, maxY));
+          clampOnBlur(yInput, idx, "y_mm");
+          yLabel.appendChild(yInput);
+          posRow.appendChild(yLabel);
+          card.appendChild(posRow);
+
+          // Size: width and height
+          var sizeRow = document.createElement("div");
+          sizeRow.style.cssText = "display:flex;gap:6px;";
+
+          var wLabel = document.createElement("label");
+          wLabel.style.cssText = "font-size:10px;flex:1;";
+          wLabel.textContent = "Width (mm) ";
+          var wInput = document.createElement("input");
+          wInput.type = "number";
+          wInput.min = "100";
+          var maxW = Math.max(100, frameDepth - (sky.x_mm || 500));
+          wInput.max = String(maxW);
+          wInput.step = "10";
+          wInput.value = Math.min(sky.width_mm || 600, maxW);
+          wInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          wInput.addEventListener("change", (function(i, fd) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) {
+                var curX = arr[i].x_mm || 500;
+                var mW = Math.max(100, fd - curX);
+                var val = Math.max(100, Math.min(mW, parseInt(this.value) || 600));
+                arr[i].width_mm = val;
+                setSkylights(arr);
+                this.value = val;
+              }
+            };
+          })(idx, frameDepth));
+          clampOnBlur(wInput, idx, "width_mm");
+          wLabel.appendChild(wInput);
+          sizeRow.appendChild(wLabel);
+
+          var hLabel = document.createElement("label");
+          hLabel.style.cssText = "font-size:10px;flex:1;";
+          hLabel.textContent = "Height (mm) ";
+          var hInput = document.createElement("input");
+          hInput.type = "number";
+          hInput.min = "100";
+          var maxH = Math.max(100, slopeLen - (sky.y_mm || 300) - MIN_EDGE_GAP);
+          hInput.max = String(maxH);
+          hInput.step = "10";
+          hInput.value = Math.min(sky.height_mm || 800, maxH);
+          hInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          hInput.addEventListener("change", (function(i, sl, eg) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) {
+                var curY = arr[i].y_mm || 300;
+                var mH = Math.max(100, sl - curY - eg);
+                var val = Math.max(100, Math.min(mH, parseInt(this.value) || 800));
+                arr[i].height_mm = val;
+                setSkylights(arr);
+                this.value = val;
+              }
+            };
+          })(idx, slopeLen, MIN_EDGE_GAP));
+          clampOnBlur(hInput, idx, "height_mm");
+          hLabel.appendChild(hInput);
+          sizeRow.appendChild(hLabel);
+          card.appendChild(sizeRow);
+
+          container.appendChild(card);
+        });
+      });
+    }
+
+    function addSkylight() {
+      var s = store.getState();
+      var arr = getSkylightsFromState(s).slice();
+      var style = (s && s.roof && s.roof.style) ? s.roof.style : "apex";
+      var defaultFace = (style === "pent") ? "pent" : "front";
+      var sl = getSlopeLength(s);
+      var defaultY = 300;
+      var defaultH = Math.min(800, Math.max(100, sl - defaultY - 30));
+      arr.push({
+        id: "sky" + (__skylightSeq++),
+        enabled: true,
+        face: defaultFace,
+        x_mm: 500,
+        y_mm: defaultY,
+        width_mm: 600,
+        height_mm: defaultH
+      });
+      setSkylights(arr);
+    }
+
+    function removeAllSkylights() {
+      setSkylights([]);
+    }
+
+    // Wire add buttons (both sections call same function)
+    if (addSkylightBtnRoofEl) addSkylightBtnRoofEl.addEventListener("click", addSkylight);
+    if (addSkylightBtnOpeningsEl) addSkylightBtnOpeningsEl.addEventListener("click", addSkylight);
+    if (removeAllSkylightsBtnRoofEl) removeAllSkylightsBtnRoofEl.addEventListener("click", removeAllSkylights);
+    if (removeAllSkylightsBtnOpeningsEl) removeAllSkylightsBtnOpeningsEl.addEventListener("click", removeAllSkylights);
+
+    // Listen for state changes to re-render skylight UI
+    store.onChange(function(s) { renderSkylightsUi(s); });
+
+    // Initial render
+    renderSkylightsUi(store.getState());
+
+    // ==================== END SKYLIGHT HANDLERS ====================
+
     // ==================== RELATIVE OPENING POSITIONING (Card #111) ====================
     // Track previous dimensions to detect changes and reposition openings proportionally
     var __prevDimW = null;
@@ -6266,6 +7397,8 @@ function parseOverhangInput(val) {
       syncUiFromState(s, v);
       applyWallHeightUiLock(s);
       renderDividersUi(s, v);
+      renderShelvingUi(s);
+      updateOpeningsCounts(s);
       console.log("[store.onChange] About to call render()");
       render(s);
       console.log("[store.onChange] render() completed");

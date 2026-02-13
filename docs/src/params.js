@@ -11,6 +11,7 @@ export const CONFIG = {
 
 /** Walls + Dimension Mode defaults + Base visibility */
 export const DEFAULTS = {
+  buildingType: "shed",
   w: 1800,
   d: 2400,
   vis: {
@@ -58,7 +59,8 @@ export const DEFAULTS = {
     pent: {
       minHeight_mm: 2300,
       maxHeight_mm: 2500
-    }
+    },
+    skylights: []  // Array of skylight objects: { id, enabled, face, x_mm, y_mm, width_mm, height_mm }
   },
   walls: {
     variant: "basic",
@@ -101,7 +103,8 @@ export const DEFAULTS = {
   },
   // Cladding appearance
   cladding: {
-    style: "shiplap"  // "shiplap" | "overlap" | "loglap"
+    style: "shiplap",  // "shiplap" | "overlap" | "loglap" | "box-profile" | "corrugated" | "composite-panel" | "composite-slatted"
+    colour: "natural-wood"  // "natural-wood" | "pale-blue" | "sage-green" | "anthracite" | "goosewing-grey" | "vandyke-brown" | "charcoal" | "stone-grey"
   },
   // Multi-section support (building attachments)
   sections: {
@@ -115,6 +118,8 @@ export const DEFAULTS = {
     },
     attachments: []  // Array of attachment objects (see ATTACHMENT_DEFAULTS below)
   },
+  // Shelving (array of shelf objects, see elements/shelving.js for schema)
+  shelving: [],
   // Internal divider panels
   dividers: {
     items: []  // Array of divider objects

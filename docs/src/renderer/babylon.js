@@ -83,9 +83,73 @@ function createExteriorWoodMat(name) {
   
   scene._claddingMat = createExteriorWoodMat("claddingMat");
   scene._claddingMatLight = createExteriorWoodMat("claddingMatLight");
+
+  // ---- Budget range: steel cladding materials (metallic) ----
+  function createSteelCladdingMat(name, baseColor) {
+    var m = new BABYLON.StandardMaterial(name, scene);
+    m.diffuseColor = baseColor;
+    m.emissiveColor = baseColor.scale(0.08);
+    m.specularColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+    m.specularPower = 32;
+    return m;
+  }
+  // Colour keyed materials — populated on first use via getCladdingMaterial()
+  scene._steelCladdingMats = {};
+  scene._compositeCladdingMats = {};
+
+  // Budget cladding colour palette
+  var BUDGET_COLOURS = {
+    "pale-blue":       new BABYLON.Color3(0.482, 0.655, 0.737),   // #7BA7BC
+    "sage-green":      new BABYLON.Color3(0.357, 0.482, 0.369),   // #5B7B5E
+    "anthracite":      new BABYLON.Color3(0.220, 0.243, 0.259),   // #383E42
+    "goosewing-grey":  new BABYLON.Color3(0.616, 0.643, 0.659),   // #9DA4A8
+    "vandyke-brown":   new BABYLON.Color3(0.353, 0.239, 0.169),   // #5A3D2B
+    "charcoal":        new BABYLON.Color3(0.200, 0.200, 0.200),
+    "stone-grey":      new BABYLON.Color3(0.600, 0.580, 0.540),
+    "natural-wood":    null  // Uses existing exteriorWoodColor
+  };
+  scene._budgetColours = BUDGET_COLOURS;
+
+  /** Get or create a material for cladding style + colour */
+  scene.getCladdingMaterial = function(style, colourKey) {
+    // Default / timber styles use the existing wood material
+    if (!colourKey || colourKey === "natural-wood" || style === "shiplap" || style === "overlap" || style === "loglap") {
+      return scene._claddingMat;
+    }
+    var isSteel = (style === "box-profile" || style === "corrugated");
+    var cache = isSteel ? scene._steelCladdingMats : scene._compositeCladdingMats;
+    var key = style + "_" + colourKey;
+    if (cache[key]) return cache[key];
+
+    var baseColor = BUDGET_COLOURS[colourKey];
+    if (!baseColor) return scene._claddingMat;
+
+    var mat;
+    if (isSteel) {
+      mat = createSteelCladdingMat(key, baseColor);
+    } else {
+      // Composite: matte finish
+      mat = new BABYLON.StandardMaterial(key, scene);
+      mat.diffuseColor = baseColor;
+      mat.emissiveColor = baseColor.scale(0.10);
+      mat.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+      mat.specularPower = 4;
+    }
+    cache[key] = mat;
+    return mat;
+  };
+
   scene._doorMat = createExteriorWoodMat("doorMat");
   scene._fasciaMat = createExteriorWoodMat("fasciaMat");
   scene._cornerMat = createExteriorWoodMat("cornerMat");
+
+  // Galvanised grey material for budget trim (fascia, barge boards, corner flashings)
+  var galvMat = new BABYLON.StandardMaterial("galvanisedGreyMat", scene);
+  galvMat.diffuseColor = new BABYLON.Color3(0.65, 0.67, 0.68);   // light industrial grey
+  galvMat.emissiveColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+  galvMat.specularColor = new BABYLON.Color3(0.35, 0.35, 0.35);  // moderate metallic sheen
+  galvMat.specularPower = 24;
+  scene._galvanisedGreyMat = galvMat;
 
   // Cladding diagnostic v0.1: one-time post-first-render scan (no geometry changes)
   let __cladScanOnce = false;

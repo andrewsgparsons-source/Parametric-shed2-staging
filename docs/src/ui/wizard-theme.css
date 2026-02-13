@@ -1,0 +1,406 @@
+/* ============================================================
+   WIZARD THEME — Step-by-step configurator flow  
+   Colour Scheme: Earth tones (forest green + warm wood + cream)
+   ============================================================ */
+
+:root {
+  --wiz-primary: #2D5016;
+  --wiz-primary-light: #E8F0E2;
+  --wiz-primary-hover: #1E3A0E;
+  --wiz-accent: #D4A574;
+  --wiz-accent-light: #F5E6D3;
+  --wiz-bg: #FFF8F0;
+  --wiz-bg-panel: #FFFFFF;
+  --wiz-text: #1A1A1A;
+  --wiz-text-secondary: #5C5C5C;
+  --wiz-text-muted: #8A8A8A;
+  --wiz-border: #E0D5C8;
+  --wiz-shadow: 0 8px 32px rgba(45, 80, 22, 0.12);
+  --wiz-radius: 12px;
+  --wiz-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== GLOBAL ===== */
+html, body {
+  background: var(--wiz-bg) !important;
+}
+
+/* ===== CONTROLS PANEL → FIXED BOTTOM WIZARD ===== */
+body.wizard-mode #controls {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: 50vh !important;
+  z-index: 2147483000 !important;
+  background: var(--wiz-bg-panel) !important;
+  border-radius: 20px 20px 0 0 !important;
+  box-shadow: var(--wiz-shadow) !important;
+  border-top: 3px solid var(--wiz-primary) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+body.wizard-mode #controls #controlPanel {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 16px 24px 24px !important;
+  -webkit-overflow-scrolling: touch;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+body.wizard-mode #controls #controlPanel form {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  min-height: 0 !important;
+}
+
+body.wizard-mode #controls #controlPanel form {
+  display: block;
+}
+
+/* Hide non-wizard sections */
+body.wizard-mode .wizard-hidden-section {
+  display: none !important;
+}
+
+/* Fix details/boSection display */
+body.wizard-mode .boSection {
+  display: block !important;
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+body.wizard-mode .boSection .boBox {
+  display: block !important;
+  opacity: 1 !important;
+  max-height: none !important;
+}
+
+/* Fix inner wrapper */
+body.wizard-mode .inner {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Fix the non-boSection details (Controls wrapper) */
+body.wizard-mode #controlPanel > details:not(.boSection) {
+  display: block !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ===== HIDE ORIGINAL PANEL CHROME ===== */
+body.wizard-mode #controls .panelHeader,
+body.wizard-mode #controls .closeBtn,
+body.wizard-mode #mobileOpenBtn,
+body.wizard-mode #mobileCloseBtn,
+body.wizard-mode .designButton,
+body.wizard-mode #controls .resize-handle,
+body.wizard-mode #viewSelect,
+body.wizard-mode #controls > aside > header,
+body.wizard-mode #controlPanel > header {
+  display: none !important;
+}
+
+/* Hide the "Controls" heading row + view selector inside the panel */
+body.wizard-mode #controlPanel > div:first-child {
+  display: none !important;
+}
+
+/* Also hide via toggling attribute if needed */
+body.wizard-mode [aria-label="Toggle panel"],
+body.wizard-mode .drag-handle {
+  display: none !important;
+}
+
+/* Hide "Design your shed" heading block */
+body.wizard-mode .panelTitle,
+body.wizard-mode #controlPanel h2,
+body.wizard-mode #controlPanel h3 {
+  display: none !important;
+}
+
+/* Hide inner header with version info */
+body.wizard-mode .inner > header,
+body.wizard-mode .inner > div:first-child:not(form) {
+  display: none !important;
+}
+
+/* Hide build tag */
+body.wizard-mode #statusOverlay {
+  display: none !important;
+}
+
+/* ===== WIZARD NAV BAR ===== */
+#wizNavBar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--wiz-border);
+}
+
+.wiz-steps-nav {
+  display: flex;
+  gap: 0;
+  padding: 0 16px;
+  background: var(--wiz-bg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wiz-step-tab {
+  flex: 1;
+  padding: 12px 6px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--wiz-text-muted);
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  transition: color var(--wiz-transition);
+  text-align: center;
+}
+
+.wiz-step-tab:hover {
+  color: var(--wiz-text-secondary);
+}
+
+.wiz-step-tab.active {
+  color: var(--wiz-primary);
+}
+
+.wiz-step-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  background: var(--wiz-primary);
+  border-radius: 3px 3px 0 0;
+}
+
+.wiz-step-tab.completed {
+  color: var(--wiz-accent);
+}
+
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--wiz-border);
+  color: var(--wiz-text-muted);
+  font-size: 10px;
+  margin-right: 4px;
+  transition: all var(--wiz-transition);
+}
+
+.wiz-step-tab.active .step-num {
+  background: var(--wiz-primary);
+  color: #fff;
+}
+
+.wiz-step-tab.completed .step-num {
+  background: var(--wiz-accent);
+  color: #fff;
+}
+
+/* ===== FOOTER ===== */
+#wizFooter {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--wiz-bg-panel);
+  border-top: 1px solid var(--wiz-border);
+}
+
+.wiz-btn {
+  padding: 10px 24px;
+  border: 2px solid var(--wiz-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--wiz-transition);
+  background: transparent;
+  color: var(--wiz-primary);
+}
+
+.wiz-btn:hover {
+  background: var(--wiz-primary-light);
+}
+
+.wiz-btn.primary {
+  background: var(--wiz-primary);
+  color: #fff;
+}
+
+.wiz-btn.primary:hover {
+  background: var(--wiz-primary-hover);
+}
+
+.wiz-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wiz-summary {
+  font-size: 13px;
+  color: var(--wiz-text-secondary);
+  text-align: center;
+  flex: 1;
+  padding: 0 16px;
+}
+
+.wiz-summary strong {
+  color: var(--wiz-primary);
+}
+
+/* ===== FORM STYLING INSIDE WIZARD ===== */
+body.wizard-mode #controlPanel input[type="number"],
+body.wizard-mode #controlPanel input[type="text"],
+body.wizard-mode #controlPanel select {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--wiz-text);
+  background: #fff;
+  border: 1.5px solid var(--wiz-border);
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: border-color var(--wiz-transition), box-shadow var(--wiz-transition);
+}
+
+body.wizard-mode #controlPanel input:focus,
+body.wizard-mode #controlPanel select:focus {
+  outline: none;
+  border-color: var(--wiz-primary);
+  box-shadow: 0 0 0 3px var(--wiz-primary-light);
+}
+
+body.wizard-mode #controlPanel label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wiz-text-secondary);
+}
+
+body.wizard-mode #controlPanel .check {
+  accent-color: var(--wiz-primary);
+}
+
+body.wizard-mode #controlPanel button {
+  padding: 8px 14px;
+  border: 1.5px solid var(--wiz-border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wiz-text);
+  transition: all var(--wiz-transition);
+}
+
+body.wizard-mode #controlPanel button:hover {
+  background: var(--wiz-bg);
+  border-color: var(--wiz-primary);
+  color: var(--wiz-primary);
+}
+
+/* ===== STICKY SUMMARY BAR ===== */
+.wiz-sticky-summary {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483001;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 8px 20px;
+  border-radius: 50px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--wiz-text);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summary-label {
+  color: var(--wiz-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-value {
+  font-weight: 700;
+  color: var(--wiz-primary);
+}
+
+.summary-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--wiz-border);
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+  body.wizard-mode #controls {
+    max-height: 60vh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+  
+  .wiz-steps-nav {
+    padding: 0 8px;
+  }
+
+  .wiz-step-tab {
+    padding: 10px 4px;
+    font-size: 10px;
+  }
+
+  body.wizard-mode #controls #controlPanel {
+    padding: 12px 16px;
+  }
+
+  #wizFooter {
+    padding: 10px 16px;
+  }
+
+  .wiz-sticky-summary {
+    top: 8px;
+    padding: 6px 14px;
+    font-size: 11px;
+    gap: 10px;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01s !important; }
+}
