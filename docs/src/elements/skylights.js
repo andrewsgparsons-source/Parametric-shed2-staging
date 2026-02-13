@@ -101,7 +101,7 @@ export function getSkylightOpenings(state, side) {
     // This accounts for the slight coordinate offset between the skylight mesh coordinate
     // system and the roof panel coordinate system (~25mm), plus it's more realistic —
     // real skylight openings are always larger than the frame for flashing/weatherproofing.
-    const OPENING_MARGIN = 30; // mm each side
+    const OPENING_MARGIN = 50; // mm each side — generous to absorb coordinate offset
     const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm) - OPENING_MARGIN);
     const b0 = Math.max(0, f_mm + skyX_mm - OPENING_MARGIN);
 
