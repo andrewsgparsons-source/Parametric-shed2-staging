@@ -97,21 +97,19 @@ export function getSkylightOpenings(state, side) {
     //   a = distance from ridge down slope (a=0 at ridge)
     //   b = distance along ridge from front verge (b=0 at front edge)
     // Top of skylight is at skyY + skyH from eaves = rafterLen - (skyY+skyH) from ridge
-    // Add OPENING_MARGIN around the frame so the opening is slightly larger than the frame.
-    // This accounts for the slight coordinate offset between the skylight mesh coordinate
-    // system and the roof panel coordinate system (~25mm), plus it's more realistic —
-    // real skylight openings are always larger than the frame for flashing/weatherproofing.
-    const OPENING_MARGIN = 50; // mm each side — generous to absorb coordinate offset
-    const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm) - OPENING_MARGIN);
-    const b0 = Math.max(0, f_mm + skyX_mm - OPENING_MARGIN);
+    // Opening = exact skylight dimensions (the hole in the roof).
+    // The skylight frame will be slightly LARGER than this, overlapping the covering
+    // edges — just like a real skylight where the frame sits on top and covers the gap.
+    const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm));
+    const b0 = f_mm + skyX_mm;
 
     if (skyH_mm < 50) continue;
 
     openings.push({
       a0_mm: a0,
       b0_mm: b0,
-      aLen_mm: skyH_mm + OPENING_MARGIN * 2,
-      bLen_mm: skyW_mm + OPENING_MARGIN * 2
+      aLen_mm: skyH_mm,
+      bLen_mm: skyW_mm
     });
   }
 
@@ -285,8 +283,22 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
     // Back slope tilts forward (negative rotation)
     const tiltAngle = (face === "front") ? slopeAng : -slopeAng;
 
+    // Frame is slightly LARGER than the opening so it overlaps the covering edges
+    // (like a real skylight). Also shift ~10mm to compensate for the coordinate
+    // offset between the skylight and roof panel coordinate systems.
+    const FRAME_OVERLAP = 20;  // mm overlap on each side beyond the opening
+    const SHIFT_Z = -25;  // mm shift in Z to centre frame on opening (compensates coord offset)
+    const SHIFT_SLOPE = 10; // mm shift down-slope (toward eaves) to centre on opening
+    const cosA = Math.cos(slopeAng);
+    const sinA = Math.sin(slopeAng);
+    // Shift along slope = shift in the slope tangent direction
+    const shiftX = SHIFT_SLOPE * cosA * ((face === "front") ? -1 : 1);
+    const shiftY = -SHIFT_SLOPE * sinA;
+
     buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, face, "apex", roofRoot);
+      cx + shiftX, cy + shiftY, cz + SHIFT_Z,
+      skyW_mm + FRAME_OVERLAP * 2, skyH_mm + FRAME_OVERLAP * 2,
+      tiltAngle, face, "apex", roofRoot);
   });
 }
 
