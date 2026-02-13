@@ -7066,11 +7066,36 @@ function parseOverhangInput(val) {
       return 2000; // fallback
     }
 
+    /**
+     * Get the frame depth (wall length along eaves) for X/width constraints.
+     * x_mm is measured from the left wall, so max x+width = frameD.
+     */
+    function getFrameDepth(state) {
+      var dims = typeof resolveDims === "function" ? resolveDims(state) : null;
+      return dims && dims.frame ? dims.frame.d_mm : 2400;
+    }
+
+    /** Attach a blur handler that clamps value to min/max and updates state */
+    function clampOnBlur(input, idx, field, getFn) {
+      input.addEventListener("blur", function() {
+        var mn = Number(this.min) || 0;
+        var mx = Number(this.max) || Infinity;
+        var raw = parseInt(this.value) || 0;
+        var val = Math.max(mn, Math.min(mx, raw));
+        if (val !== raw) {
+          this.value = val;
+          var arr = getSkylightsFromState(store.getState());
+          if (arr[idx]) { arr[idx][field] = val; setSkylights(arr); }
+        }
+      });
+    }
+
     function renderSkylightsUi(state) {
       var skylights = getSkylightsFromState(state);
       var faces = getFacesForRoofStyle(state);
       var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
       var slopeLen = getSlopeLength(state);
+      var frameDepth = getFrameDepth(state);
       var MIN_EDGE_GAP = 30;
 
       // Update both count badges
@@ -7150,16 +7175,21 @@ function parseOverhangInput(val) {
           xLabel.textContent = "X from left wall (mm) ";
           var xInput = document.createElement("input");
           xInput.type = "number";
+          var maxX = Math.max(0, frameDepth - (sky.width_mm || 600));
           xInput.min = "0";
+          xInput.max = String(maxX);
           xInput.step = "10";
-          xInput.value = sky.x_mm || 500;
+          xInput.value = Math.min(sky.x_mm || 500, maxX);
           xInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
-          xInput.addEventListener("change", (function(i) {
+          xInput.addEventListener("change", (function(i, mX) {
             return function() {
               var arr = getSkylightsFromState(store.getState());
-              if (arr[i]) { arr[i].x_mm = parseInt(this.value) || 0; setSkylights(arr); }
+              var val = Math.max(0, Math.min(mX, parseInt(this.value) || 0));
+              if (arr[i]) { arr[i].x_mm = val; setSkylights(arr); }
+              this.value = val;
             };
-          })(idx));
+          })(idx, maxX));
+          clampOnBlur(xInput, idx, "x_mm");
           xLabel.appendChild(xInput);
           posRow.appendChild(xLabel);
 
@@ -7182,6 +7212,7 @@ function parseOverhangInput(val) {
               this.value = val;
             };
           })(idx, maxY));
+          clampOnBlur(yInput, idx, "y_mm");
           yLabel.appendChild(yInput);
           posRow.appendChild(yLabel);
           card.appendChild(posRow);
@@ -7196,15 +7227,25 @@ function parseOverhangInput(val) {
           var wInput = document.createElement("input");
           wInput.type = "number";
           wInput.min = "100";
+          var maxW = Math.max(100, frameDepth - (sky.x_mm || 500));
+          wInput.max = String(maxW);
           wInput.step = "10";
-          wInput.value = sky.width_mm || 600;
+          wInput.value = Math.min(sky.width_mm || 600, maxW);
           wInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
-          wInput.addEventListener("change", (function(i) {
+          wInput.addEventListener("change", (function(i, fd) {
             return function() {
               var arr = getSkylightsFromState(store.getState());
-              if (arr[i]) { arr[i].width_mm = Math.max(100, parseInt(this.value) || 600); setSkylights(arr); }
+              if (arr[i]) {
+                var curX = arr[i].x_mm || 500;
+                var mW = Math.max(100, fd - curX);
+                var val = Math.max(100, Math.min(mW, parseInt(this.value) || 600));
+                arr[i].width_mm = val;
+                setSkylights(arr);
+                this.value = val;
+              }
             };
-          })(idx));
+          })(idx, frameDepth));
+          clampOnBlur(wInput, idx, "width_mm");
           wLabel.appendChild(wInput);
           sizeRow.appendChild(wLabel);
 
@@ -7232,6 +7273,7 @@ function parseOverhangInput(val) {
               }
             };
           })(idx, slopeLen, MIN_EDGE_GAP));
+          clampOnBlur(hInput, idx, "height_mm");
           hLabel.appendChild(hInput);
           sizeRow.appendChild(hLabel);
           card.appendChild(sizeRow);
