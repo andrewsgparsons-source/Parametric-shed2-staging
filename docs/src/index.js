@@ -7291,11 +7291,28 @@ function parseOverhangInput(val) {
       var sl = getSlopeLength(s);
       var defaultY = 300;
       var defaultH = Math.min(800, Math.max(100, sl - defaultY - 30));
+      // Default X position varies by roof style:
+      // - Hipped: must land within the saddle region (past the hip triangle zone).
+      //   Saddle starts at roofW/2 from roof edge, which is (frameW/2 + ovh) from wall.
+      //   Compute a safe default that lands in the middle of the saddle.
+      var defaultX = 500;
+      if (style === "hipped") {
+        var _dims = typeof resolveDims === "function" ? resolveDims(s) : null;
+        var _roofW = _dims ? (_dims.roof ? _dims.roof.w_mm : 2900) : 2900;
+        var _roofD = _dims ? (_dims.roof ? _dims.roof.d_mm : 3400) : 3400;
+        var _f = _dims ? (_dims.overhang ? _dims.overhang.f_mm : 200) : 200;
+        var _halfSpan = _roofW / 2;
+        var _ridgeStart = _halfSpan;
+        var _ridgeEnd = _roofD - _halfSpan;
+        var _ridgeMid = (_ridgeStart + _ridgeEnd) / 2;
+        // Convert from roof-local Z to wall-relative x_mm
+        defaultX = Math.max(500, Math.round(_ridgeMid - _f));
+      }
       arr.push({
         id: "sky" + (__skylightSeq++),
         enabled: true,
         face: defaultFace,
-        x_mm: 500,
+        x_mm: defaultX,
         y_mm: defaultY,
         width_mm: 600,
         height_mm: defaultH
