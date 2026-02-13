@@ -201,13 +201,26 @@
                     <div id="shelvesList"></div>
                   </div>
                 </details>
+
+                <details class="openingsGroup" id="skylightsGroupOpenings">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountOpenings" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionOpenings">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnOpenings" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnOpenings" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListOpenings"></div>
+                  </div>
+                </details>
               </div>
             </details>
 
             <details open class="boSection">
               <summary>Roof</summary>
               <div class="boBox">
-                <div class="boSubhead">Building Height Options</div>
+
+                <details class="openingsGroup" id="roofHeightsGroup" open>
+                  <summary class="openingsGroupSummary">Building Height Options</summary>
                 <div class="hint" style="margin:0 0 10px 0;">(Shown after roof type selection)</div>
 
                 <div id="roofHeightOptions">
@@ -312,8 +325,10 @@
                   </div>
                 </div>
 
-                <div class="boRuleTitle">───────────────────────────────────────────────────────────</div>
-<div class="boSubhead" style="margin-top:8px;">Overhangs</div>
+                </details>
+
+                <details class="openingsGroup" id="roofOverhangsGroup">
+                  <summary class="openingsGroupSummary">Overhangs</summary>
                 <div class="row">
                   <label>
                     <span id="overUniformLabel">Uniform (mm)</span>
@@ -330,6 +345,19 @@
                   <label><span id="overLeftLabel">Left</span><input id="roofOverLeft" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overLeftFtIn" class="ftInHint" style="display:none;"></span></label>
                   <label><span id="overRightLabel">Right</span><input id="roofOverRight" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overRightFtIn" class="ftInHint" style="display:none;"></span></label>
                 </div>
+                </details>
+
+                <details class="openingsGroup" id="skylightsGroupRoof">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountRoof" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionRoof">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnRoof" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnRoof" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListRoof"></div>
+                  </div>
+                </details>
+
               </div>
             </details>
 

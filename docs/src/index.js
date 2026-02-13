@@ -6999,6 +6999,239 @@ function parseOverhangInput(val) {
 
     // ==================== END SHELVING HANDLERS ====================
 
+    // ==================== SKYLIGHT HANDLERS ====================
+    // Skylights appear in both Roof and Walls & Openings sections — same data, linked UI.
+
+    var skylightsListRoofEl = $("skylightsListRoof");
+    var skylightsListOpeningsEl = $("skylightsListOpenings");
+    var skylightsCountRoofEl = $("skylightsCountRoof");
+    var skylightsCountOpeningsEl = $("skylightsCountOpenings");
+    var addSkylightBtnRoofEl = $("addSkylightBtnRoof");
+    var addSkylightBtnOpeningsEl = $("addSkylightBtnOpenings");
+    var removeAllSkylightsBtnRoofEl = $("removeAllSkylightsBtnRoof");
+    var removeAllSkylightsBtnOpeningsEl = $("removeAllSkylightsBtnOpenings");
+
+    var __skylightSeq = 1;
+
+    function getSkylightsFromState(s) {
+      return (s && s.roof && Array.isArray(s.roof.skylights)) ? s.roof.skylights : [];
+    }
+
+    function setSkylights(arr) {
+      store.setState({ roof: { skylights: arr } });
+    }
+
+    function getFacesForRoofStyle(s) {
+      var style = (s && s.roof && s.roof.style) ? s.roof.style : "apex";
+      if (style === "pent") return [{ value: "pent", label: "Roof" }];
+      if (style === "hipped") return [
+        { value: "front", label: "Front" },
+        { value: "back", label: "Back" },
+        { value: "left", label: "Left" },
+        { value: "right", label: "Right" }
+      ];
+      // apex default
+      return [
+        { value: "front", label: "Front" },
+        { value: "back", label: "Back" }
+      ];
+    }
+
+    function renderSkylightsUi(state) {
+      var skylights = getSkylightsFromState(state);
+      var faces = getFacesForRoofStyle(state);
+      var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+
+      // Update both count badges
+      var countText = "(" + skylights.length + ")";
+      if (skylightsCountRoofEl) skylightsCountRoofEl.textContent = countText;
+      if (skylightsCountOpeningsEl) skylightsCountOpeningsEl.textContent = countText;
+
+      // Render into both containers
+      [skylightsListRoofEl, skylightsListOpeningsEl].forEach(function(container) {
+        if (!container) return;
+        container.innerHTML = "";
+
+        if (skylights.length === 0) {
+          container.innerHTML = '<div class="hint">(No skylights added)</div>';
+          return;
+        }
+
+        skylights.forEach(function(sky, idx) {
+          var card = document.createElement("div");
+          card.className = "openingCard";
+          card.style.cssText = "border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin:0 0 6px 0;background:#fafafa;";
+
+          // Header: title + remove button
+          var header = document.createElement("div");
+          header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;";
+          var title = document.createElement("strong");
+          title.textContent = "Skylight " + (idx + 1);
+          title.style.fontSize = "11px";
+          var removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.textContent = "✕";
+          removeBtn.style.cssText = "padding:0 4px;font-size:10px;cursor:pointer;border:1px solid #ccc;border-radius:2px;background:#fff;";
+          removeBtn.addEventListener("click", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              arr = arr.filter(function(_, j) { return j !== i; });
+              setSkylights(arr);
+            };
+          })(idx));
+          header.appendChild(title);
+          header.appendChild(removeBtn);
+          card.appendChild(header);
+
+          // Face selector (hidden for pent)
+          if (roofStyle !== "pent") {
+            var faceRow = document.createElement("div");
+            faceRow.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:4px;";
+            var faceLabel = document.createElement("span");
+            faceLabel.textContent = "Face:";
+            faceLabel.style.cssText = "font-size:10px;min-width:35px;";
+            var faceSelect = document.createElement("select");
+            faceSelect.style.cssText = "font-size:10px;padding:2px 4px;flex:1;";
+            faces.forEach(function(f) {
+              var opt = document.createElement("option");
+              opt.value = f.value;
+              opt.textContent = f.label;
+              if ((sky.face || "front") === f.value) opt.selected = true;
+              faceSelect.appendChild(opt);
+            });
+            faceSelect.addEventListener("change", (function(i) {
+              return function() {
+                var arr = getSkylightsFromState(store.getState());
+                if (arr[i]) { arr[i].face = this.value; setSkylights(arr); }
+              };
+            })(idx));
+            faceRow.appendChild(faceLabel);
+            faceRow.appendChild(faceSelect);
+            card.appendChild(faceRow);
+          }
+
+          // Position: X (from left wall) and Y (up from wall plate)
+          var posRow = document.createElement("div");
+          posRow.style.cssText = "display:flex;gap:6px;margin-bottom:4px;";
+
+          var xLabel = document.createElement("label");
+          xLabel.style.cssText = "font-size:10px;flex:1;";
+          xLabel.textContent = "X from left wall (mm) ";
+          var xInput = document.createElement("input");
+          xInput.type = "number";
+          xInput.min = "0";
+          xInput.step = "10";
+          xInput.value = sky.x_mm || 500;
+          xInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          xInput.addEventListener("change", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) { arr[i].x_mm = parseInt(this.value) || 0; setSkylights(arr); }
+            };
+          })(idx));
+          xLabel.appendChild(xInput);
+          posRow.appendChild(xLabel);
+
+          var yLabel = document.createElement("label");
+          yLabel.style.cssText = "font-size:10px;flex:1;";
+          yLabel.textContent = "Y up from plate (mm) ";
+          var yInput = document.createElement("input");
+          yInput.type = "number";
+          yInput.min = "0";
+          yInput.step = "10";
+          yInput.value = sky.y_mm || 300;
+          yInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          yInput.addEventListener("change", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) { arr[i].y_mm = parseInt(this.value) || 0; setSkylights(arr); }
+            };
+          })(idx));
+          yLabel.appendChild(yInput);
+          posRow.appendChild(yLabel);
+          card.appendChild(posRow);
+
+          // Size: width and height
+          var sizeRow = document.createElement("div");
+          sizeRow.style.cssText = "display:flex;gap:6px;";
+
+          var wLabel = document.createElement("label");
+          wLabel.style.cssText = "font-size:10px;flex:1;";
+          wLabel.textContent = "Width (mm) ";
+          var wInput = document.createElement("input");
+          wInput.type = "number";
+          wInput.min = "100";
+          wInput.step = "10";
+          wInput.value = sky.width_mm || 600;
+          wInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          wInput.addEventListener("change", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) { arr[i].width_mm = Math.max(100, parseInt(this.value) || 600); setSkylights(arr); }
+            };
+          })(idx));
+          wLabel.appendChild(wInput);
+          sizeRow.appendChild(wLabel);
+
+          var hLabel = document.createElement("label");
+          hLabel.style.cssText = "font-size:10px;flex:1;";
+          hLabel.textContent = "Height (mm) ";
+          var hInput = document.createElement("input");
+          hInput.type = "number";
+          hInput.min = "100";
+          hInput.step = "10";
+          hInput.value = sky.height_mm || 800;
+          hInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
+          hInput.addEventListener("change", (function(i) {
+            return function() {
+              var arr = getSkylightsFromState(store.getState());
+              if (arr[i]) { arr[i].height_mm = Math.max(100, parseInt(this.value) || 800); setSkylights(arr); }
+            };
+          })(idx));
+          hLabel.appendChild(hInput);
+          sizeRow.appendChild(hLabel);
+          card.appendChild(sizeRow);
+
+          container.appendChild(card);
+        });
+      });
+    }
+
+    function addSkylight() {
+      var s = store.getState();
+      var arr = getSkylightsFromState(s).slice();
+      var style = (s && s.roof && s.roof.style) ? s.roof.style : "apex";
+      var defaultFace = (style === "pent") ? "pent" : "front";
+      arr.push({
+        id: "sky" + (__skylightSeq++),
+        enabled: true,
+        face: defaultFace,
+        x_mm: 500,
+        y_mm: 300,
+        width_mm: 600,
+        height_mm: 800
+      });
+      setSkylights(arr);
+    }
+
+    function removeAllSkylights() {
+      setSkylights([]);
+    }
+
+    // Wire add buttons (both sections call same function)
+    if (addSkylightBtnRoofEl) addSkylightBtnRoofEl.addEventListener("click", addSkylight);
+    if (addSkylightBtnOpeningsEl) addSkylightBtnOpeningsEl.addEventListener("click", addSkylight);
+    if (removeAllSkylightsBtnRoofEl) removeAllSkylightsBtnRoofEl.addEventListener("click", removeAllSkylights);
+    if (removeAllSkylightsBtnOpeningsEl) removeAllSkylightsBtnOpeningsEl.addEventListener("click", removeAllSkylights);
+
+    // Subscribe to state changes to re-render skylight UI
+    store.subscribe(function(s) { renderSkylightsUi(s); });
+
+    // Initial render
+    renderSkylightsUi(store.getState());
+
+    // ==================== END SKYLIGHT HANDLERS ====================
+
     // ==================== RELATIVE OPENING POSITIONING (Card #111) ====================
     // Track previous dimensions to detect changes and reposition openings proportionally
     var __prevDimW = null;
