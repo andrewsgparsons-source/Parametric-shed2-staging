@@ -66,6 +66,7 @@ import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
+import * as Skylights from "./elements/skylights.js";
 import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
 import { initViews } from "./views.js?_v=2";
@@ -2600,6 +2601,8 @@ if (getWallsEnabled(state)) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
+        // Build skylights on the roof (before shift, so they get shifted with roof meshes)
+        if (Skylights && typeof Skylights.build3D === "function") Skylights.build3D(roofState, ctx, undefined);
         shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
       }
 

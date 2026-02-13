@@ -59,7 +59,8 @@ export const DEFAULTS = {
     pent: {
       minHeight_mm: 2300,
       maxHeight_mm: 2500
-    }
+    },
+    skylights: []  // Array of skylight objects: { id, enabled, face, x_mm, y_mm, width_mm, height_mm }
   },
   walls: {
     variant: "basic",
