@@ -7224,8 +7224,8 @@ function parseOverhangInput(val) {
     if (removeAllSkylightsBtnRoofEl) removeAllSkylightsBtnRoofEl.addEventListener("click", removeAllSkylights);
     if (removeAllSkylightsBtnOpeningsEl) removeAllSkylightsBtnOpeningsEl.addEventListener("click", removeAllSkylights);
 
-    // Subscribe to state changes to re-render skylight UI
-    store.subscribe(function(s) { renderSkylightsUi(s); });
+    // Listen for state changes to re-render skylight UI
+    store.onChange(function(s) { renderSkylightsUi(s); });
 
     // Initial render
     renderSkylightsUi(store.getState());
