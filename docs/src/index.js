@@ -66,8 +66,9 @@ import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
+import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
-import { initViews } from "./views.js";
+import { initViews } from "./views.js?_v=2";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";
@@ -174,6 +175,71 @@ function updateOpeningsBOM(state) {
   }
 }
 
+/**
+ * Update the Shelving BOM table
+ */
+function updateShelvingBOM(state) {
+  var shelvingBom = (Shelving && typeof Shelving.updateBOM === "function") ? Shelving.updateBOM(state) : { sections: [] };
+  var sections = (shelvingBom && shelvingBom.sections) ? shelvingBom.sections : [];
+
+  var tbody = $("shelvingBomTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  // Flatten all rows from all sections
+  var allRows = [];
+  for (var s = 0; s < sections.length; s++) {
+    var sec = sections[s];
+    if (sec && sec.title) {
+      // Add section header row
+      allRows.push({ isHeader: true, title: sec.title });
+    }
+    var rows = (sec && sec.rows) ? sec.rows : [];
+    for (var r = 0; r < rows.length; r++) {
+      allRows.push(rows[r]);
+    }
+  }
+
+  if (allRows.length === 0) {
+    var emptyRow = document.createElement("tr");
+    var emptyCell = document.createElement("td");
+    emptyCell.colSpan = 6;
+    emptyCell.textContent = "No shelves configured.";
+    emptyRow.appendChild(emptyCell);
+    tbody.appendChild(emptyRow);
+    return;
+  }
+
+  for (var i = 0; i < allRows.length; i++) {
+    var row = allRows[i];
+    var tr = document.createElement("tr");
+
+    if (row.isHeader) {
+      var th = document.createElement("td");
+      th.colSpan = 6;
+      th.style.fontWeight = "bold";
+      th.style.paddingTop = "12px";
+      th.textContent = row.title;
+      tr.appendChild(th);
+    } else {
+      var vals = [
+        row.item || "",
+        String(row.qty || ""),
+        row.section || "",
+        String(row.length_mm || ""),
+        row.material || "",
+        row.notes || ""
+      ];
+      for (var v = 0; v < vals.length; v++) {
+        var td = document.createElement("td");
+        td.textContent = vals[v];
+        tr.appendChild(td);
+      }
+    }
+    tbody.appendChild(tr);
+  }
+}
+
 var WALL_OVERHANG_MM = 25;
 var WALL_RISE_MM = 168;
 
@@ -265,10 +331,12 @@ function ensureRequiredDomScaffolding() {
   var wallsPage = $("wallsBomPage") || ensureEl("div", "wallsBomPage", document.body);
   var roofPage = $("roofBomPage") || ensureEl("div", "roofBomPage", document.body);
   var openingsPage = $("openingsBomPage") || ensureEl("div", "openingsBomPage", document.body);
+  var shelvingPage = $("shelvingBomPage") || ensureEl("div", "shelvingBomPage", document.body);
 
   // Make sure they start hidden (view system will show/hide).
   if (bomPage && bomPage.style && bomPage.style.display === "") bomPage.style.display = "none";
   if (wallsPage && wallsPage.style && wallsPage.style.display === "") wallsPage.style.display = "none";
+  if (shelvingPage && shelvingPage.style && shelvingPage.style.display === "") shelvingPage.style.display = "none";
   if (roofPage && roofPage.style && roofPage.style.display === "") roofPage.style.display = "none";
   if (openingsPage && openingsPage.style && openingsPage.style.display === "") openingsPage.style.display = "none";
 
@@ -560,6 +628,12 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var addDividerBtnEl = $("addDividerBtn");
     var removeAllDividersBtnEl = $("removeAllDividersBtn");
     var dividersListEl = $("dividersList");
+
+    // Shelving controls
+    var addShelfBtnEl = $("addShelfBtn");
+    var removeAllShelvesBtnEl = $("removeAllShelvesBtn");
+    var shelvesListEl = $("shelvesList");
+    var shelfSeq = 1;
 
     var instanceSelectEl = $("instanceSelect");
     var saveInstanceBtnEl = $("saveInstanceBtn");
@@ -1618,12 +1692,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (engine && typeof engine.resize === "function") engine.resize(); } catch (e) {}
       try { if (camera && typeof camera.attachControl === "function") camera.attachControl(canvas, true); } catch (e) {}
@@ -1638,12 +1715,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "block");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, false);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -1657,12 +1737,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "block");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "none");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, false);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, true);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -1676,12 +1759,15 @@ function applyOpeningsVisibility(scene, on) {
       var bomPage = $("bomPage");
       var wallsPage = $("wallsBomPage");
       var roofPage = $("roofBomPage");
+      var shelvingPage = $("shelvingBomPage");
       setDisplay(bomPage, "none");
       setDisplay(wallsPage, "none");
       setDisplay(roofPage, "block");
+      setDisplay(shelvingPage, "none");
       setAriaHidden(bomPage, true);
       setAriaHidden(wallsPage, true);
       setAriaHidden(roofPage, false);
+      setAriaHidden(shelvingPage, true);
 
       try { if (camera && typeof camera.detachControl === "function") camera.detachControl(); } catch (e) {}
     }
@@ -2363,6 +2449,7 @@ if (getWallsEnabled(state)) {
         // Build door and window geometry into openings (always build regardless of wall visibility)
         if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
         if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
+        if (Shelving && typeof Shelving.build3D === "function") Shelving.build3D(wallState, ctx, undefined);
         } // end shed mode
 
         var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
@@ -2399,6 +2486,7 @@ if (getWallsEnabled(state)) {
 
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
         updateOpeningsBOM(state);
+        updateShelvingBOM(state);
 
        // Apply all visibility settings
         try {
@@ -2497,9 +2585,10 @@ if (getWallsEnabled(state)) {
         shiftDividerMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
       }
 
-      // Build doors/windows
+      // Build doors/windows/shelving
       if (Doors && typeof Doors.build3D === "function") Doors.build3D(wallState, ctx, undefined);
       if (Windows && typeof Windows.build3D === "function") Windows.build3D(wallState, ctx, undefined);
+      if (Shelving && typeof Shelving.build3D === "function") Shelving.build3D(wallState, ctx, undefined);
 
       // Build main building roof
       var roofStyle = (state && state.roof && state.roof.style) ? String(state.roof.style) : "apex";
@@ -2544,6 +2633,7 @@ if (getWallsEnabled(state)) {
       }
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
       updateOpeningsBOM(state);
+      updateShelvingBOM(state);
 
       // Apply all visibility settings to main building AND attachments
       try {
@@ -4373,6 +4463,7 @@ if (state && state.overhang) {
 
         renderDoorsUi(state, dv);
         renderWindowsUi(state, wv);
+        renderShelvingUi(state);
         updateOpeningsCounts(state);
         // Update building type UI visibility
         if (typeof updateBuildingTypeUI === "function") {
@@ -4390,9 +4481,12 @@ if (state && state.overhang) {
       var dc = document.getElementById("doorsCount");
       var wc = document.getElementById("windowsCount");
       var ic = document.getElementById("dividersCount");
+      var shelves = Array.isArray(state.shelving) ? state.shelving : [];
       if (dc) dc.textContent = "(" + doors.length + ")";
       if (wc) wc.textContent = "(" + wins.length + ")";
       if (ic) ic.textContent = "(" + dividers.length + ")";
+      var sc = document.getElementById("shelvingCount");
+      if (sc) sc.textContent = "(" + shelves.length + ")";
     }
 
     // Expose a function to refresh dynamic controls after profile changes
@@ -6733,6 +6827,151 @@ function parseOverhangInput(val) {
 
     // ==================== END DIVIDER HANDLERS ====================
 
+    // ==================== SHELVING HANDLERS ====================
+
+    function getShelvingFromState(s) {
+      return Array.isArray(s && s.shelving) ? s.shelving.slice() : [];
+    }
+
+    function setShelving(arr) {
+      store.setState({ shelving: arr });
+    }
+
+    function renderShelvingUi(state) {
+      if (!shelvesListEl) return;
+      var shelves = getShelvingFromState(state);
+      shelvesListEl.innerHTML = "";
+
+      if (shelves.length === 0) {
+        shelvesListEl.innerHTML = '<div class="hint">(No shelves added)</div>';
+        return;
+      }
+
+      shelves.forEach(function(shelf, idx) {
+        var item = document.createElement("div");
+        item.className = "openingCard";
+        item.style.cssText = "border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin:0 0 6px 0;background:#fafafa;";
+
+        // Header row with title and remove button
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;";
+        var title = document.createElement("strong");
+        title.textContent = "Shelf " + (idx + 1);
+        title.style.fontSize = "11px";
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "✕";
+        removeBtn.style.cssText = "padding:0 4px;font-size:10px;cursor:pointer;border:1px solid #ccc;border-radius:2px;background:#fff;";
+        removeBtn.addEventListener("click", (function(i) {
+          return function() {
+            var arr = getShelvingFromState(store.getState());
+            arr.splice(i, 1);
+            setShelving(arr);
+          };
+        })(idx));
+        header.appendChild(title);
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+
+        // Wall select
+        var wallRow = document.createElement("div");
+        wallRow.className = "row";
+        wallRow.style.cssText = "margin-bottom:3px;";
+        var wallLabel = document.createElement("label");
+        wallLabel.style.fontSize = "10px";
+        wallLabel.textContent = "Wall ";
+        var wallSel = document.createElement("select");
+        wallSel.style.cssText = "font-size:10px;padding:1px 2px;";
+        ["back", "front", "left", "right"].forEach(function(w) {
+          var opt = document.createElement("option");
+          opt.value = w;
+          opt.textContent = w.charAt(0).toUpperCase() + w.slice(1);
+          if (shelf.wall === w) opt.selected = true;
+          wallSel.appendChild(opt);
+        });
+        wallSel.addEventListener("change", (function(i) {
+          return function(e) {
+            var arr = getShelvingFromState(store.getState());
+            arr[i] = Object.assign({}, arr[i], { wall: e.target.value });
+            setShelving(arr);
+          };
+        })(idx));
+        wallLabel.appendChild(wallSel);
+        wallRow.appendChild(wallLabel);
+        item.appendChild(wallRow);
+
+        // Numeric inputs: position along wall, height, length, depth
+        var fields = [
+          { key: "x_mm", label: "Position along wall (mm)", min: 0, max: 8000, step: 50, val: shelf.x_mm || 0 },
+          { key: "y_mm", label: "Height from floor (mm)", min: 200, max: 2500, step: 50, val: shelf.y_mm || 1200 },
+          { key: "length_mm", label: "Length (mm)", min: 200, max: 4000, step: 50, val: shelf.length_mm || 800 },
+          { key: "depth_mm", label: "Depth (mm)", min: 100, max: 600, step: 25, val: shelf.depth_mm || 300 }
+        ];
+
+        fields.forEach(function(f) {
+          var row = document.createElement("div");
+          row.className = "row";
+          row.style.cssText = "margin-bottom:2px;";
+          var lbl = document.createElement("label");
+          lbl.style.fontSize = "10px";
+          lbl.textContent = f.label + " ";
+          var inp = document.createElement("input");
+          inp.type = "number";
+          inp.min = f.min;
+          inp.max = f.max;
+          inp.step = f.step;
+          inp.value = f.val;
+          inp.style.cssText = "width:70px;font-size:10px;padding:1px 3px;";
+          inp.addEventListener("change", (function(i, key) {
+            return function(e) {
+              var v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+              var arr = getShelvingFromState(store.getState());
+              var patch = {};
+              patch[key] = v;
+              arr[i] = Object.assign({}, arr[i], patch);
+              setShelving(arr);
+            };
+          })(idx, f.key));
+          lbl.appendChild(inp);
+          row.appendChild(lbl);
+          item.appendChild(row);
+        });
+
+        shelvesListEl.appendChild(item);
+      });
+    }
+
+    // Add Shelf button handler
+    if (addShelfBtnEl) {
+      addShelfBtnEl.addEventListener("click", function() {
+        var s = store.getState();
+        var shelves = getShelvingFromState(s);
+
+        shelves.push({
+          wall: "back",
+          side: "inside",
+          x_mm: 200,
+          y_mm: 1200,
+          length_mm: 800,
+          depth_mm: 300,
+          thickness_mm: 25,
+          bracket_size_mm: 250,
+          enabled: true
+        });
+
+        setShelving(shelves);
+      });
+    }
+
+    // Remove All Shelves button handler
+    if (removeAllShelvesBtnEl) {
+      removeAllShelvesBtnEl.addEventListener("click", function() {
+        setShelving([]);
+      });
+    }
+
+    // ==================== END SHELVING HANDLERS ====================
+
     // ==================== RELATIVE OPENING POSITIONING (Card #111) ====================
     // Track previous dimensions to detect changes and reposition openings proportionally
     var __prevDimW = null;
@@ -6809,6 +7048,7 @@ function parseOverhangInput(val) {
       syncUiFromState(s, v);
       applyWallHeightUiLock(s);
       renderDividersUi(s, v);
+      renderShelvingUi(s);
       updateOpeningsCounts(s);
       console.log("[store.onChange] About to call render()");
       render(s);

@@ -52,6 +52,7 @@
               <option value="base">Base List</option>
               <option value="roof">Roof List</option>
               <option value="openings">Openings List</option>
+              <option value="shelving">Shelving List</option>
             </select>
             <button type="button" class="panel-btn" id="panelMaximizeBtn" title="Maximize panel">⛶</button>
           </div>
@@ -186,6 +187,18 @@
                       <button id="removeAllDividersBtn" type="button">Remove All</button>
                     </div>
                     <div id="dividersList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="shelvingGroup">
+                  <summary class="openingsGroupSummary">Shelving <span id="shelvingCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="shelvingSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add shelves to interior walls</div>
+                    <div class="row">
+                      <button id="addShelfBtn" type="button">+ Add Shelf</button>
+                      <button id="removeAllShelvesBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="shelvesList"></div>
                   </div>
                 </details>
               </div>
@@ -797,6 +810,27 @@
     </div>
   </div>
 
+  <!-- View: Shelving Cutting List -->
+  <div id="shelvingBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Shelving Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">&larr; Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Shelving &mdash; Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>Section (mm)</th><th>Length (mm)</th><th>Material</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="shelvingBomTable">
+          <tr><td colspan="6">No shelves configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script type="module">
     (function () {
@@ -912,7 +946,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=11"></script>
+  <script type="module" src="./src/index.js?_v=14"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Mobile UX initialization -->

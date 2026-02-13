@@ -117,6 +117,8 @@ export const DEFAULTS = {
     },
     attachments: []  // Array of attachment objects (see ATTACHMENT_DEFAULTS below)
   },
+  // Shelving (array of shelf objects, see elements/shelving.js for schema)
+  shelving: [],
   // Internal divider panels
   dividers: {
     items: []  // Array of divider objects
