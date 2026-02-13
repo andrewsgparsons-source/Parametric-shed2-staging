@@ -6898,6 +6898,30 @@ function parseOverhangInput(val) {
         })(idx));
         wallLabel.appendChild(wallSel);
         wallRow.appendChild(wallLabel);
+
+        // Side select (inside/outside)
+        var sideLabel = document.createElement("label");
+        sideLabel.style.cssText = "font-size:10px;margin-left:8px;";
+        sideLabel.textContent = "Side ";
+        var sideSel = document.createElement("select");
+        sideSel.style.cssText = "font-size:10px;padding:1px 2px;";
+        ["inside", "outside"].forEach(function(s) {
+          var opt = document.createElement("option");
+          opt.value = s;
+          opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+          if ((shelf.side || "inside") === s) opt.selected = true;
+          sideSel.appendChild(opt);
+        });
+        sideSel.addEventListener("change", (function(i) {
+          return function(e) {
+            var arr = getShelvingFromState(store.getState());
+            arr[i] = Object.assign({}, arr[i], { side: e.target.value });
+            setShelving(arr);
+          };
+        })(idx));
+        sideLabel.appendChild(sideSel);
+        wallRow.appendChild(sideLabel);
+
         item.appendChild(wallRow);
 
         // Numeric inputs: position along wall, height, length, depth
