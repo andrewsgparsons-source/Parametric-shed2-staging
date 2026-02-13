@@ -27,14 +27,22 @@ const SURFACE_OFFSET_MM = 5; // Lift above roof surface to prevent z-fighting
  * @param {Object}  state          – The building state
  * @param {Object}  ctx            – { scene, materials }
  * @param {Object} [sectionCtx]    – Optional section context { sectionId, position }
+ * @param {Object} [roofShift]     – { x, y, z } mm offset already applied to roof meshes
  */
-export function build3D(state, ctx, sectionCtx) {
+export function build3D(state, ctx, sectionCtx, roofShift) {
   const { scene, materials } = ctx || {};
   if (!scene) return;
 
   const sectionId  = sectionCtx?.sectionId;
   const sectionPos = sectionCtx?.position || { x: 0, y: 0, z: 0 };
   const meshPrefix = sectionId ? `section-${sectionId}-` : "";
+
+  // Find the roof-root TransformNode so skylights can be parented to it
+  // (roof meshes live in roof-root local space, not world space)
+  const roofRootName = meshPrefix ? `${meshPrefix}roof-root` : "roof-root";
+  const roofRoot = (scene.transformNodes || []).find(
+    n => n.name === roofRootName
+  ) || null;
 
   // ── Dispose previous skylight meshes ──
   const prefix = meshPrefix + "roof-skylight-";
@@ -79,13 +87,13 @@ export function build3D(state, ctx, sectionCtx) {
   // ── Build per roof style ──
   if (roofStyle === "apex") {
     buildApexSkylights(active, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm);
+      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot);
   } else if (roofStyle === "pent") {
     buildPentSkylights(active, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm);
+      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot);
   } else if (roofStyle === "hipped") {
     buildHippedSkylights(active, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm);
+      frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot);
   }
 }
 
@@ -94,7 +102,7 @@ export function build3D(state, ctx, sectionCtx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm) {
+    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot) {
 
   const A_mm = roofW_mm;   // span axis (X)
   const B_mm = roofD_mm;   // ridge axis (Z)
@@ -112,6 +120,23 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
 
   const slopeAng = Math.atan2(rise_mm, halfSpan);
   const slopeLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
+
+  // Normal offset from rafter slope baseline to roof outer surface.
+  // In roof-root local space, rafter slopes start above Y=0 (the tie beam
+  // sits at Y≈tieBeamDepth, and OSB/covering are stacked outward from there).
+  // The full perpendicular stack is: tieBeamDepth (projected onto slope normal)
+  // + rafterDepth + osbClear + osbThk + coveringThk + gap.
+  // In practice, the tie beam centre Y ≈ 190mm in roof-root local space for
+  // standard timber, so we account for that as a Y-direction offset on the slope.
+  const rafterD = Number(state.frame?.thickness_mm) || Number(CONFIG.frame?.thickness_mm) || 50;
+  const frameD  = Number(state.frame?.depth_mm)     || Number(CONFIG.frame?.depth_mm)     || 75;
+  const COVERING_THK = 2;
+  const OSB_CLEAR = 1;
+  // Perpendicular offset from slope centreline to above outer surface
+  const normalOffset_mm = rafterD + OSB_CLEAR + OSB_THK + COVERING_THK + SURFACE_OFFSET_MM;
+  // Additional Y offset to match where tie beams / slope actually starts in roof-root space
+  // (tie beams are not at Y=0, they sit at approximately tieBeamCentreY = frameD/2 + wallPlate stack)
+  const tieBaseY_mm = frameD * 2 + rafterD / 2; // empirical: ~175-200mm for standard 75x50 timber
 
   skylights.forEach((sky, idx) => {
     const face = sky.face || "front";
@@ -160,13 +185,18 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
     const cHoriz = centerAlongSlope * Math.cos(slopeAng);
     const cVert  = centerAlongSlope * Math.sin(slopeAng);
 
+    // Offset perpendicular to slope surface (pushes skylight outward above OSB)
+    // Normal direction: (-sin(slopeAng), cos(slopeAng)) for front, (sin, cos) for back
+    const nX = (face === "front") ? -Math.sin(slopeAng) : Math.sin(slopeAng);
+    const nY = Math.cos(slopeAng);
+
     let cx, cy;
     if (face === "front") {
-      cx = cHoriz;
-      cy = cVert;
+      cx = cHoriz + nX * normalOffset_mm;
+      cy = cVert  + nY * normalOffset_mm + tieBaseY_mm;
     } else {
-      cx = A_mm - cHoriz;
-      cy = cVert;
+      cx = A_mm - cHoriz + nX * normalOffset_mm;
+      cy = cVert + nY * normalOffset_mm + tieBaseY_mm;
     }
 
     const cz = roofLocalZ + skyW_mm / 2;
@@ -177,7 +207,7 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
     const tiltAngle = (face === "front") ? slopeAng : -slopeAng;
 
     buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, face, "apex");
+      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, face, "apex", roofRoot);
   });
 }
 
@@ -186,7 +216,7 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
 // ════════════════════════════════════════════════════════════════════════════
 
 function buildPentSkylights(skylights, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm) {
+    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot) {
 
   const A_mm = roofW_mm;   // slope runs along width (X)
   const B_mm = roofD_mm;
@@ -224,7 +254,7 @@ function buildPentSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
     const tiltAngle = -slopeAng;
 
     buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, "pent", "pent");
+      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, "pent", "pent", roofRoot);
   });
 }
 
@@ -233,7 +263,7 @@ function buildPentSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
 // ════════════════════════════════════════════════════════════════════════════
 
 function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
-    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm) {
+    frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot) {
 
   // Hipped roof: main slopes (front/back) + hip triangles (left/right)
   // Main slopes are like apex but with shortened ridge
@@ -284,7 +314,7 @@ function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, section
       const tiltAngle = (face === "front") ? slopeAng : -slopeAng;
 
       buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-        cx, cy, roofLocalZ, skyW_mm, skyH_mm, tiltAngle, face, "hipped");
+        cx, cy, roofLocalZ, skyW_mm, skyH_mm, tiltAngle, face, "hipped", roofRoot);
 
     } else if (face === "left" || face === "right") {
       // Hip triangle slopes
@@ -310,7 +340,7 @@ function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, section
 
       // Hip skylights are rotated 90° around Y vs main slopes
       buildSkylightMeshHip(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-        roofLocalX, cVert, cz, skyW_mm, skyH_mm, tiltAngle, face);
+        roofLocalX, cVert, cz, skyW_mm, skyH_mm, tiltAngle, face, roofRoot);
     }
   });
 }
@@ -324,7 +354,7 @@ function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, section
  * The skylight frame lies on the slope surface, tilted by tiltAngle around the Z axis.
  */
 function buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-    cx_mm, cy_mm, cz_mm, width_mm, height_mm, tiltAngle, face, roofType) {
+    cx_mm, cy_mm, cz_mm, width_mm, height_mm, tiltAngle, face, roofType, roofRoot) {
 
   const name = `${meshPrefix}roof-skylight-${idx}`;
   const meta = { dynamic: true, sectionId: sectionId || null, skylight: true, face, roofType };
@@ -332,11 +362,14 @@ function buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, m
   // Parent transform — positioned in roof-local coordinates
   const group = new BABYLON.TransformNode(`${name}-group`, scene);
   group.metadata = meta;
+  // Position in roof-local space (same coordinate system as OSB panels, trusses, etc.)
   group.position = new BABYLON.Vector3(
     (sectionPos.x + cx_mm) / 1000,
     (sectionPos.y + cy_mm) / 1000,
     (sectionPos.z + cz_mm) / 1000
   );
+  // Parent to roof-root so skylight inherits the roof's world position
+  if (roofRoot) group.parent = roofRoot;
 
   // Tilt to match roof slope (rotate around Z axis for main slopes)
   // Front slope: positive tilt (leans back)
@@ -398,7 +431,7 @@ function buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, m
  * These are rotated 90° vs main slopes — tilt is around X axis.
  */
 function buildSkylightMeshHip(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-    cx_mm, cy_mm, cz_mm, width_mm, height_mm, tiltAngle, face) {
+    cx_mm, cy_mm, cz_mm, width_mm, height_mm, tiltAngle, face, roofRoot) {
 
   const name = `${meshPrefix}roof-skylight-${idx}`;
   const meta = { dynamic: true, sectionId: sectionId || null, skylight: true, face, roofType: "hipped" };
@@ -410,6 +443,7 @@ function buildSkylightMeshHip(scene, sky, idx, meshPrefix, sectionPos, sectionId
     (sectionPos.y + cy_mm) / 1000,
     (sectionPos.z + cz_mm) / 1000
   );
+  if (roofRoot) group.parent = roofRoot;
 
   // Hip slopes tilt around X axis
   group.rotation = new BABYLON.Vector3(tiltAngle, 0, 0);
@@ -484,12 +518,12 @@ function ensureSkylightMaterials(scene) {
   frameMat.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15);
   scene._skylightMaterials.frame = frameMat;
 
-  // Glass — blue-tinted, semi-transparent
+  // Glass — light blue-tinted, semi-transparent (visible against dark roof)
   const glassMat = new BABYLON.StandardMaterial("skylightGlassMat", scene);
-  glassMat.diffuseColor = new BABYLON.Color3(0.55, 0.70, 0.82);
-  glassMat.alpha = 0.45;
-  glassMat.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
-  glassMat.specularPower = 64;
+  glassMat.diffuseColor = new BABYLON.Color3(0.4, 0.7, 0.9);
+  glassMat.alpha = 0.6;
+  glassMat.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+  glassMat.specularPower = 32;
   scene._skylightMaterials.glass = glassMat;
 }
 
