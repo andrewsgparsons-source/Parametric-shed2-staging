@@ -22,6 +22,73 @@ const GLASS_THK_MM  = 10;   // Glass pane thickness
 const SURFACE_OFFSET_MM = 5; // Lift above roof surface to prevent z-fighting
 
 /**
+ * Get skylight opening rectangles in slope-local coordinates for the roof builder.
+ * Used by roof.js to split OSB/covering panels around skylight openings.
+ *
+ * Coordinate system matches the OSB builder:
+ *   a = distance down slope from ridge (0 = ridge edge)
+ *   b = distance along ridge from front edge (0 = front verge)
+ *
+ * @param {Object} state - Building state
+ * @param {string} side  - "L" (front/left slope) or "R" (back/right slope)
+ * @returns {Array<{a0_mm: number, b0_mm: number, aLen_mm: number, bLen_mm: number}>}
+ */
+export function getSkylightOpenings(state, side) {
+  const skylights = Array.isArray(state.roof?.skylights) ? state.roof.skylights : [];
+  const active = skylights.filter(s => s && s.enabled !== false);
+  if (active.length === 0) return [];
+
+  const roofStyle = state.roof?.style || "apex";
+  if (roofStyle !== "apex") return []; // TODO: support pent/hipped later
+
+  const dims = resolveDims(state);
+  const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+  const frameW_mm = Math.max(1, Math.floor(Number(dims?.frame?.w_mm ?? state?.w ?? 1)));
+  const roofW_mm  = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
+  const f_mm = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+
+  const apex = state.roof?.apex || {};
+  const eavesH = Number(apex.heightToEaves_mm || apex.eavesHeight_mm || apex.eaves_mm) || 1850;
+  const crestH = Number(apex.heightToCrest_mm || apex.crestHeight_mm || apex.crest_mm) || 2200;
+  const halfSpan = roofW_mm / 2;
+  const OSB_THK = 18;
+  const delta = Math.max(OSB_THK, Math.floor(crestH - eavesH));
+  const rise_mm = solveRise(delta, halfSpan, OSB_THK);
+  const rafterLen_mm = Math.round(Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm));
+
+  const openings = [];
+
+  for (const sky of active) {
+    const face = sky.face || "front";
+    // Front slope = "L", Back slope = "R"
+    if (side === "L" && face !== "front") continue;
+    if (side === "R" && face !== "back") continue;
+
+    const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));     // from left wall along eaves
+    const skyY_mm = Math.max(0, Math.floor(sky.y_mm || 300));    // up from wall plate along slope
+    const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));  // width (along eaves / b-axis)
+    const skyH_mm = Math.max(100, Math.floor(sky.height_mm || 800)); // height (along slope / a-axis)
+
+    // Convert to slope-local coords:
+    // b = front overhang + distance from left wall
+    const b0 = f_mm + skyX_mm;
+    // a = distance from ridge down slope
+    // skyY is distance UP from eaves, so distance from ridge = rafterLen - skyY - skyH
+    // But the skylight TOP edge (closest to ridge) is at skyY + skyH from eaves
+    const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm));
+
+    openings.push({
+      a0_mm: a0,
+      b0_mm: b0,
+      aLen_mm: skyH_mm,
+      bLen_mm: skyW_mm
+    });
+  }
+
+  return openings;
+}
+
+/**
  * Build all skylight meshes for the current building state.
  *
  * @param {Object}  state          – The building state

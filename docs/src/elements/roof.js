@@ -40,6 +40,7 @@
 
 import { CONFIG, resolveDims } from "../params.js";
 import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=7";
+import { getSkylightOpenings } from "./skylights.js?_v=8";
 
 /**
  * Builds the 3D roof geometry for the current building state.
@@ -1215,6 +1216,80 @@ function computeOsbPiecesForSlope(extA, extB, sheetA, sheetB) {
 
   return all;
 }
+/**
+ * Split a rectangular panel around rectangular holes.
+ * Returns an array of sub-rectangles that tile the original rect minus the holes.
+ * Uses a simple 2D grid decomposition: collects all X and Y edges from the rect
+ * and all holes, creates a grid, and keeps cells that don't overlap any hole.
+ *
+ * @param {{a0: number, b0: number, aLen: number, bLen: number}} rect - Original panel
+ * @param {Array<{a0_mm: number, b0_mm: number, aLen_mm: number, bLen_mm: number}>} holes - Holes to cut
+ * @returns {Array<{a0_mm: number, b0_mm: number, aLen_mm: number, bLen_mm: number, kind: string}>}
+ */
+function splitRectAroundHoles(rect, holes) {
+  if (!holes || holes.length === 0) return [rect];
+
+  const ra0 = rect.a0_mm, ra1 = rect.a0_mm + rect.aLen_mm;
+  const rb0 = rect.b0_mm, rb1 = rect.b0_mm + rect.bLen_mm;
+
+  // Collect unique sorted edges along A axis
+  const aEdges = [ra0, ra1];
+  // Collect unique sorted edges along B axis
+  const bEdges = [rb0, rb1];
+
+  for (const h of holes) {
+    const ha0 = Math.max(ra0, h.a0_mm);
+    const ha1 = Math.min(ra1, h.a0_mm + h.aLen_mm);
+    const hb0 = Math.max(rb0, h.b0_mm);
+    const hb1 = Math.min(rb1, h.b0_mm + h.bLen_mm);
+    if (ha0 < ha1 && hb0 < hb1) {
+      aEdges.push(ha0, ha1);
+      bEdges.push(hb0, hb1);
+    }
+  }
+
+  // Deduplicate and sort
+  const sortUniq = arr => [...new Set(arr)].sort((a, b) => a - b);
+  const aS = sortUniq(aEdges);
+  const bS = sortUniq(bEdges);
+
+  const result = [];
+  const MIN_SIZE = 5; // Ignore tiny slivers
+
+  for (let ai = 0; ai < aS.length - 1; ai++) {
+    for (let bi = 0; bi < bS.length - 1; bi++) {
+      const ca0 = aS[ai], ca1 = aS[ai + 1];
+      const cb0 = bS[bi], cb1 = bS[bi + 1];
+      const cw = ca1 - ca0;
+      const ch = cb1 - cb0;
+      if (cw < MIN_SIZE || ch < MIN_SIZE) continue;
+
+      // Check if this cell overlaps any hole
+      let inHole = false;
+      const cellMidA = (ca0 + ca1) / 2;
+      const cellMidB = (cb0 + cb1) / 2;
+      for (const h of holes) {
+        if (cellMidA > h.a0_mm && cellMidA < h.a0_mm + h.aLen_mm &&
+            cellMidB > h.b0_mm && cellMidB < h.b0_mm + h.bLen_mm) {
+          inHole = true;
+          break;
+        }
+      }
+      if (!inHole) {
+        result.push({
+          a0_mm: ca0,
+          b0_mm: cb0,
+          aLen_mm: cw,
+          bLen_mm: ch,
+          kind: "cut"
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
 function computeOsbPiecesNoStagger(A_mm, B_mm) {
   const A = Math.max(1, Math.floor(A_mm));
   const B = Math.max(1, Math.floor(B_mm));
@@ -1999,16 +2074,37 @@ if (roofParts.osb) {
       return mesh;
     }
     
-    // Create pieces for left slope
+    // Get skylight openings for each slope (empty array if no skylights)
+    let skyOpeningsL = [], skyOpeningsR = [];
+    try { skyOpeningsL = getSkylightOpenings(state, "L") || []; } catch(e) { /* safe fallback */ }
+    try { skyOpeningsR = getSkylightOpenings(state, "R") || []; } catch(e) { /* safe fallback */ }
+
+    // Create pieces for left slope (split around skylights if any)
+    let osbIdx = 0;
     for (let i = 0; i < osbPieces.length; i++) {
       const p = osbPieces[i];
-      createOsbPiece("L", i, p.a0_mm, p.b0_mm, p.aLen_mm, p.bLen_mm, p.kind);
+      if (skyOpeningsL.length > 0) {
+        const subPieces = splitRectAroundHoles(p, skyOpeningsL);
+        for (const sp of subPieces) {
+          createOsbPiece("L", osbIdx++, sp.a0_mm, sp.b0_mm, sp.aLen_mm, sp.bLen_mm, sp.kind || p.kind);
+        }
+      } else {
+        createOsbPiece("L", osbIdx++, p.a0_mm, p.b0_mm, p.aLen_mm, p.bLen_mm, p.kind);
+      }
     }
     
-// Create pieces for right slope
+    // Create pieces for right slope (split around skylights if any)
+    osbIdx = 0;
     for (let i = 0; i < osbPieces.length; i++) {
       const p = osbPieces[i];
-      createOsbPiece("R", i, p.a0_mm, p.b0_mm, p.aLen_mm, p.bLen_mm, p.kind);
+      if (skyOpeningsR.length > 0) {
+        const subPieces = splitRectAroundHoles(p, skyOpeningsR);
+        for (const sp of subPieces) {
+          createOsbPiece("R", osbIdx++, sp.a0_mm, sp.b0_mm, sp.aLen_mm, sp.bLen_mm, sp.kind || p.kind);
+        }
+      } else {
+        createOsbPiece("R", osbIdx++, p.a0_mm, p.b0_mm, p.aLen_mm, p.bLen_mm, p.kind);
+      }
     }
   }
 
@@ -2035,42 +2131,74 @@ if (roofParts.osb) {
     const coveringLen_mm = rafterLen_mm + RIDGE_OVERLAP_MM;  // down slope, extended at ridge
     const coveringWidth_mm = B_mm;        // along ridge
     
-    function createSlopeCovering(side) {
-      const sideSign = (side === "L") ? 1 : -1;  // L is on left (negative X normal), R on right
+    // Helper: create a covering piece at given slope-local coords
+    // a0 = distance from ridge down slope, b0 = along ridge from front
+    function createCoveringPiece(side, idx, a0, b0, aLen, bLen) {
       const rotZ = (side === "L") ? slopeAng : -slopeAng;
       const normalX = (side === "L") ? -sinT : sinT;
       const normalY = cosT;
-      
-// Mid-slope sample point for main panel positioning
-      // Shift toward ridge to account for the overlap extension
-      const sMid_mm = (rafterLen_mm / 2) - (RIDGE_OVERLAP_MM / 2);
-      const runMid_mm = Math.round(sMid_mm * cosT);
-      const dropMid_mm = Math.round(sMid_mm * sinT);
+
+      // Compute center position from piece's midpoint on slope
+      const aMid = a0 + aLen / 2;
+      const bMid = b0 + bLen / 2;
+      const s_mm = aMid;  // distance from ridge along slope
+      const runMid_mm = Math.round(s_mm * cosT);
+      const dropMid_mm = Math.round(s_mm * sinT);
       const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
-      
-      // Surface X at mid-slope
-      const xSurfMid_mm = (side === "L") 
+      const xSurfMid_mm = (side === "L")
         ? (halfSpan_mm - runMid_mm)
         : (halfSpan_mm + runMid_mm);
-      
-      // Center of covering panel (offset from surface along normal)
       const cx = xSurfMid_mm + normalX * coveringOutOffset_mm;
       const cy = ySurfMid_mm + normalY * coveringOutOffset_mm;
-      
-      // Main sloped panel
-      mkBoxCenteredLocal(
-        `${meshPrefix}roof-covering-${side}`,
-        coveringLen_mm,
+
+      const mesh = mkBoxCenteredLocal(
+        `${meshPrefix}roof-covering-${side}-${idx}`,
+        aLen,
         COVERING_THK_MM,
-        coveringWidth_mm,
+        bLen,
         cx,
         cy,
-        B_mm / 2,
+        bMid,
         roofRoot,
         coveringMat,
         { roof: "apex", part: "covering", side: side }
-      ).rotation = new BABYLON.Vector3(0, 0, rotZ);
+      );
+      mesh.rotation = new BABYLON.Vector3(0, 0, rotZ);
+      return mesh;
+    }
+
+    function createSlopeCovering(side) {
+      const normalX = (side === "L") ? -sinT : sinT;
+      const normalY = cosT;
+
+      // Get skylight openings for this slope
+      let skyOpenings = [];
+      try { skyOpenings = getSkylightOpenings(state, side) || []; } catch(e) { /* safe */ }
+
+      // Main covering: a from -RIDGE_OVERLAP to rafterLen, b from 0 to B
+      const mainRect = { a0_mm: -RIDGE_OVERLAP_MM, b0_mm: 0, aLen_mm: coveringLen_mm, bLen_mm: coveringWidth_mm };
+
+      if (skyOpenings.length > 0) {
+        // Split covering around skylight openings
+        const pieces = splitRectAroundHoles(mainRect, skyOpenings);
+        for (let pi = 0; pi < pieces.length; pi++) {
+          createCoveringPiece(side, pi, pieces[pi].a0_mm, pieces[pi].b0_mm, pieces[pi].aLen_mm, pieces[pi].bLen_mm);
+        }
+      } else {
+        // No skylights — single panel as before
+        createCoveringPiece(side, 0, -RIDGE_OVERLAP_MM, 0, coveringLen_mm, coveringWidth_mm);
+      }
       
+      // Compute midpoint values for fold-down positioning (unchanged from original)
+      const _sMid = (rafterLen_mm / 2) - (RIDGE_OVERLAP_MM / 2);
+      const _runMid = Math.round(_sMid * cosT);
+      const _dropMid = Math.round(_sMid * sinT);
+      const _ySurfMid = memberD_mm + (rise_mm - _dropMid);
+      const _xSurfMid = (side === "L") ? (halfSpan_mm - _runMid) : (halfSpan_mm + _runMid);
+      const cx = _xSurfMid + normalX * coveringOutOffset_mm;
+      const cy = _ySurfMid + normalY * coveringOutOffset_mm;
+      const rotZ = (side === "L") ? slopeAng : -slopeAng;
+
       // Eaves fold-down (at bottom/outer edge of slope - away from ridge)
       // Top of fold connects to outer edge of main panel
       {
