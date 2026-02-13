@@ -58,13 +58,138 @@ export function getSkylightOpenings(state, side) {
   if (active.length === 0) return [];
 
   const roofStyle = state.roof?.style || "apex";
-  if (roofStyle !== "apex") return []; // TODO: support pent/hipped later
-
   const dims = resolveDims(state);
   const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
   const frameW_mm = Math.max(1, Math.floor(Number(dims?.frame?.w_mm ?? state?.w ?? 1)));
+  const frameD_mm = Math.max(1, Math.floor(Number(dims?.frame?.d_mm ?? state?.d ?? 1)));
   const roofW_mm  = Math.max(1, Math.floor(Number(dims?.roof?.w_mm ?? frameW_mm)));
+  const roofD_mm  = Math.max(1, Math.floor(Number(dims?.roof?.d_mm ?? frameD_mm)));
+  const l_mm = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
   const f_mm = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+
+  // ── PENT ROOF ──
+  // Pent local coords: X = along slope (0 at eaves), Z = along depth (0 at front)
+  // OSB/covering are built flat in this space; roofRoot rotation handles the pitch.
+  // side = "pent" for pent roofs (single slope).
+  if (roofStyle === "pent") {
+    if (side !== "pent") return [];
+
+    const pent = state.roof?.pent || {};
+    // Resolve pent heights (same logic as computeRoofData_Pent in roof.js)
+    const baseH_mm = Number(state?.walls?.height_mm) || 2400;
+    const GRID_HEIGHT = 50, OSB_THK = 18;
+    const timberD = Math.floor(Number(CONFIG?.timber?.d ?? 100));
+    const g = state?.frame || CONFIG?.frame || {};
+    const rafterW = Math.floor(Number(g.thickness_mm || CONFIG?.frame?.thickness_mm || 50));
+    const pentStackAdjust = GRID_HEIGHT + timberD + OSB_THK + rafterW + OSB_THK;
+    const maxH_mm = Math.max(100, Math.floor(Number(pent.maxHeight_mm ?? baseH_mm) - pentStackAdjust));
+    const minH_mm = Math.max(100, Math.floor(Number(pent.minHeight_mm ?? baseH_mm) - pentStackAdjust));
+    const rise_mm = Math.max(0, maxH_mm - minH_mm);
+    const run_mm = Math.max(1, frameW_mm); // slope runs along width
+    const slopeLen_mm = Math.max(1, Math.round(Math.sqrt(run_mm * run_mm + rise_mm * rise_mm)));
+    const slopeScale = run_mm > 0 ? (slopeLen_mm / run_mm) : 1;
+
+    // Eaves-side overhang in slope-scaled coords
+    // In pent local space, X=0 is eaves (low edge), wall plate at X = l_mm * slopeScale
+    const eavesOvhSlope = Math.round(l_mm * slopeScale);
+
+    const openings = [];
+    for (const sky of active) {
+      // Pent has one face — accept any face value
+      const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));
+      const rawY = Math.max(0, Math.floor(sky.y_mm || 300));
+      const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
+      const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
+
+      const clamped = clampSkylightToSlope(rawY, rawH, slopeLen_mm);
+      const skyY_mm = clamped.y;
+      const skyH_mm = clamped.h;
+      if (skyH_mm < 50) continue;
+
+      // In pent local flat coords (slope-scaled):
+      // a (X direction) = eavesOverhang + distance from wall plate up slope
+      // b (Z direction) = front overhang + distance from left wall along eaves
+      const a0 = eavesOvhSlope + skyY_mm;
+      const b0 = f_mm + skyX_mm;
+
+      openings.push({
+        a0_mm: a0,
+        b0_mm: b0,
+        aLen_mm: skyH_mm,
+        bLen_mm: skyW_mm
+      });
+    }
+    return openings;
+  }
+
+  // ── HIPPED ROOF (saddle slopes only) ──
+  // Hipped main slopes (front/back = L/R) are like apex but the ridge is shortened.
+  // The saddle rectangle runs from ridgeStartZ to ridgeEndZ along Z.
+  // Skylight openings must be clipped to the saddle region.
+  if (roofStyle === "hipped") {
+    if (side !== "L" && side !== "R") return []; // hip triangles not supported yet
+
+    const A_mm = roofW_mm;
+    const B_mm = roofD_mm;
+    const halfSpan = A_mm / 2;
+    const ridgeStartZ_mm = halfSpan;
+    const ridgeEndZ_mm = B_mm - halfSpan;
+    const ridgeLen_mm = Math.max(0, ridgeEndZ_mm - ridgeStartZ_mm);
+    if (ridgeLen_mm <= 0) return []; // Square hipped (pyramid) — no saddle slopes
+
+    const hipped = state.roof?.hipped || {};
+    const apex_h = state.roof?.apex || {};
+    const eavesH = Number(hipped.heightToEaves_mm || apex_h.heightToEaves_mm || apex_h.eavesHeight_mm) || 1850;
+    const crestH = Number(hipped.heightToCrest_mm || apex_h.heightToCrest_mm || apex_h.crestHeight_mm) || 2400;
+    const rise_mm = Math.max(100, crestH - eavesH);
+    const commonRafterLen_mm = Math.round(Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm));
+
+    const openings = [];
+    for (const sky of active) {
+      const face = sky.face || "front";
+      if (side === "L" && face !== "front") continue;
+      if (side === "R" && face !== "back") continue;
+
+      const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));
+      const rawY = Math.max(0, Math.floor(sky.y_mm || 300));
+      const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
+      const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
+
+      const clamped = clampSkylightToSlope(rawY, rawH, commonRafterLen_mm);
+      const skyY_mm = clamped.y;
+      const skyH_mm = clamped.h;
+      if (skyH_mm < 50) continue;
+
+      // Convert to slope-local coords for the saddle rectangle:
+      //   a = distance from ridge down slope (0 at ridge), same as apex
+      //   b = distance along the SADDLE rectangle from its front edge (0 at ridgeStartZ)
+      // The skylight x_mm is from the left wall along eaves. The saddle starts at Z=ridgeStartZ
+      // in roof-local space, and the front overhang starts at Z=0.
+      // So: saddle-local b = f_mm + skyX_mm - ridgeStartZ_mm
+      // (skylight must fall within the saddle region)
+      const a0 = Math.max(0, commonRafterLen_mm - (skyY_mm + skyH_mm));
+      const b0_abs = f_mm + skyX_mm; // absolute Z in roof-local
+      const b0_saddle = b0_abs - ridgeStartZ_mm; // relative to saddle start
+
+      // Clip to saddle region
+      const b1_saddle = b0_saddle + skyW_mm;
+      const clippedB0 = Math.max(0, b0_saddle);
+      const clippedB1 = Math.min(ridgeLen_mm, b1_saddle);
+      const clippedBLen = clippedB1 - clippedB0;
+      if (clippedBLen < 50) continue; // skylight falls outside saddle region
+
+      openings.push({
+        a0_mm: a0,
+        b0_mm: clippedB0,
+        aLen_mm: skyH_mm,
+        bLen_mm: clippedBLen
+      });
+    }
+    return openings;
+  }
+
+  // ── APEX ROOF ──
+  if (roofStyle !== "apex") return [];
 
   const apex = state.roof?.apex || {};
   const eavesH = Number(apex.heightToEaves_mm || apex.eavesHeight_mm || apex.eaves_mm) || 1850;
@@ -309,43 +434,69 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
 function buildPentSkylights(skylights, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
     frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot) {
 
-  const A_mm = roofW_mm;   // slope runs along width (X)
-  const B_mm = roofD_mm;
+  // Pent roof: meshes are built FLAT in local space (X along slope, Z along depth, Y up).
+  // roofRoot's quaternion rotation handles the pitch — NO per-mesh tilt needed.
+  //
+  // Local coord system (matching roof.js buildPent):
+  //   X = 0 at eaves (low edge), increases toward ridge (high edge)
+  //   Z = 0 at front, increases toward back
+  //   Y = 0 at rafter bottom, increases upward (normal to flat local plane)
 
   const pent = state.roof?.pent || {};
-  const maxH = Number(pent.maxHeight_mm) || 2500;
-  const minH = Number(pent.minHeight_mm) || 2300;
-  const rise_mm = Math.max(0, maxH - minH);
-  const run_mm = A_mm;
+  // Resolve pent heights (same logic as computeRoofData_Pent / buildPent in roof.js)
+  const baseH_mm = Number(state?.walls?.height_mm) || 2400;
+  const GRID_HEIGHT = 50, OSB_THK = 18;
+  const timberD = Math.floor(Number(CONFIG?.timber?.d ?? 100));
+  const g = state?.frame || CONFIG?.frame || {};
+  const rafterW = Math.floor(Number(g.thickness_mm || CONFIG?.frame?.thickness_mm || 50));
+  const rafterD = Math.floor(Number(g.depth_mm || CONFIG?.frame?.depth_mm || 75));
+  const pentStackAdjust = GRID_HEIGHT + timberD + OSB_THK + rafterW + OSB_THK;
+  const maxH_mm = Math.max(100, Math.floor(Number(pent.maxHeight_mm ?? baseH_mm) - pentStackAdjust));
+  const minH_mm = Math.max(100, Math.floor(Number(pent.minHeight_mm ?? baseH_mm) - pentStackAdjust));
 
-  const slopeAng = Math.atan2(rise_mm, run_mm);
+  const rise_mm = Math.max(0, maxH_mm - minH_mm);
+  const run_mm = Math.max(1, frameW_mm); // slope runs along frame width
+  const slopeLen_mm = Math.max(1, Math.round(Math.sqrt(run_mm * run_mm + rise_mm * rise_mm)));
+  const slopeScale = run_mm > 0 ? (slopeLen_mm / run_mm) : 1;
+
+  // Eaves-side overhang in slope-scaled local X coords
+  const eavesOvhSlope = Math.round(l_mm * slopeScale);
+
+  // Surface offset: rafter depth + OSB + covering + small gap
+  const COVERING_THK = 2;
+  const surfaceY_mm = rafterD + 1 + OSB_THK + COVERING_THK + SURFACE_OFFSET_MM;
 
   skylights.forEach((sky, idx) => {
-    // Pent has only one face — ignore face selector
+    // Pent has only one face — accept any face value
     const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));
-    const skyY_mm = Math.max(0, Math.floor(sky.y_mm || 300));
+    const rawY = Math.max(0, Math.floor(sky.y_mm || 300));
     const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
-    const skyH_mm = Math.max(100, Math.floor(sky.height_mm || 800));
+    const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
 
-    // X along eaves (Z in roof local = depth direction)
-    const roofLocalZ = f_mm + skyX_mm + skyW_mm / 2;
+    // Clamp to slope
+    const clamped = clampSkylightToSlope(rawY, rawH, slopeLen_mm);
+    const skyY_mm = clamped.y;
+    const skyH_mm = clamped.h;
 
-    // Y up slope from high edge (X=0 is high edge for pent)
-    const centerAlongSlope = skyY_mm + skyH_mm / 2;
-    const cHoriz = centerAlongSlope * Math.cos(slopeAng);
-    const cVert  = centerAlongSlope * Math.sin(slopeAng);
+    // Frame is slightly LARGER than opening (same as apex)
+    const FRAME_OVERLAP = 20;
 
-    // Pent: high edge at X=0, slopes down to X=A_mm
-    // So skylight goes from high side downward
-    const cx = cHoriz;
-    const cy = -cVert; // slopes downward
-    const cz = roofLocalZ;
+    // Center position in pent local flat coords:
+    //   X = eaves overhang + distance from wall plate + half height along slope
+    //   Z = front overhang + distance from left wall + half width
+    //   Y = above roof surface (rafter + OSB + covering)
+    const cx = eavesOvhSlope + skyY_mm + skyH_mm / 2;
+    const cy = surfaceY_mm;
+    const cz = f_mm + skyX_mm + skyW_mm / 2;
 
-    // Pent tilts downward (negative slope)
-    const tiltAngle = -slopeAng;
+    // tiltAngle = 0: roofRoot handles the pitch rotation for pent roofs.
+    // The skylight is flat in local space, just like OSB/covering panels.
+    const tiltAngle = 0;
 
     buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-      cx, cy, cz, skyW_mm, skyH_mm, tiltAngle, "pent", "pent", roofRoot);
+      cx, cy, cz,
+      skyW_mm + FRAME_OVERLAP * 2, skyH_mm + FRAME_OVERLAP * 2,
+      tiltAngle, "pent", "pent", roofRoot);
   });
 }
 
@@ -357,67 +508,93 @@ function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, section
     frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot) {
 
   // Hipped roof: main slopes (front/back) + hip triangles (left/right)
-  // Main slopes are like apex but with shortened ridge
+  // Main slopes are like apex but with shortened ridge.
+  // Uses the same normalOffset / tieBaseY / frame overlap approach as apex.
   const A_mm = roofW_mm;
   const B_mm = roofD_mm;
   const halfSpan = A_mm / 2;
 
+  const hipped = state.roof?.hipped || {};
   const apex = state.roof?.apex || {};
-  const eavesH = Number(apex.heightToEaves_mm || apex.eavesHeight_mm || apex.eaves_mm) || 1850;
-  const crestH = Number(apex.heightToCrest_mm || apex.crestHeight_mm || apex.crest_mm) || 2200;
-
-  const OSB_THK = 18;
-  const delta = Math.max(OSB_THK, Math.floor(crestH - eavesH));
-  const rise_mm = solveRise(delta, halfSpan, OSB_THK);
+  const eavesH = Number(hipped.heightToEaves_mm || apex.heightToEaves_mm || apex.eavesHeight_mm) || 1850;
+  const crestH = Number(hipped.heightToCrest_mm || apex.heightToCrest_mm || apex.crestHeight_mm) || 2400;
+  const rise_mm = Math.max(100, crestH - eavesH);
 
   const mainSlopeAng = Math.atan2(rise_mm, halfSpan);
+  const slopeLen = Math.sqrt(halfSpan * halfSpan + rise_mm * rise_mm);
+
+  // Normal offset from rafter to above roof outer surface (same stack as apex)
+  const rafterD = Number(state.frame?.thickness_mm) || Number(CONFIG.frame?.thickness_mm) || 50;
+  const frameD  = Number(state.frame?.depth_mm)     || Number(CONFIG.frame?.depth_mm)     || 75;
+  const OSB_THK = 18;
+  const COVERING_THK = 2;
+  const OSB_CLEAR = 1;
+  const normalOffset_mm = rafterD + OSB_CLEAR + OSB_THK + COVERING_THK + SURFACE_OFFSET_MM;
+  const tieBaseY_mm = frameD * 2 + rafterD / 2; // same empirical offset as apex
 
   // Hip triangles: rise is the same, but run is along depth axis
-  // Hip run = halfSpan (the hip ridge shortens by halfSpan on each end)
-  const hipRun = halfSpan; // From eaves corner to where ridge starts
+  const hipRun = halfSpan;
   const hipSlopeAng = Math.atan2(rise_mm, hipRun);
 
   skylights.forEach((sky, idx) => {
     const face = sky.face || "front";
     const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));
-    const skyY_mm = Math.max(0, Math.floor(sky.y_mm || 300));
+    const rawY = Math.max(0, Math.floor(sky.y_mm || 300));
     const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
-    const skyH_mm = Math.max(100, Math.floor(sky.height_mm || 800));
+    const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
 
     if (face === "front" || face === "back") {
-      // Main slopes — same as apex
+      // Main saddle slopes — same geometry as apex with proper offsets
       const slopeAng = mainSlopeAng;
+      const clamped = clampSkylightToSlope(rawY, rawH, slopeLen);
+      const skyY_mm = clamped.y;
+      const skyH_mm = clamped.h;
+
+      const roofLocalZ = f_mm + skyX_mm + skyW_mm / 2;
       const centerAlongSlope = skyY_mm + skyH_mm / 2;
       const cHoriz = centerAlongSlope * Math.cos(slopeAng);
       const cVert  = centerAlongSlope * Math.sin(slopeAng);
 
-      const roofLocalZ = f_mm + skyX_mm + skyW_mm / 2;
+      const nX = (face === "front") ? -Math.sin(slopeAng) : Math.sin(slopeAng);
+      const nY = Math.cos(slopeAng);
 
       let cx, cy;
       if (face === "front") {
-        cx = cHoriz;
-        cy = cVert;
+        cx = cHoriz + nX * normalOffset_mm;
+        cy = cVert  + nY * normalOffset_mm + tieBaseY_mm;
       } else {
-        cx = A_mm - cHoriz;
-        cy = cVert;
+        cx = A_mm - cHoriz + nX * normalOffset_mm;
+        cy = cVert + nY * normalOffset_mm + tieBaseY_mm;
       }
 
+      const cz = roofLocalZ;
       const tiltAngle = (face === "front") ? slopeAng : -slopeAng;
 
+      // Frame overlap and shift corrections (same as apex)
+      const FRAME_OVERLAP = 20;
+      const SHIFT_Z = -25;
+      const SHIFT_SLOPE = 10;
+      const cosA = Math.cos(slopeAng);
+      const sinA = Math.sin(slopeAng);
+      const shiftX = SHIFT_SLOPE * cosA * ((face === "front") ? -1 : 1);
+      const shiftY = -SHIFT_SLOPE * sinA;
+
       buildSkylightMesh(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
-        cx, cy, roofLocalZ, skyW_mm, skyH_mm, tiltAngle, face, "hipped", roofRoot);
+        cx + shiftX, cy + shiftY, cz + SHIFT_Z,
+        skyW_mm + FRAME_OVERLAP * 2, skyH_mm + FRAME_OVERLAP * 2,
+        tiltAngle, face, "hipped", roofRoot);
 
     } else if (face === "left" || face === "right") {
-      // Hip triangle slopes
-      // These slope from eaves (at the end wall) up to the ridge endpoint
+      // Hip triangle slopes — placeholder positioning (no see-through yet)
       const slopeAng = hipSlopeAng;
+      const clamped = clampSkylightToSlope(rawY, rawH, Math.sqrt(hipRun * hipRun + rise_mm * rise_mm));
+      const skyY_mm = clamped.y;
+      const skyH_mm = clamped.h;
+
       const centerAlongSlope = skyY_mm + skyH_mm / 2;
       const cHoriz = centerAlongSlope * Math.cos(slopeAng);
       const cVert  = centerAlongSlope * Math.sin(slopeAng);
 
-      // For left hip: eaves at Z=0, slopes toward Z=halfSpan (where ridge starts)
-      // For right hip: eaves at Z=B_mm, slopes toward Z=B_mm-halfSpan
-      // X position is centered (at halfSpan) adjusted by skyX_mm
       const roofLocalX = l_mm + skyX_mm + skyW_mm / 2;
 
       let cz;
@@ -429,7 +606,6 @@ function buildHippedSkylights(skylights, state, scene, dims, meshPrefix, section
 
       const tiltAngle = (face === "left") ? slopeAng : -slopeAng;
 
-      // Hip skylights are rotated 90° around Y vs main slopes
       buildSkylightMeshHip(scene, sky, idx, meshPrefix, sectionPos, sectionId, mats,
         roofLocalX, cVert, cz, skyW_mm, skyH_mm, tiltAngle, face, roofRoot);
     }

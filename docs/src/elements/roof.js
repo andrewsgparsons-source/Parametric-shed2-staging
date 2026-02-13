@@ -40,7 +40,7 @@
 
 import { CONFIG, resolveDims } from "../params.js";
 import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=7";
-import { getSkylightOpenings } from "./skylights.js?_v=8";
+import { getSkylightOpenings } from "./skylights.js?_v=11";
 
 /**
  * Builds the 3D roof geometry for the current building state.
@@ -392,6 +392,12 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
   if (roofParts.osb) {
     // OSB (bottom on top of rafters)
     const osbBottomY_m_local = data.rafterD_mm / 1000;
+
+    // Get skylight openings for pent roof (empty array if no skylights)
+    let skyOpeningsPent = [];
+    try { skyOpeningsPent = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe fallback */ }
+
+    let osbIdx = 0;
     for (let i = 0; i < data.osb.all.length; i++) {
       const p = data.osb.all[i];
 
@@ -409,24 +415,34 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
         zLen_mm = Math.max(1, Math.round(Number(zLen_mm) * slopeScale));
       }
 
-const osbMesh = mkBoxBottomLocal(
-        `${meshPrefix}roof-osb-${i}`,
-        xLen_mm,
-        data.osbThickness_mm,
-        zLen_mm,
-        x0_mm,
-        osbBottomY_m_local,
-        z0_mm,
-        roofRoot,
-        osbMat,
-        { roof: "pent", part: "osb", kind: p.kind }
-      );
+      // Convert OSB piece to a/b format for splitRectAroundHoles (a=X slope dir, b=Z depth dir)
+      const osbRect = { a0_mm: x0_mm, b0_mm: z0_mm, aLen_mm: xLen_mm, bLen_mm: zLen_mm };
+
+      // Split around skylight openings if any
+      const pieces = skyOpeningsPent.length > 0
+        ? splitRectAroundHoles(osbRect, skyOpeningsPent)
+        : [osbRect];
+
+      for (const sp of pieces) {
+        const osbMesh = mkBoxBottomLocal(
+          `${meshPrefix}roof-osb-${osbIdx++}`,
+          sp.aLen_mm,
+          data.osbThickness_mm,
+          sp.bLen_mm,
+          sp.a0_mm,
+          osbBottomY_m_local,
+          sp.b0_mm,
+          roofRoot,
+          osbMat,
+          { roof: "pent", part: "osb", kind: sp.kind || p.kind }
+        );
       
-      // Add witness lines (edge rendering) to show sheet cut boundaries
-      if (osbMesh && osbMesh.enableEdgesRendering) {
-        osbMesh.enableEdgesRendering();
-        osbMesh.edgesWidth = 3;
-        osbMesh.edgesColor = new BABYLON.Color4(0, 0, 0, 1);
+        // Add witness lines (edge rendering) to show sheet cut boundaries
+        if (osbMesh && osbMesh.enableEdgesRendering) {
+          osbMesh.enableEdgesRendering();
+          osbMesh.edgesWidth = 3;
+          osbMesh.edgesColor = new BABYLON.Color4(0, 0, 0, 1);
+        }
       }
     }
   }
@@ -452,19 +468,45 @@ const osbMesh = mkBoxBottomLocal(
       coveringZ_mm = Math.round(coveringZ_mm * slopeScale);
     }
     
-    // Main covering panel
-    mkBoxBottomLocal(
-      `${meshPrefix}roof-covering`,
-      coveringX_mm,
-      COVERING_THK_MM,
-      coveringZ_mm,
-      0,
-      osbTopY_m_local,
-      0,
-      roofRoot,
-      coveringMat,
-      { roof: "pent", part: "covering" }
-    );
+    // Main covering panel — split around skylight openings if any
+    // Get skylight openings (reuse from OSB section or fetch fresh)
+    let skyOpeningsCov = [];
+    try { skyOpeningsCov = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe */ }
+
+    // Covering rect in a/b format (a=X slope dir, b=Z depth dir)
+    const covRect = { a0_mm: 0, b0_mm: 0, aLen_mm: coveringX_mm, bLen_mm: coveringZ_mm };
+
+    if (skyOpeningsCov.length > 0) {
+      const covPieces = splitRectAroundHoles(covRect, skyOpeningsCov);
+      for (let ci = 0; ci < covPieces.length; ci++) {
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-covering-${ci}`,
+          covPieces[ci].aLen_mm,
+          COVERING_THK_MM,
+          covPieces[ci].bLen_mm,
+          covPieces[ci].a0_mm,
+          osbTopY_m_local,
+          covPieces[ci].b0_mm,
+          roofRoot,
+          coveringMat,
+          { roof: "pent", part: "covering" }
+        );
+      }
+    } else {
+      // No skylights — single panel as before
+      mkBoxBottomLocal(
+        `${meshPrefix}roof-covering`,
+        coveringX_mm,
+        COVERING_THK_MM,
+        coveringZ_mm,
+        0,
+        osbTopY_m_local,
+        0,
+        roofRoot,
+        coveringMat,
+        { roof: "pent", part: "covering" }
+      );
+    }
     
     // OSB top surface Y in local coords (for fold positioning)
     const osbTopY_mm = data.rafterD_mm + data.osbThickness_mm;
@@ -3989,83 +4031,76 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     // ============================================
     // RECTANGLES: 2 saddle sections (main slopes)
     // ============================================
-    // These span from front hip to back hip along the ridge
+    // These span from front hip to back hip along the ridge.
+    // Split around skylight openings if any.
     if (ridgeLen_mm > 0) {
-      // Left saddle rectangle
-      {
+      // Get skylight openings for each slope
+      let skyOpeningsL = [], skyOpeningsR = [];
+      try { skyOpeningsL = getSkylightOpenings(state, "L") || []; } catch(e) { /* safe */ }
+      try { skyOpeningsR = getSkylightOpenings(state, "R") || []; } catch(e) { /* safe */ }
+
+      // Helper: create a saddle OSB piece from slope-local sub-rect.
+      // a = distance from ridge down slope (0 at ridge), b = along ridge from front (0 at ridgeStartZ)
+      function createSaddleOsbPiece(side, idx, a0, b0, aLen, bLen) {
         const slopeLen_mm = commonRafterLen_mm;
-        const panelWidth_mm = ridgeLen_mm;
-        
-        // Center of the slope
-        const sMid_mm = slopeLen_mm / 2;
-        const runMid_mm = sMid_mm * cosT;
-        const dropMid_mm = sMid_mm * sinT;
+        const rotZ = (side === "L") ? commonSlopeAng : -commonSlopeAng;
+        const normalX = (side === "L") ? -sinT : sinT;
+        const normalY = cosT;
+
+        // Center of this sub-piece on the slope
+        const aMid = a0 + aLen / 2;
+        const bMid = b0 + bLen / 2;
+        const runMid_mm = aMid * cosT;
+        const dropMid_mm = aMid * sinT;
         const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
-        
-        // X position (left slope goes from halfSpan toward 0)
-        const xSurf_mm = halfSpan_mm - runMid_mm;
-        
-        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
-        const cx = xSurf_mm + (-sinT) * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
-        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
-        
-        const meshL = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-osb-saddle-L`,
-          slopeLen_mm,
+        const xSurf_mm = (side === "L")
+          ? (halfSpan_mm - runMid_mm)
+          : (halfSpan_mm + runMid_mm);
+        const cx = xSurf_mm + normalX * (osbThk / 2);
+        const cy = ySurf_mm + normalY * (osbThk / 2);
+        const cz = ridgeStartZ_mm + bMid;
+
+        const mesh = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-osb-saddle-${side}-${idx}`,
+          aLen,
           osbThk,
-          panelWidth_mm,
+          bLen,
           cx,
           cy,
           cz,
           roofRoot,
           osbMat,
-          { roof: "hipped", part: "osb", type: "saddle", side: "L" }
+          { roof: "hipped", part: "osb", type: "saddle", side: side }
         );
-        meshL.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
-        if (meshL.enableEdgesRendering) {
-          meshL.enableEdgesRendering();
-          meshL.edgesWidth = 2;
-          meshL.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+        mesh.rotation = new BABYLON.Vector3(0, 0, rotZ);
+        if (mesh.enableEdgesRendering) {
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 2;
+          mesh.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
         }
       }
-      
-      // Right saddle rectangle
-      {
-        const slopeLen_mm = commonRafterLen_mm;
-        const panelWidth_mm = ridgeLen_mm;
-        
-        const sMid_mm = slopeLen_mm / 2;
-        const runMid_mm = sMid_mm * cosT;
-        const dropMid_mm = sMid_mm * sinT;
-        const ySurf_mm = osbOffset_mm + (rise_mm - dropMid_mm);
-        
-        // X position (right slope goes from halfSpan toward A_mm)
-        const xSurf_mm = halfSpan_mm + runMid_mm;
-        
-        // Offset perpendicular to slope surface (no ridge shift - align with triangles)
-        const cx = xSurf_mm + sinT * (osbThk / 2);
-        const cy = ySurf_mm + cosT * (osbThk / 2);
-        const cz = ridgeStartZ_mm + panelWidth_mm / 2;
-        
-        const meshR = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-osb-saddle-R`,
-          slopeLen_mm,
-          osbThk,
-          panelWidth_mm,
-          cx,
-          cy,
-          cz,
-          roofRoot,
-          osbMat,
-          { roof: "hipped", part: "osb", type: "saddle", side: "R" }
-        );
-        meshR.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
-        if (meshR.enableEdgesRendering) {
-          meshR.enableEdgesRendering();
-          meshR.edgesWidth = 2;
-          meshR.edgesColor = new BABYLON.Color4(0.3, 0.2, 0.1, 1);
+
+      // Full saddle rect in slope-local coords
+      const fullRect = { a0_mm: 0, b0_mm: 0, aLen_mm: commonRafterLen_mm, bLen_mm: ridgeLen_mm };
+
+      // Left saddle
+      if (skyOpeningsL.length > 0) {
+        const pieces = splitRectAroundHoles(fullRect, skyOpeningsL);
+        for (let pi = 0; pi < pieces.length; pi++) {
+          createSaddleOsbPiece("L", pi, pieces[pi].a0_mm, pieces[pi].b0_mm, pieces[pi].aLen_mm, pieces[pi].bLen_mm);
         }
+      } else {
+        createSaddleOsbPiece("L", 0, 0, 0, commonRafterLen_mm, ridgeLen_mm);
+      }
+
+      // Right saddle
+      if (skyOpeningsR.length > 0) {
+        const pieces = splitRectAroundHoles(fullRect, skyOpeningsR);
+        for (let pi = 0; pi < pieces.length; pi++) {
+          createSaddleOsbPiece("R", pi, pieces[pi].a0_mm, pieces[pi].b0_mm, pieces[pi].aLen_mm, pieces[pi].bLen_mm);
+        }
+      } else {
+        createSaddleOsbPiece("R", 0, 0, 0, commonRafterLen_mm, ridgeLen_mm);
       }
     }
     
@@ -4276,68 +4311,75 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
   // === COVERING (FELT) ===
   if (roofParts.covering) {
     const coveringThk = 2;
-    const sinT = Math.sin(commonSlopeAng);
-    const cosT = Math.cos(commonSlopeAng);
+    const sinT_cov = Math.sin(commonSlopeAng);
+    const cosT_cov = Math.cos(commonSlopeAng);
     const osbOutOffset_mm = memberD_mm + 1 + 18; // On top of OSB
     
-    // Main covering panels (simplified)
+    // Main covering panels — split around skylight openings
     if (ridgeLen_mm > 0) {
-      // Left covering
-      {
-        const coveringLen_mm = commonRafterLen_mm + 20; // Slight overlap at ridge
-        const coveringWidth_mm = ridgeLen_mm;
-        
-        const sMid_mm = commonRafterLen_mm / 2;
-        const runMid_mm = Math.round(sMid_mm * cosT);
-        const dropMid_mm = Math.round(sMid_mm * sinT);
+      const RIDGE_OVERLAP_MM = 20;
+      const coveringLen_mm = commonRafterLen_mm + RIDGE_OVERLAP_MM;
+      const coveringWidth_mm = ridgeLen_mm;
+
+      // Get skylight openings for each slope
+      let skyOpeningsL_cov = [], skyOpeningsR_cov = [];
+      try { skyOpeningsL_cov = getSkylightOpenings(state, "L") || []; } catch(e) { /* safe */ }
+      try { skyOpeningsR_cov = getSkylightOpenings(state, "R") || []; } catch(e) { /* safe */ }
+
+      // Helper: create a covering piece from slope-local sub-rect
+      function createHippedCoveringPiece(side, idx, a0, b0, aLen, bLen) {
+        const rotZ = (side === "L") ? commonSlopeAng : -commonSlopeAng;
+        const normalX = (side === "L") ? -sinT_cov : sinT_cov;
+        const normalY = cosT_cov;
+
+        const aMid = a0 + aLen / 2;
+        const bMid = b0 + bLen / 2;
+        const runMid_mm = Math.round(aMid * cosT_cov);
+        const dropMid_mm = Math.round(aMid * sinT_cov);
         const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
-        
-        const xSurfMid_mm = halfSpan_mm - runMid_mm;
-        const cx = xSurfMid_mm + (-sinT) * (osbOutOffset_mm + coveringThk / 2);
-        const cy = ySurfMid_mm + (cosT) * (osbOutOffset_mm + coveringThk / 2);
-        
-        const covL = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-covering-L`,
-          coveringLen_mm,
+        const xSurfMid_mm = (side === "L")
+          ? (halfSpan_mm - runMid_mm)
+          : (halfSpan_mm + runMid_mm);
+        const cx = xSurfMid_mm + normalX * (osbOutOffset_mm + coveringThk / 2);
+        const cy = ySurfMid_mm + normalY * (osbOutOffset_mm + coveringThk / 2);
+        const cz = ridgeStartZ_mm + bMid;
+
+        const mesh = mkBoxCenteredLocal(
+          `${meshPrefix}roof-hipped-covering-${side}-${idx}`,
+          aLen,
           coveringThk,
-          coveringWidth_mm,
+          bLen,
           cx,
           cy,
-          ridgeStartZ_mm + coveringWidth_mm / 2,
+          cz,
           roofRoot,
           coveringMat,
-          { roof: "hipped", part: "covering", side: "L" }
+          { roof: "hipped", part: "covering", side: side }
         );
-        covL.rotation = new BABYLON.Vector3(0, 0, commonSlopeAng);
+        mesh.rotation = new BABYLON.Vector3(0, 0, rotZ);
       }
-      
+
+      // Full covering rect: a starts at -RIDGE_OVERLAP (past ridge), b = full ridge width
+      const fullCovRect = { a0_mm: -RIDGE_OVERLAP_MM, b0_mm: 0, aLen_mm: coveringLen_mm, bLen_mm: coveringWidth_mm };
+
+      // Left covering
+      if (skyOpeningsL_cov.length > 0) {
+        const pieces = splitRectAroundHoles(fullCovRect, skyOpeningsL_cov);
+        for (let pi = 0; pi < pieces.length; pi++) {
+          createHippedCoveringPiece("L", pi, pieces[pi].a0_mm, pieces[pi].b0_mm, pieces[pi].aLen_mm, pieces[pi].bLen_mm);
+        }
+      } else {
+        createHippedCoveringPiece("L", 0, -RIDGE_OVERLAP_MM, 0, coveringLen_mm, coveringWidth_mm);
+      }
+
       // Right covering
-      {
-        const coveringLen_mm = commonRafterLen_mm + 20;
-        const coveringWidth_mm = ridgeLen_mm;
-        
-        const sMid_mm = commonRafterLen_mm / 2;
-        const runMid_mm = Math.round(sMid_mm * cosT);
-        const dropMid_mm = Math.round(sMid_mm * sinT);
-        const ySurfMid_mm = memberD_mm + (rise_mm - dropMid_mm);
-        
-        const xSurfMid_mm = halfSpan_mm + runMid_mm;
-        const cx = xSurfMid_mm + (sinT) * (osbOutOffset_mm + coveringThk / 2);
-        const cy = ySurfMid_mm + (cosT) * (osbOutOffset_mm + coveringThk / 2);
-        
-        const covR = mkBoxCenteredLocal(
-          `${meshPrefix}roof-hipped-covering-R`,
-          coveringLen_mm,
-          coveringThk,
-          coveringWidth_mm,
-          cx,
-          cy,
-          ridgeStartZ_mm + coveringWidth_mm / 2,
-          roofRoot,
-          coveringMat,
-          { roof: "hipped", part: "covering", side: "R" }
-        );
-        covR.rotation = new BABYLON.Vector3(0, 0, -commonSlopeAng);
+      if (skyOpeningsR_cov.length > 0) {
+        const pieces = splitRectAroundHoles(fullCovRect, skyOpeningsR_cov);
+        for (let pi = 0; pi < pieces.length; pi++) {
+          createHippedCoveringPiece("R", pi, pieces[pi].a0_mm, pieces[pi].b0_mm, pieces[pi].aLen_mm, pieces[pi].bLen_mm);
+        }
+      } else {
+        createHippedCoveringPiece("R", 0, -RIDGE_OVERLAP_MM, 0, coveringLen_mm, coveringWidth_mm);
       }
     }
   }
