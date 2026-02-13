@@ -95,6 +95,13 @@ export function build3D(state, ctx, sectionCtx, roofShift) {
     buildHippedSkylights(active, state, scene, dims, meshPrefix, sectionPos, sectionId, mats,
       frameW_mm, frameD_mm, roofW_mm, roofD_mm, l_mm, r_mm, f_mm, b_mm, roofRoot);
   }
+
+  // ── Cut openings through roof surfaces (OSB + covering) ──
+  // DISABLED: CSG subtraction corrupts/destroys roof meshes (bakeCurrentTransform
+  // + reparent cycle fails for rotated slope geometry).  Skylight frame sitting
+  // on top of the roof surface looks fine without actual cutouts.
+  // TODO: revisit with Babylon.js MeshBuilder boolean ops if needed later.
+  // cutRoofOpenings(scene, meshPrefix, roofRoot);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -491,6 +498,112 @@ function buildSkylightMeshHip(scene, sky, idx, meshPrefix, sectionPos, sectionId
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// CSG ROOF CUTTING
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cut openings through roof OSB and covering meshes using CSG subtraction.
+ * Finds all skylight groups, creates cutter boxes at their positions,
+ * and subtracts from roof surface meshes.
+ */
+function cutRoofOpenings(scene, meshPrefix, roofRoot) {
+  const hasCSG = typeof BABYLON !== "undefined" && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+  if (!hasCSG) { console.warn("[SKYLIGHTS] CSG not available, cannot cut roof openings"); return; }
+
+  // Find all skylight groups
+  const skyGroups = (scene.transformNodes || []).filter(
+    n => n.metadata?.skylight && n.name?.startsWith(meshPrefix + "roof-skylight-")
+  );
+  if (skyGroups.length === 0) return;
+
+  // Find roof meshes to cut (OSB panels + covering)
+  const roofMeshes = scene.meshes.filter(m => {
+    if (!m.metadata?.dynamic) return false;
+    const n = m.name || "";
+    return (n.includes("osb") || n.includes("covering")) && n.startsWith(meshPrefix + "roof-");
+  });
+  if (roofMeshes.length === 0) return;
+
+  // For each skylight, determine which roof meshes it overlaps and cut them
+  for (const grp of skyGroups) {
+    const face = grp.metadata.face;
+    // Read the skylight's inner dimensions from its child glass pane
+    const glassMesh = scene.meshes.find(m => m.parent === grp && m.name?.includes("glass"));
+    if (!glassMesh) continue;
+
+    // The glass bounding box gives us the opening size
+    const glassBB = glassMesh.getBoundingInfo().boundingBox;
+    const openW = (glassBB.maximum.x - glassBB.minimum.x) * 1000 + FRAME_THK_MM; // slightly larger than glass
+    const openH = (glassBB.maximum.z - glassBB.minimum.z) * 1000 + FRAME_THK_MM;
+
+    // Cutter must be large enough to pierce through the entire roof stack.
+    // It needs to be oriented to match the slope (same rotation as the skylight group).
+    // Strategy: create a box in the group's local space, then bake its world matrix
+    // for CSG operations.
+
+    const CUT_DEPTH_MM = 200; // deep enough to cut through OSB + covering + clearance
+
+    // Create temporary cutter box as child of the skylight group (inherits rotation + position)
+    const cutter = BABYLON.MeshBuilder.CreateBox("__skylight_cutter__", {
+      width: openW / 1000,        // along slope (height direction)
+      height: CUT_DEPTH_MM / 1000, // perpendicular to slope (cuts through roof stack)
+      depth: openH / 1000          // across slope (width direction)
+    }, scene);
+    cutter.parent = grp;
+    cutter.position = BABYLON.Vector3.Zero();
+    // Bake the world transform so CSG sees correct positions
+    cutter.computeWorldMatrix(true);
+    cutter.bakeCurrentTransformIntoVertices();
+    cutter.parent = null;
+
+    // Determine which side (L/R) this skylight is on
+    const isLeftSlope = (face === "front");
+    const isRightSlope = (face === "back");
+
+    // Cut each relevant roof mesh
+    for (const roofMesh of roofMeshes) {
+      const rn = roofMesh.name || "";
+      // Only cut meshes on the matching slope side
+      if (isLeftSlope && !rn.includes("-L")) continue;
+      if (isRightSlope && !rn.includes("-R")) continue;
+
+      // Check if this mesh's bounding box overlaps the cutter
+      roofMesh.computeWorldMatrix(true);
+      cutter.computeWorldMatrix(true);
+
+      try {
+        // Temporarily remove parent from roof mesh for CSG (needs world coords)
+        const origParent = roofMesh.parent;
+        const origPos = roofMesh.position.clone();
+        const origRot = roofMesh.rotation?.clone();
+        const origRotQ = roofMesh.rotationQuaternion?.clone();
+
+        roofMesh.bakeCurrentTransformIntoVertices();
+        roofMesh.parent = null;
+
+        const baseCSG = BABYLON.CSG.FromMesh(roofMesh);
+        const cutCSG = BABYLON.CSG.FromMesh(cutter);
+        const resultCSG = baseCSG.subtract(cutCSG);
+
+        const resultMesh = resultCSG.toMesh(rn, roofMesh.material, scene, false);
+        resultMesh.metadata = Object.assign({}, roofMesh.metadata);
+
+        // Re-parent result mesh
+        if (origParent) resultMesh.parent = origParent;
+
+        // Dispose original
+        if (!roofMesh.isDisposed()) roofMesh.dispose(false, true);
+      } catch (e) {
+        console.warn("[SKYLIGHTS] CSG cut failed for", rn, e.message);
+      }
+    }
+
+    // Dispose cutter
+    if (!cutter.isDisposed()) cutter.dispose(false, true);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -518,12 +631,13 @@ function ensureSkylightMaterials(scene) {
   frameMat.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15);
   scene._skylightMaterials.frame = frameMat;
 
-  // Glass — light blue-tinted, semi-transparent (visible against dark roof)
+  // Glass — matches window glass style: light blue, semi-transparent (see-through)
   const glassMat = new BABYLON.StandardMaterial("skylightGlassMat", scene);
-  glassMat.diffuseColor = new BABYLON.Color3(0.4, 0.7, 0.9);
-  glassMat.alpha = 0.6;
-  glassMat.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
-  glassMat.specularPower = 32;
+  glassMat.diffuseColor = new BABYLON.Color3(0.6, 0.75, 0.85);
+  glassMat.alpha = 0.35;
+  glassMat.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+  glassMat.specularPower = 64;
+  glassMat.backFaceCulling = false; // visible from both sides
   scene._skylightMaterials.glass = glassMat;
 }
 

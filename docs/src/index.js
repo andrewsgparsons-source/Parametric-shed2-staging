@@ -66,7 +66,7 @@ import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
-import * as Skylights from "./elements/skylights.js?_v=6";
+import * as Skylights from "./elements/skylights.js?_v=8";
 import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
 import { initViews } from "./views.js?_v=2";
@@ -280,6 +280,8 @@ function shiftRoofMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
     var m = scene.meshes[i];
     if (!m || !m.metadata || m.metadata.dynamic !== true) continue;
     if (typeof m.name !== "string" || m.name.indexOf("roof-") !== 0) continue;
+    // Skip skylight meshes — they are children of roof-root and must not be double-shifted
+    if (m.name.indexOf("roof-skylight-") === 0) continue;
     // If section context provided, only shift meshes belonging to this section
     if (sectionId) {
       if (m.metadata.sectionId !== sectionId) continue;
