@@ -20,6 +20,25 @@ const FRAME_THK_MM  = 35;   // Frame section thickness
 const FRAME_DEPTH_MM = 60;  // Frame depth (protrudes above roof surface)
 const GLASS_THK_MM  = 10;   // Glass pane thickness
 const SURFACE_OFFSET_MM = 5; // Lift above roof surface to prevent z-fighting
+const MIN_EDGE_GAP_MM = 30; // Minimum gap from skylight edge to ridge/eaves
+
+/**
+ * Clamp a skylight's height so it can't extend past the ridge or below the eaves.
+ * Both the mesh builder and opening calculator must use this to stay aligned.
+ *
+ * @param {number} skyY_mm   - Distance up from wall plate along slope
+ * @param {number} skyH_mm   - Requested height (along slope)
+ * @param {number} slopeLen  - Total slope length (eaves to ridge)
+ * @returns {{y: number, h: number}} Clamped y and height values
+ */
+function clampSkylightToSlope(skyY_mm, skyH_mm, slopeLen) {
+  const maxY = Math.max(0, slopeLen - MIN_EDGE_GAP_MM);
+  const y = Math.min(skyY_mm, maxY);
+  // Top edge can't go beyond ridge (slopeLen - MIN_EDGE_GAP_MM)
+  const maxH = Math.max(50, slopeLen - y - MIN_EDGE_GAP_MM);
+  const h = Math.min(skyH_mm, maxH);
+  return { y, h: Math.max(50, h) };
+}
 
 /**
  * Get skylight opening rectangles in slope-local coordinates for the roof builder.
@@ -64,18 +83,24 @@ export function getSkylightOpenings(state, side) {
     if (side === "L" && face !== "front") continue;
     if (side === "R" && face !== "back") continue;
 
-    const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));     // from left wall along eaves
-    const skyY_mm = Math.max(0, Math.floor(sky.y_mm || 300));    // up from wall plate along slope
-    const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));  // width (along eaves / b-axis)
-    const skyH_mm = Math.max(100, Math.floor(sky.height_mm || 800)); // height (along slope / a-axis)
+    const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));
+    const rawY = Math.max(0, Math.floor(sky.y_mm || 300));
+    const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
+    const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
 
-    // Convert to slope-local coords:
-    // b = front overhang + distance from left wall
+    // Clamp to slope — same function used by mesh builder
+    const clamped = clampSkylightToSlope(rawY, rawH, rafterLen_mm);
+    const skyY_mm = clamped.y;
+    const skyH_mm = clamped.h;
+
+    // Convert to slope-local OSB coords:
+    //   a = distance from ridge down slope (a=0 at ridge)
+    //   b = distance along ridge from front verge (b=0 at front edge)
+    // Top of skylight is at skyY + skyH from eaves = rafterLen - (skyY+skyH) from ridge
+    const a0 = rafterLen_mm - (skyY_mm + skyH_mm);
     const b0 = f_mm + skyX_mm;
-    // a = distance from ridge down slope
-    // skyY is distance UP from eaves, so distance from ridge = rafterLen - skyY - skyH
-    // But the skylight TOP edge (closest to ridge) is at skyY + skyH from eaves
-    const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm));
+
+    if (skyH_mm < 50) continue;
 
     openings.push({
       a0_mm: a0,
@@ -218,43 +243,18 @@ function buildApexSkylights(skylights, state, scene, dims, meshPrefix, sectionPo
 
     // Wall-referenced coordinates
     const skyX_mm = Math.max(0, Math.floor(sky.x_mm || 0));     // from left wall
-    const skyY_mm = Math.max(0, Math.floor(sky.y_mm || 300));    // up from wall plate
+    const rawY = Math.max(0, Math.floor(sky.y_mm || 300));       // up from wall plate
     const skyW_mm = Math.max(100, Math.floor(sky.width_mm || 600));
-    const skyH_mm = Math.max(100, Math.floor(sky.height_mm || 800));
+    const rawH = Math.max(100, Math.floor(sky.height_mm || 800));
 
-    // Convert wall-referenced X to roof-local X
-    // Wall starts at overhang l_mm in roof coords
-    // Ridge runs along Z, so skylight X is along the eaves
+    // Clamp to slope — same function used by getSkylightOpenings
+    const clamped = clampSkylightToSlope(rawY, rawH, slopeLen);
+    const skyY_mm = clamped.y;
+    const skyH_mm = clamped.h;
+
     const roofLocalZ = f_mm + skyX_mm;
 
-    // Convert wall-referenced Y (up from wall plate, along slope) to roof-local position
-    // The slope starts at the eaves (at the wall plate).
-    // y_mm is the distance along the slope surface from the eaves.
-    // We need to find the position on the sloped surface.
-
-    // For front slope: eaves is at X=0 (roof local), ridge at X=halfSpan
-    // For back slope: eaves is at X=A_mm, ridge at X=halfSpan
-    // Distance along slope from eaves = skyY_mm
-    // Horizontal component = skyY_mm * cos(slopeAng)
-    // Vertical component = skyY_mm * sin(slopeAng)
-
-    const horizDist = skyY_mm * Math.cos(slopeAng);
-    const vertDist  = skyY_mm * Math.sin(slopeAng);
-
-    let roofLocalX, pivotY;
-
-    if (face === "front") {
-      // Front slope goes from X=0 (eaves) up to X=halfSpan (ridge)
-      // Eaves is at the bottom, skylight positioned up the slope
-      roofLocalX = horizDist;
-      pivotY = vertDist;
-    } else {
-      // Back slope goes from X=A_mm (eaves) down to X=halfSpan (ridge)
-      roofLocalX = A_mm - horizDist;
-      pivotY = vertDist;
-    }
-
-    // The skylight center on the slope
+    // The skylight center on the slope (using clamped values)
     const centerAlongSlope = skyY_mm + skyH_mm / 2;
     const cHoriz = centerAlongSlope * Math.cos(slopeAng);
     const cVert  = centerAlongSlope * Math.sin(slopeAng);

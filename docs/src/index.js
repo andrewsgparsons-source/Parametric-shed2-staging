@@ -66,7 +66,7 @@ import { renderBOM } from "./bom/index.js";
 import { initInstancesUI } from "./instances.js?_v=10";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
-import * as Skylights from "./elements/skylights.js?_v=8";
+import * as Skylights from "./elements/skylights.js?_v=9";
 import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
 import { initViews } from "./views.js?_v=2";
@@ -7041,10 +7041,37 @@ function parseOverhangInput(val) {
       ];
     }
 
+    /**
+     * Compute the slope length for the current roof — used to set max constraints
+     * on skylight Y position and height so they can't extend past the ridge.
+     */
+    function getSlopeLength(state) {
+      var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+      var dims = typeof resolveDims === "function" ? resolveDims(state) : null;
+      var roofW = dims ? (dims.roof ? dims.roof.w_mm : (dims.frame ? dims.frame.w_mm : 1800)) : 1800;
+      if (roofStyle === "apex") {
+        var apex = (state && state.roof && state.roof.apex) ? state.roof.apex : {};
+        var eavesH = Number(apex.heightToEaves_mm || apex.eavesHeight_mm || apex.eaves_mm) || 1850;
+        var crestH = Number(apex.heightToCrest_mm || apex.crestHeight_mm || apex.crest_mm) || 2200;
+        var halfSpan = roofW / 2;
+        var rise = Math.max(18, crestH - eavesH);
+        return Math.round(Math.sqrt(halfSpan * halfSpan + rise * rise));
+      } else if (roofStyle === "pent") {
+        var pent = (state && state.roof && state.roof.pent) ? state.roof.pent : {};
+        var maxH = Number(pent.maxHeight_mm) || 2500;
+        var minH = Number(pent.minHeight_mm) || 2300;
+        var pRise = Math.max(0, maxH - minH);
+        return Math.round(Math.sqrt(roofW * roofW + pRise * pRise));
+      }
+      return 2000; // fallback
+    }
+
     function renderSkylightsUi(state) {
       var skylights = getSkylightsFromState(state);
       var faces = getFacesForRoofStyle(state);
       var roofStyle = (state && state.roof && state.roof.style) ? state.roof.style : "apex";
+      var slopeLen = getSlopeLength(state);
+      var MIN_EDGE_GAP = 30;
 
       // Update both count badges
       var countText = "(" + skylights.length + ")";
@@ -7141,16 +7168,20 @@ function parseOverhangInput(val) {
           yLabel.textContent = "Y up from plate (mm) ";
           var yInput = document.createElement("input");
           yInput.type = "number";
+          var maxY = Math.max(0, slopeLen - MIN_EDGE_GAP - 100);
           yInput.min = "0";
+          yInput.max = String(maxY);
           yInput.step = "10";
-          yInput.value = sky.y_mm || 300;
+          yInput.value = Math.min(sky.y_mm || 300, maxY);
           yInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
-          yInput.addEventListener("change", (function(i) {
+          yInput.addEventListener("change", (function(i, mY) {
             return function() {
               var arr = getSkylightsFromState(store.getState());
-              if (arr[i]) { arr[i].y_mm = parseInt(this.value) || 0; setSkylights(arr); }
+              var val = Math.max(0, Math.min(mY, parseInt(this.value) || 0));
+              if (arr[i]) { arr[i].y_mm = val; setSkylights(arr); }
+              this.value = val;
             };
-          })(idx));
+          })(idx, maxY));
           yLabel.appendChild(yInput);
           posRow.appendChild(yLabel);
           card.appendChild(posRow);
@@ -7183,15 +7214,24 @@ function parseOverhangInput(val) {
           var hInput = document.createElement("input");
           hInput.type = "number";
           hInput.min = "100";
+          var maxH = Math.max(100, slopeLen - (sky.y_mm || 300) - MIN_EDGE_GAP);
+          hInput.max = String(maxH);
           hInput.step = "10";
-          hInput.value = sky.height_mm || 800;
+          hInput.value = Math.min(sky.height_mm || 800, maxH);
           hInput.style.cssText = "width:100%;font-size:10px;padding:2px;";
-          hInput.addEventListener("change", (function(i) {
+          hInput.addEventListener("change", (function(i, sl, eg) {
             return function() {
               var arr = getSkylightsFromState(store.getState());
-              if (arr[i]) { arr[i].height_mm = Math.max(100, parseInt(this.value) || 800); setSkylights(arr); }
+              if (arr[i]) {
+                var curY = arr[i].y_mm || 300;
+                var mH = Math.max(100, sl - curY - eg);
+                var val = Math.max(100, Math.min(mH, parseInt(this.value) || 800));
+                arr[i].height_mm = val;
+                setSkylights(arr);
+                this.value = val;
+              }
             };
-          })(idx));
+          })(idx, slopeLen, MIN_EDGE_GAP));
           hLabel.appendChild(hInput);
           sizeRow.appendChild(hLabel);
           card.appendChild(sizeRow);
@@ -7206,14 +7246,17 @@ function parseOverhangInput(val) {
       var arr = getSkylightsFromState(s).slice();
       var style = (s && s.roof && s.roof.style) ? s.roof.style : "apex";
       var defaultFace = (style === "pent") ? "pent" : "front";
+      var sl = getSlopeLength(s);
+      var defaultY = 300;
+      var defaultH = Math.min(800, Math.max(100, sl - defaultY - 30));
       arr.push({
         id: "sky" + (__skylightSeq++),
         enabled: true,
         face: defaultFace,
         x_mm: 500,
-        y_mm: 300,
+        y_mm: defaultY,
         width_mm: 600,
-        height_mm: 800
+        height_mm: defaultH
       });
       setSkylights(arr);
     }
