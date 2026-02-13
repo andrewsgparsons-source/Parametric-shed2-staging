@@ -97,16 +97,21 @@ export function getSkylightOpenings(state, side) {
     //   a = distance from ridge down slope (a=0 at ridge)
     //   b = distance along ridge from front verge (b=0 at front edge)
     // Top of skylight is at skyY + skyH from eaves = rafterLen - (skyY+skyH) from ridge
-    const a0 = rafterLen_mm - (skyY_mm + skyH_mm);
-    const b0 = f_mm + skyX_mm;
+    // Add OPENING_MARGIN around the frame so the opening is slightly larger than the frame.
+    // This accounts for the slight coordinate offset between the skylight mesh coordinate
+    // system and the roof panel coordinate system (~25mm), plus it's more realistic —
+    // real skylight openings are always larger than the frame for flashing/weatherproofing.
+    const OPENING_MARGIN = 30; // mm each side
+    const a0 = Math.max(0, rafterLen_mm - (skyY_mm + skyH_mm) - OPENING_MARGIN);
+    const b0 = Math.max(0, f_mm + skyX_mm - OPENING_MARGIN);
 
     if (skyH_mm < 50) continue;
 
     openings.push({
       a0_mm: a0,
       b0_mm: b0,
-      aLen_mm: skyH_mm,
-      bLen_mm: skyW_mm
+      aLen_mm: skyH_mm + OPENING_MARGIN * 2,
+      bLen_mm: skyW_mm + OPENING_MARGIN * 2
     });
   }
 
