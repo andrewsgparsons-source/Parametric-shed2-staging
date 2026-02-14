@@ -39,7 +39,7 @@
  */
 
 import { CONFIG, resolveDims } from "../params.js";
-import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=7";
+import { buildTileLayers, disposeTileMeshes } from "./roof-tiles.js?_v=9";
 import { getSkylightOpenings } from "./skylights.js?_v=11";
 
 /**
