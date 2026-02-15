@@ -56,45 +56,133 @@
 
   function fixDevPanel() {
     var developerBox = document.getElementById('developerBox');
+    if (!developerBox) return;
+    
+    // Nuclear option: the existing devPanel is fought over by instances.js,
+    // profiles.js, and toggleDevMode. Instead of battling them, we clone
+    // the dev panel content into a FRESH div that nothing else knows about.
+    var freshId = 'mc-dev-fresh';
+    if (document.getElementById(freshId)) return; // Already done
+    
     var devPanel = document.getElementById('devPanel');
     var devCheck = document.getElementById('devModeCheck');
     
-    if (!devPanel) {
-      console.warn('[mobile-configurator] devPanel not found');
-      return;
-    }
-
-    // Force the checkbox checked — this triggers toggleDevMode(true) naturally
-    // via instances.js, which sets devPanel.style.display = "block"
-    if (devCheck && !devCheck.checked) {
-      devCheck.checked = true;
-      devCheck.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    // Belt-and-suspenders: also force display directly
-    devPanel.style.setProperty('display', 'block', 'important');
-
-    // Hide the checkbox row since dev tools are always shown on mobile
+    // Hide original checkbox and devPanel entirely
     if (devCheck) {
       var row = devCheck.closest('.row');
       if (row) row.style.setProperty('display', 'none', 'important');
     }
-
-    // Ensure nested boSection details are open with visible summaries
-    devPanel.querySelectorAll('details.boSection').forEach(function(d) {
-      d.style.setProperty('display', 'block', 'important');
-      d.setAttribute('open', '');
-      var sum = d.querySelector(':scope > summary');
-      if (sum) {
-        sum.style.setProperty('display', 'block', 'important');
-        sum.style.setProperty('cursor', 'pointer', 'important');
-        sum.style.setProperty('font-size', '12px', 'important');
-        sum.style.setProperty('font-weight', '700', 'important');
-        sum.style.setProperty('padding', '8px', 'important');
-        sum.style.setProperty('background', '#f5f5f5', 'important');
-      }
+    if (devPanel) devPanel.style.setProperty('display', 'none', 'important');
+    
+    // Build fresh content
+    var fresh = document.createElement('div');
+    fresh.id = freshId;
+    fresh.style.cssText = 'margin-top:8px;';
+    
+    // Copy State button
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy State to Clipboard';
+    copyBtn.type = 'button';
+    copyBtn.style.cssText = 'width:100%;padding:10px;margin-bottom:8px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;';
+    copyBtn.addEventListener('click', function() {
+      var origBtn = document.getElementById('copyStateBtn');
+      if (origBtn) origBtn.click();
     });
-
-    console.log('[mobile-configurator] fixDevPanel done. devPanel display:', devPanel.style.display, 'checkbox:', devCheck ? devCheck.checked : 'N/A');
+    fresh.appendChild(copyBtn);
+    
+    // Profile Editor section
+    var profileSection = document.createElement('div');
+    profileSection.style.cssText = 'margin-top:12px;border:1px solid #ddd;border-radius:8px;padding:10px;background:#fafafa;';
+    
+    var profileTitle = document.createElement('div');
+    profileTitle.textContent = 'Profile Editor';
+    profileTitle.style.cssText = 'font-size:13px;font-weight:700;color:#2D5016;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #E8F0E2;';
+    profileSection.appendChild(profileTitle);
+    
+    // Move the original profile editor controls into our fresh section
+    var profileContainer = document.getElementById('profileEditorPanel');
+    if (profileContainer) {
+      // Clone the contents to avoid breaking references
+      var clone = profileContainer.cloneNode(true);
+      clone.id = 'mc-profileEditorPanel';
+      // Re-wire buttons to delegate to originals
+      clone.querySelectorAll('button').forEach(function(btn) {
+        var origId = btn.id;
+        btn.id = 'mc-' + origId;
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          var orig = document.getElementById(origId);
+          if (orig) orig.click();
+        });
+      });
+      clone.querySelectorAll('select').forEach(function(sel) {
+        var origId = sel.id;
+        sel.id = 'mc-' + origId;
+        // Sync selection changes to original
+        sel.addEventListener('change', function() {
+          var orig = document.getElementById(origId);
+          if (orig) {
+            orig.value = sel.value;
+            orig.dispatchEvent(new Event('change'));
+          }
+        });
+        // Copy current options from original
+        var origSel = document.getElementById(origId);
+        if (origSel) {
+          sel.innerHTML = origSel.innerHTML;
+          sel.value = origSel.value;
+        }
+      });
+      profileSection.appendChild(clone);
+    } else {
+      var noProfile = document.createElement('p');
+      noProfile.textContent = 'Profile Editor loading...';
+      noProfile.style.cssText = 'font-size:11px;color:#888;';
+      profileSection.appendChild(noProfile);
+    }
+    
+    fresh.appendChild(profileSection);
+    
+    // Attachment Visibility section
+    var attSection = document.createElement('div');
+    attSection.style.cssText = 'margin-top:12px;border:1px solid #ddd;border-radius:8px;padding:10px;background:#fafafa;';
+    
+    var attTitle = document.createElement('div');
+    attTitle.textContent = 'Attachment Visibility';
+    attTitle.style.cssText = 'font-size:13px;font-weight:700;color:#2D5016;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #E8F0E2;';
+    attSection.appendChild(attTitle);
+    
+    // Copy the dev attachment checkboxes
+    var attIds = ['devVAttBase','devVAttWalls','devVAttRoof','devVAttCladding',
+                  'devVAttBaseGrid','devVAttBaseFrame','devVAttBaseDeck',
+                  'devVAttWallFront','devVAttWallBack','devVAttWallLeft','devVAttWallRight','devVAttWallOuter'];
+    var attGrid = document.createElement('div');
+    attGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;';
+    attIds.forEach(function(id) {
+      var orig = document.getElementById(id);
+      if (!orig) return;
+      var label = orig.closest('label');
+      if (!label) return;
+      var lbl = document.createElement('label');
+      lbl.className = 'check';
+      lbl.style.cssText = 'font-size:11px;display:flex;align-items:center;gap:6px;';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = orig.checked;
+      cb.style.cssText = 'width:18px;height:18px;';
+      cb.addEventListener('change', function() {
+        orig.checked = cb.checked;
+        orig.dispatchEvent(new Event('change'));
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(label.textContent.trim()));
+      attGrid.appendChild(lbl);
+    });
+    attSection.appendChild(attGrid);
+    fresh.appendChild(attSection);
+    
+    developerBox.appendChild(fresh);
+    console.log('[mobile-configurator] Fresh dev panel built');
   }
 
   function buildLayout(panel) {
