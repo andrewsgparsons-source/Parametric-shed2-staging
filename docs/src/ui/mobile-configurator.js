@@ -54,137 +54,6 @@
     buildLayout(panel);
   }
 
-  function fixDevPanel() {
-    var developerBox = document.getElementById('developerBox');
-    if (!developerBox) return;
-    
-    // Nuclear option: the existing devPanel is fought over by instances.js,
-    // profiles.js, and toggleDevMode. Instead of battling them, we clone
-    // the dev panel content into a FRESH div that nothing else knows about.
-    var freshId = 'mc-dev-fresh';
-    if (document.getElementById(freshId)) return; // Already done
-    
-    var devPanel = document.getElementById('devPanel');
-    var devCheck = document.getElementById('devModeCheck');
-    
-    // Hide original checkbox and devPanel entirely
-    if (devCheck) {
-      var row = devCheck.closest('.row');
-      if (row) row.style.setProperty('display', 'none', 'important');
-    }
-    if (devPanel) devPanel.style.setProperty('display', 'none', 'important');
-    
-    // Build fresh content
-    var fresh = document.createElement('div');
-    fresh.id = freshId;
-    fresh.style.cssText = 'margin-top:8px;';
-    
-    // Copy State button
-    var copyBtn = document.createElement('button');
-    copyBtn.textContent = 'Copy State to Clipboard';
-    copyBtn.type = 'button';
-    copyBtn.style.cssText = 'width:100%;padding:10px;margin-bottom:8px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;';
-    copyBtn.addEventListener('click', function() {
-      var origBtn = document.getElementById('copyStateBtn');
-      if (origBtn) origBtn.click();
-    });
-    fresh.appendChild(copyBtn);
-    
-    // Profile Editor section
-    var profileSection = document.createElement('div');
-    profileSection.style.cssText = 'margin-top:12px;border:1px solid #ddd;border-radius:8px;padding:10px;background:#fafafa;';
-    
-    var profileTitle = document.createElement('div');
-    profileTitle.textContent = 'Profile Editor';
-    profileTitle.style.cssText = 'font-size:13px;font-weight:700;color:#2D5016;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #E8F0E2;';
-    profileSection.appendChild(profileTitle);
-    
-    // Move the original profile editor controls into our fresh section
-    var profileContainer = document.getElementById('profileEditorPanel');
-    if (profileContainer) {
-      // Clone the contents to avoid breaking references
-      var clone = profileContainer.cloneNode(true);
-      clone.id = 'mc-profileEditorPanel';
-      // Re-wire buttons to delegate to originals
-      clone.querySelectorAll('button').forEach(function(btn) {
-        var origId = btn.id;
-        btn.id = 'mc-' + origId;
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          var orig = document.getElementById(origId);
-          if (orig) orig.click();
-        });
-      });
-      clone.querySelectorAll('select').forEach(function(sel) {
-        var origId = sel.id;
-        sel.id = 'mc-' + origId;
-        // Sync selection changes to original
-        sel.addEventListener('change', function() {
-          var orig = document.getElementById(origId);
-          if (orig) {
-            orig.value = sel.value;
-            orig.dispatchEvent(new Event('change'));
-          }
-        });
-        // Copy current options from original
-        var origSel = document.getElementById(origId);
-        if (origSel) {
-          sel.innerHTML = origSel.innerHTML;
-          sel.value = origSel.value;
-        }
-      });
-      profileSection.appendChild(clone);
-    } else {
-      var noProfile = document.createElement('p');
-      noProfile.textContent = 'Profile Editor loading...';
-      noProfile.style.cssText = 'font-size:11px;color:#888;';
-      profileSection.appendChild(noProfile);
-    }
-    
-    fresh.appendChild(profileSection);
-    
-    // Attachment Visibility section
-    var attSection = document.createElement('div');
-    attSection.style.cssText = 'margin-top:12px;border:1px solid #ddd;border-radius:8px;padding:10px;background:#fafafa;';
-    
-    var attTitle = document.createElement('div');
-    attTitle.textContent = 'Attachment Visibility';
-    attTitle.style.cssText = 'font-size:13px;font-weight:700;color:#2D5016;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #E8F0E2;';
-    attSection.appendChild(attTitle);
-    
-    // Copy the dev attachment checkboxes
-    var attIds = ['devVAttBase','devVAttWalls','devVAttRoof','devVAttCladding',
-                  'devVAttBaseGrid','devVAttBaseFrame','devVAttBaseDeck',
-                  'devVAttWallFront','devVAttWallBack','devVAttWallLeft','devVAttWallRight','devVAttWallOuter'];
-    var attGrid = document.createElement('div');
-    attGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;';
-    attIds.forEach(function(id) {
-      var orig = document.getElementById(id);
-      if (!orig) return;
-      var label = orig.closest('label');
-      if (!label) return;
-      var lbl = document.createElement('label');
-      lbl.className = 'check';
-      lbl.style.cssText = 'font-size:11px;display:flex;align-items:center;gap:6px;';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = orig.checked;
-      cb.style.cssText = 'width:18px;height:18px;';
-      cb.addEventListener('change', function() {
-        orig.checked = cb.checked;
-        orig.dispatchEvent(new Event('change'));
-      });
-      lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(label.textContent.trim()));
-      attGrid.appendChild(lbl);
-    });
-    attSection.appendChild(attGrid);
-    fresh.appendChild(attSection);
-    
-    developerBox.appendChild(fresh);
-    console.log('[mobile-configurator] Fresh dev panel built');
-  }
-
   function buildLayout(panel) {
     // Find only TOP-LEVEL boSection elements (direct children of the form),
     // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
@@ -194,7 +63,7 @@
       : panel.querySelectorAll('details.boSection');
     var byName = {};
     allSections.forEach(function(s) {
-      var summary = s.querySelector(':scope > summary');
+      var summary = s.querySelector('summary');
       var name = summary ? summary.textContent.trim() : '';
       if (name) byName[name] = s;
     });
@@ -208,10 +77,10 @@
     document.body.classList.add('mobile-configurator');
     document.body.classList.add('mobile-panel-collapsed'); // Ensure original mobile UI doesn't interfere
 
-    // Open all top-level sections so content is accessible
+    // Open all sections so content is accessible
     allSections.forEach(function(s) { s.setAttribute('open', ''); });
 
-    // Hide all top-level sections initially (nested ones inside devPanel are untouched)
+    // Hide ALL sections initially
     allSections.forEach(function(s) { s.style.display = 'none'; });
 
     // Create main container
@@ -328,14 +197,8 @@
     }
 
     // Also schedule a delayed re-apply in case elements weren't ready
-    // AND re-apply step visibility in case showAllControls() (profiles.js) runs after us
-    var reapply = function() {
-      try { applyMobileStyles(container); } catch(e) {}
-      goToStep(activeStep); // Re-enforce which tab is visible
-    };
-    setTimeout(reapply, 2000);
-    setTimeout(reapply, 4000);
-    setTimeout(reapply, 6000); // Extra pass for slow profile loading
+    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 2000);
+    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 4000);
 
     // Resize engine after layout change
     setTimeout(resizeEngine, 100);
@@ -354,15 +217,6 @@
       }
     });
 
-    // === FIX DEV PANEL ===
-    // On mobile, bypass the checkbox toggle entirely — just force devPanel visible
-    // and ensure nested sections (Attachment Visibility, Profile Editor) work
-    fixDevPanel();
-    // Re-apply periodically to win any race with profiles.js / instances.js
-    setTimeout(fixDevPanel, 2000);
-    setTimeout(fixDevPanel, 4000);
-    setTimeout(fixDevPanel, 6000);
-
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
   }
 
@@ -372,9 +226,9 @@
 
     var isBom = STEPS[idx].section === '__bom__';
 
-    // Hide all sections (use !important to beat any profile system resets)
+    // Hide all sections
     sections.forEach(function(s, i) {
-      if (s) s.style.setProperty('display', 'none', 'important');
+      if (s) s.style.display = 'none';
     });
 
     // Remove any previous BOM content
@@ -408,8 +262,8 @@
         });
       });
     } else {
-      // Show active section (use !important to beat profile system and other resets)
-      if (sections[idx]) sections[idx].style.setProperty('display', 'block', 'important');
+      // Show active section
+      if (sections[idx]) sections[idx].style.display = '';
     }
 
     // Update pills

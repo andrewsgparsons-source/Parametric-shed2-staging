@@ -55,8 +55,12 @@
   }
 
   function buildSidebar(panel) {
-    // Find sections by summary text
-    const allSections = panel.querySelectorAll('details.boSection');
+    // Find only TOP-LEVEL boSection elements (direct children of the form),
+    // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
+    const form = panel.querySelector('form[aria-label="Build options"]');
+    const allSections = form
+      ? form.querySelectorAll(':scope > details.boSection')
+      : panel.querySelectorAll('details.boSection');
     const byName = {};
     allSections.forEach(s => {
       const name = s.querySelector('summary')?.textContent?.trim();
