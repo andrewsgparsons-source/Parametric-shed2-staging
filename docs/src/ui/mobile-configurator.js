@@ -59,19 +59,7 @@
     var devPanel = document.getElementById('devPanel');
     var devCheck = document.getElementById('devModeCheck');
     
-    // DEBUG: Add visible diagnostic banner to the developer section
-    var debugId = 'mc-dev-debug';
-    if (!document.getElementById(debugId) && developerBox) {
-      var dbg = document.createElement('div');
-      dbg.id = debugId;
-      dbg.style.cssText = 'background:#ff0;color:#000;padding:10px;font-size:14px;font-weight:bold;border:2px solid red;margin:8px 0;';
-      dbg.textContent = 'DEBUG: fixDevPanel ran. devPanel=' + (devPanel ? 'FOUND' : 'NULL') +
-        ' | display=' + (devPanel ? devPanel.style.display : 'N/A') +
-        ' | computed=' + (devPanel ? window.getComputedStyle(devPanel).display : 'N/A') +
-        ' | children=' + (devPanel ? devPanel.children.length : 0) +
-        ' | checkbox=' + (devCheck ? devCheck.checked : 'NULL');
-      developerBox.insertBefore(dbg, developerBox.firstChild);
-    }
+    // (debug banner removed)
 
     if (!devPanel) {
       console.warn('[mobile-configurator] devPanel not found');
@@ -102,28 +90,7 @@
       }
     });
 
-    // Update debug banner after fixes applied
-    var dbgEl = document.getElementById(debugId);
-    if (dbgEl && devPanel) {
-      // Check each child's visibility
-      var childInfo = [];
-      for (var i = 0; i < devPanel.children.length; i++) {
-        var c = devPanel.children[i];
-        var cs = window.getComputedStyle(c);
-        childInfo.push(c.tagName + '.' + (c.className || c.id || i) + ':d=' + cs.display + ',h=' + c.offsetHeight);
-      }
-      // Check parent chain for overflow/height constraints
-      var parentInfo = [];
-      var el = devPanel;
-      for (var p = 0; p < 5 && el; p++) {
-        var ps = window.getComputedStyle(el);
-        parentInfo.push(el.tagName + '#' + (el.id || '') + ':d=' + ps.display + ',h=' + el.offsetHeight + ',oh=' + ps.overflow + ',mh=' + ps.maxHeight);
-        el = el.parentElement;
-      }
-      dbgEl.innerHTML = '<b>POST-FIX:</b> devPanel h=' + devPanel.offsetHeight +
-        '<br><b>Children:</b> ' + childInfo.join(' | ') +
-        '<br><b>Parents:</b> ' + parentInfo.join(' → ');
-    }
+    // (debug output removed)
   }
 
   function buildLayout(panel) {
@@ -313,9 +280,9 @@
 
     var isBom = STEPS[idx].section === '__bom__';
 
-    // Hide all sections
+    // Hide all sections (use !important to beat any profile system resets)
     sections.forEach(function(s, i) {
-      if (s) s.style.display = 'none';
+      if (s) s.style.setProperty('display', 'none', 'important');
     });
 
     // Remove any previous BOM content
@@ -349,8 +316,8 @@
         });
       });
     } else {
-      // Show active section
-      if (sections[idx]) sections[idx].style.display = '';
+      // Show active section (use !important to beat profile system and other resets)
+      if (sections[idx]) sections[idx].style.setProperty('display', 'block', 'important');
     }
 
     // Update pills
