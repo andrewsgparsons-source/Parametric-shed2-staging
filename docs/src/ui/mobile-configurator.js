@@ -197,8 +197,14 @@
     }
 
     // Also schedule a delayed re-apply in case elements weren't ready
-    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 2000);
-    setTimeout(function() { try { applyMobileStyles(container); } catch(e) {} }, 4000);
+    // AND re-apply step visibility in case showAllControls() (profiles.js) runs after us
+    var reapply = function() {
+      try { applyMobileStyles(container); } catch(e) {}
+      goToStep(activeStep); // Re-enforce which tab is visible
+    };
+    setTimeout(reapply, 2000);
+    setTimeout(reapply, 4000);
+    setTimeout(reapply, 6000); // Extra pass for slow profile loading
 
     // Resize engine after layout change
     setTimeout(resizeEngine, 100);
@@ -216,6 +222,42 @@
         }, 300);
       }
     });
+
+    // === FIX DEV PANEL ===
+    // The devPanel nested sections (Attachment Visibility, Profile Editor) need 
+    // special handling: they must remain visible and their summaries must be shown
+    // (the main CSS hides all .boSection > summary in mcControls)
+    var devPanel = document.getElementById('devPanel');
+    if (devPanel) {
+      // Ensure nested boSection details inside devPanel are open and visible
+      devPanel.querySelectorAll('details.boSection').forEach(function(d) {
+        d.style.display = '';
+        d.setAttribute('open', '');
+        var sum = d.querySelector(':scope > summary');
+        if (sum) {
+          sum.style.setProperty('display', 'block', 'important');
+          sum.style.setProperty('cursor', 'pointer', 'important');
+        }
+      });
+
+      // Also watch for the devModeCheck toggle to re-apply fixes
+      // (since showAllControls() or other code might reset display states)
+      var devCheck = document.getElementById('devModeCheck');
+      if (devCheck) {
+        devCheck.addEventListener('change', function() {
+          setTimeout(function() {
+            if (devPanel) {
+              devPanel.querySelectorAll('details.boSection').forEach(function(d) {
+                d.style.display = '';
+                d.setAttribute('open', '');
+                var sum = d.querySelector(':scope > summary');
+                if (sum) sum.style.setProperty('display', 'block', 'important');
+              });
+            }
+          }, 50);
+        });
+      }
+    }
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
   }
