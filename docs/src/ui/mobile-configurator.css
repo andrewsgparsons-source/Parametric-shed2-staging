@@ -218,6 +218,22 @@ body.mobile-configurator #mcControls .boSection .boBox {
   align-items: end !important;
 }
 
+/* Preset & share link rows: select + button side by side, select constrained */
+#mobileConfigurator #saveLoadBox .row {
+  grid-template-columns: 1fr auto !important;
+}
+#mobileConfigurator #saveLoadBox select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+#mobileConfigurator #saveLoadBox label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
 #mobileConfigurator .row3 {
   display: grid !important;
   grid-template-columns: 1fr 1fr 1fr !important;
