@@ -4642,6 +4642,16 @@ if (state && state.overhang) {
             dimChanged = true;
           }
           
+          // Hipped roof: depth must be >= width (ridge runs along depth)
+          if (curW > curD) {
+            // Swap so depth is always the longer dimension
+            var tmpDim = curW;
+            curW = curD;
+            curD = tmpDim;
+            dimChanged = true;
+            console.log("[ROOF_STYLE_CHANGE] Hipped roof: swapped W/D so depth >= width:", curW, "x", curD);
+          }
+          
           // Hipped roof minimum overhang: 200mm
           var HIPPED_MIN_OVERHANG = 200;
           var curOverhang = curState.overhang || {};
@@ -4688,6 +4698,7 @@ if (state && state.overhang) {
         applyWallHeightUiLock(store.getState());
         updateRoofHeightBlocks(v);
         updateRoofCoveringOptions(v);
+        applyHippedDimConstraints();
       });
     }
 
@@ -5236,12 +5247,58 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
         }
       }
 
+      // Hipped roof constraint: depth must be >= width
+      // (ridge runs along depth; if width > depth, hip geometry collapses)
+      var curState = store.getState();
+      var roofStyle = (curState && curState.roof && curState.roof.style) ? String(curState.roof.style) : "apex";
+      if (roofStyle === "hipped" && w > d) {
+        // Cap width to depth value
+        w = d;
+        console.log("[clampBuildingDimensions] Hipped roof: capped width to depth (" + d + "mm)");
+      }
+
       var didClamp = (w !== origW || d !== origD);
       if (didClamp) {
         console.log("[clampBuildingDimensions] CLAMPED:", origW, "x", origD, "->", w, "x", d);
       }
 
       return { w: w, d: d, clamped: didClamp };
+    }
+
+    /**
+     * For hipped roofs: set HTML max on width input (≤ depth) and min on depth input (≥ width).
+     * For other roof styles: remove those constraints.
+     */
+    function applyHippedDimConstraints() {
+      var curState = store.getState();
+      var roofStyle = (curState && curState.roof && curState.roof.style) ? String(curState.roof.style) : "apex";
+      var unitMode = getUnitMode(curState);
+
+      if (roofStyle === "hipped") {
+        var curW = curState.w || 2500;
+        var curD = curState.d || 3000;
+
+        if (wInputEl) {
+          // Width can't exceed current depth
+          wInputEl.max = formatDimension(curD, unitMode);
+          wInputEl.title = "Hipped roof: width must be ≤ depth (" + formatDimension(curD, unitMode) + (unitMode === "imperial" ? "\"" : "mm") + ")";
+        }
+        if (dInputEl) {
+          // Depth can't go below current width
+          dInputEl.min = formatDimension(curW, unitMode);
+          dInputEl.title = "Hipped roof: depth must be ≥ width (" + formatDimension(curW, unitMode) + (unitMode === "imperial" ? "\"" : "mm") + ")";
+        }
+      } else {
+        // Remove hipped constraints
+        if (wInputEl) {
+          wInputEl.removeAttribute("max");
+          wInputEl.title = "";
+        }
+        if (dInputEl) {
+          dInputEl.min = "1";
+          dInputEl.title = "";
+        }
+      }
     }
 
 function writeActiveDims() {
@@ -5277,8 +5334,11 @@ if (unitMode === "imperial") {
       if (clamped.clamped) {
         if (wInputEl) wInputEl.value = formatDimension(w, unitMode);
         if (dInputEl) dInputEl.value = formatDimension(d, unitMode);
-        console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm (max 8m x 4m)");
+        console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm");
       }
+
+      // Update hipped constraints (max/min on inputs) after every dimension change
+      applyHippedDimConstraints();
 
       var mode = (s && s.dimMode) ? String(s.dimMode) : "base";
 
@@ -7557,6 +7617,7 @@ function parseOverhangInput(val) {
       try {
         applyWallHeightUiLock(store.getState());
         updateInsulationControlsForVariant(store.getState());
+        applyHippedDimConstraints();
       } catch (eWallLock) {
         console.error("[INIT] ERROR in applyWallHeightUiLock:", eWallLock);
       }
