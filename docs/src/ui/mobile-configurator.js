@@ -54,6 +54,40 @@
     buildLayout(panel);
   }
 
+  function fixDevPanel() {
+    var devPanel = document.getElementById('devPanel');
+    if (!devPanel) {
+      console.warn('[mobile-configurator] devPanel not found');
+      return;
+    }
+
+    // Force devPanel visible — bypass the checkbox toggle on mobile
+    devPanel.style.setProperty('display', 'block', 'important');
+    console.log('[mobile-configurator] devPanel forced visible');
+
+    // Also hide the "Show Dev Tools" checkbox row since it's always visible now
+    var devCheck = document.getElementById('devModeCheck');
+    if (devCheck) {
+      var row = devCheck.closest('.row');
+      if (row) row.style.display = 'none';
+    }
+
+    // Ensure nested boSection details are open with visible summaries
+    devPanel.querySelectorAll('details.boSection').forEach(function(d) {
+      d.style.setProperty('display', '', '');
+      d.setAttribute('open', '');
+      var sum = d.querySelector(':scope > summary');
+      if (sum) {
+        sum.style.setProperty('display', 'block', 'important');
+        sum.style.setProperty('cursor', 'pointer', 'important');
+        sum.style.setProperty('font-size', '12px', 'important');
+        sum.style.setProperty('font-weight', '700', 'important');
+        sum.style.setProperty('padding', '8px', 'important');
+        sum.style.setProperty('background', '#f5f5f5', 'important');
+      }
+    });
+  }
+
   function buildLayout(panel) {
     // Find only TOP-LEVEL boSection elements (direct children of the form),
     // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
@@ -224,40 +258,13 @@
     });
 
     // === FIX DEV PANEL ===
-    // The devPanel nested sections (Attachment Visibility, Profile Editor) need 
-    // special handling: they must remain visible and their summaries must be shown
-    // (the main CSS hides all .boSection > summary in mcControls)
-    var devPanel = document.getElementById('devPanel');
-    if (devPanel) {
-      // Ensure nested boSection details inside devPanel are open and visible
-      devPanel.querySelectorAll('details.boSection').forEach(function(d) {
-        d.style.display = '';
-        d.setAttribute('open', '');
-        var sum = d.querySelector(':scope > summary');
-        if (sum) {
-          sum.style.setProperty('display', 'block', 'important');
-          sum.style.setProperty('cursor', 'pointer', 'important');
-        }
-      });
-
-      // Also watch for the devModeCheck toggle to re-apply fixes
-      // (since showAllControls() or other code might reset display states)
-      var devCheck = document.getElementById('devModeCheck');
-      if (devCheck) {
-        devCheck.addEventListener('change', function() {
-          setTimeout(function() {
-            if (devPanel) {
-              devPanel.querySelectorAll('details.boSection').forEach(function(d) {
-                d.style.display = '';
-                d.setAttribute('open', '');
-                var sum = d.querySelector(':scope > summary');
-                if (sum) sum.style.setProperty('display', 'block', 'important');
-              });
-            }
-          }, 50);
-        });
-      }
-    }
+    // On mobile, bypass the checkbox toggle entirely — just force devPanel visible
+    // and ensure nested sections (Attachment Visibility, Profile Editor) work
+    fixDevPanel();
+    // Re-apply periodically to win any race with profiles.js / instances.js
+    setTimeout(fixDevPanel, 2000);
+    setTimeout(fixDevPanel, 4000);
+    setTimeout(fixDevPanel, 6000);
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
   }
