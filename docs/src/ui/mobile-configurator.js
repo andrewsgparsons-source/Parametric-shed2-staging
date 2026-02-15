@@ -105,10 +105,24 @@
     // Update debug banner after fixes applied
     var dbgEl = document.getElementById(debugId);
     if (dbgEl && devPanel) {
-      dbgEl.textContent = 'DEBUG POST-FIX: display=' + devPanel.style.display +
-        ' | computed=' + window.getComputedStyle(devPanel).display +
-        ' | offsetHeight=' + devPanel.offsetHeight +
-        ' | innerHTML(100)=' + devPanel.innerHTML.substring(0, 100);
+      // Check each child's visibility
+      var childInfo = [];
+      for (var i = 0; i < devPanel.children.length; i++) {
+        var c = devPanel.children[i];
+        var cs = window.getComputedStyle(c);
+        childInfo.push(c.tagName + '.' + (c.className || c.id || i) + ':d=' + cs.display + ',h=' + c.offsetHeight);
+      }
+      // Check parent chain for overflow/height constraints
+      var parentInfo = [];
+      var el = devPanel;
+      for (var p = 0; p < 5 && el; p++) {
+        var ps = window.getComputedStyle(el);
+        parentInfo.push(el.tagName + '#' + (el.id || '') + ':d=' + ps.display + ',h=' + el.offsetHeight + ',oh=' + ps.overflow + ',mh=' + ps.maxHeight);
+        el = el.parentElement;
+      }
+      dbgEl.innerHTML = '<b>POST-FIX:</b> devPanel h=' + devPanel.offsetHeight +
+        '<br><b>Children:</b> ' + childInfo.join(' | ') +
+        '<br><b>Parents:</b> ' + parentInfo.join(' → ');
     }
   }
 
