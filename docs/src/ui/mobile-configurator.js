@@ -55,11 +55,15 @@
   }
 
   function buildLayout(panel) {
-    // Find all boSection elements by their summary text
-    var allSections = panel.querySelectorAll('details.boSection');
+    // Find only TOP-LEVEL boSection elements (direct children of the form),
+    // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
+    var form = panel.querySelector('form[aria-label="Build options"]');
+    var allSections = form
+      ? form.querySelectorAll(':scope > details.boSection')
+      : panel.querySelectorAll('details.boSection');
     var byName = {};
     allSections.forEach(function(s) {
-      var summary = s.querySelector('summary');
+      var summary = s.querySelector(':scope > summary');
       var name = summary ? summary.textContent.trim() : '';
       if (name) byName[name] = s;
     });
@@ -73,10 +77,10 @@
     document.body.classList.add('mobile-configurator');
     document.body.classList.add('mobile-panel-collapsed'); // Ensure original mobile UI doesn't interfere
 
-    // Open all sections so content is accessible
+    // Open all top-level sections so content is accessible
     allSections.forEach(function(s) { s.setAttribute('open', ''); });
 
-    // Hide ALL sections initially
+    // Hide all top-level sections initially (nested ones inside devPanel are untouched)
     allSections.forEach(function(s) { s.style.display = 'none'; });
 
     // Create main container
