@@ -6,7 +6,16 @@
   <title>Parametric Shed — Views</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="./styles.css">
-  <script src="./src/ui/theme-loader.js"></script>
+  <script>
+    // Inline cache-bust: append ?v= to theme-loader to prevent stale JS
+    (function() {
+      var p = new URLSearchParams(window.location.search);
+      var v = p.get('bust') || Date.now();
+      var s = document.createElement('script');
+      s.src = './src/ui/theme-loader.js?v=' + v;
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
 </head>
 
 <body data-view="3d">
