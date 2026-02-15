@@ -276,25 +276,39 @@
       var profileRow = document.createElement('div');
       profileRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
 
-      // Clone the profile select or create a synced one
-      var origSelect = document.getElementById('profileEditorSelect');
+      // Build profile select from localStorage (can't import ES module from IIFE)
       var profileSelect = document.createElement('select');
       profileSelect.id = 'mcProfileSelect';
       profileSelect.style.cssText = 'flex:1;min-width:100px;padding:7px 9px;font-size:14px;border:1px solid #E0D5C8;border-radius:8px;';
-      // Populate from original
-      if (origSelect) {
-        Array.from(origSelect.options).forEach(function(opt) {
-          var newOpt = document.createElement('option');
-          newOpt.value = opt.value;
-          newOpt.textContent = opt.textContent;
-          newOpt.selected = opt.selected;
-          profileSelect.appendChild(newOpt);
-        });
-        profileSelect.addEventListener('change', function() {
+
+      // Read profiles from localStorage (same key profiles.js uses)
+      try {
+        var stored = localStorage.getItem('shedProfilesData');
+        if (stored) {
+          var profilesData = JSON.parse(stored);
+          Object.keys(profilesData).forEach(function(name) {
+            var profile = profilesData[name];
+            var opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = (profile && profile.label) ? profile.label : name;
+            profileSelect.appendChild(opt);
+          });
+          // Default to admin if it exists
+          if (profilesData['admin']) profileSelect.value = 'admin';
+        }
+      } catch (e) {
+        console.warn('[mobile-configurator] Could not read profiles from localStorage:', e);
+      }
+
+      // When changed, delegate to the original select (if it exists) for profile apply
+      profileSelect.addEventListener('change', function() {
+        var origSelect = document.getElementById('profileEditorSelect');
+        if (origSelect) {
           origSelect.value = profileSelect.value;
           origSelect.dispatchEvent(new Event('change'));
-        });
-      }
+        }
+      });
+
       profileRow.appendChild(profileSelect);
       devDiv.appendChild(profileRow);
 
