@@ -276,28 +276,51 @@
       var profileRow = document.createElement('div');
       profileRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
 
-      // Build profile select from localStorage (can't import ES module from IIFE)
+      // Build profile select — populate from localStorage or profiles.json
       var profileSelect = document.createElement('select');
       profileSelect.id = 'mcProfileSelect';
       profileSelect.style.cssText = 'flex:1;min-width:100px;padding:7px 9px;font-size:14px;border:1px solid #E0D5C8;border-radius:8px;';
 
-      // Read profiles from localStorage (same key profiles.js uses)
+      function populateMobileProfileSelect(profiles) {
+        profileSelect.innerHTML = '';
+        Object.keys(profiles).forEach(function(name) {
+          var profile = profiles[name];
+          var opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = (profile && profile.label) ? profile.label : name;
+          profileSelect.appendChild(opt);
+        });
+        if (profiles['admin']) profileSelect.value = 'admin';
+      }
+
+      // Try localStorage first (data shape: { profiles: { admin: {...}, ... } })
+      var populated = false;
       try {
         var stored = localStorage.getItem('shedProfilesData');
         if (stored) {
-          var profilesData = JSON.parse(stored);
-          Object.keys(profilesData).forEach(function(name) {
-            var profile = profilesData[name];
-            var opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = (profile && profile.label) ? profile.label : name;
-            profileSelect.appendChild(opt);
-          });
-          // Default to admin if it exists
-          if (profilesData['admin']) profileSelect.value = 'admin';
+          var data = JSON.parse(stored);
+          var profiles = data.profiles || data;
+          if (Object.keys(profiles).length > 0) {
+            populateMobileProfileSelect(profiles);
+            populated = true;
+          }
         }
       } catch (e) {
-        console.warn('[mobile-configurator] Could not read profiles from localStorage:', e);
+        console.warn('[mobile-configurator] localStorage profiles parse error:', e);
+      }
+
+      // Fallback: fetch profiles.json directly (same source profiles.js uses)
+      if (!populated) {
+        fetch('./profiles.json')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var profiles = data.profiles || data;
+            populateMobileProfileSelect(profiles);
+            console.log('[mobile-configurator] Populated profiles from profiles.json');
+          })
+          .catch(function(e) {
+            console.warn('[mobile-configurator] Could not fetch profiles.json:', e);
+          });
       }
 
       // When changed, delegate to the original select (if it exists) for profile apply
