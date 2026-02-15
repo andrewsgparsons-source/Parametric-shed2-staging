@@ -55,7 +55,24 @@
   }
 
   function fixDevPanel() {
+    var developerBox = document.getElementById('developerBox');
     var devPanel = document.getElementById('devPanel');
+    var devCheck = document.getElementById('devModeCheck');
+    
+    // DEBUG: Add visible diagnostic banner to the developer section
+    var debugId = 'mc-dev-debug';
+    if (!document.getElementById(debugId) && developerBox) {
+      var dbg = document.createElement('div');
+      dbg.id = debugId;
+      dbg.style.cssText = 'background:#ff0;color:#000;padding:10px;font-size:14px;font-weight:bold;border:2px solid red;margin:8px 0;';
+      dbg.textContent = 'DEBUG: fixDevPanel ran. devPanel=' + (devPanel ? 'FOUND' : 'NULL') +
+        ' | display=' + (devPanel ? devPanel.style.display : 'N/A') +
+        ' | computed=' + (devPanel ? window.getComputedStyle(devPanel).display : 'N/A') +
+        ' | children=' + (devPanel ? devPanel.children.length : 0) +
+        ' | checkbox=' + (devCheck ? devCheck.checked : 'NULL');
+      developerBox.insertBefore(dbg, developerBox.firstChild);
+    }
+
     if (!devPanel) {
       console.warn('[mobile-configurator] devPanel not found');
       return;
@@ -63,10 +80,8 @@
 
     // Force devPanel visible — bypass the checkbox toggle on mobile
     devPanel.style.setProperty('display', 'block', 'important');
-    console.log('[mobile-configurator] devPanel forced visible');
 
     // Also hide the "Show Dev Tools" checkbox row since it's always visible now
-    var devCheck = document.getElementById('devModeCheck');
     if (devCheck) {
       var row = devCheck.closest('.row');
       if (row) row.style.display = 'none';
@@ -74,7 +89,7 @@
 
     // Ensure nested boSection details are open with visible summaries
     devPanel.querySelectorAll('details.boSection').forEach(function(d) {
-      d.style.setProperty('display', '', '');
+      d.style.setProperty('display', 'block', 'important');
       d.setAttribute('open', '');
       var sum = d.querySelector(':scope > summary');
       if (sum) {
@@ -86,6 +101,15 @@
         sum.style.setProperty('background', '#f5f5f5', 'important');
       }
     });
+
+    // Update debug banner after fixes applied
+    var dbgEl = document.getElementById(debugId);
+    if (dbgEl && devPanel) {
+      dbgEl.textContent = 'DEBUG POST-FIX: display=' + devPanel.style.display +
+        ' | computed=' + window.getComputedStyle(devPanel).display +
+        ' | offsetHeight=' + devPanel.offsetHeight +
+        ' | innerHTML(100)=' + devPanel.innerHTML.substring(0, 100);
+    }
   }
 
   function buildLayout(panel) {
