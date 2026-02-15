@@ -46,11 +46,14 @@
     document.head.appendChild(mobileStyle);
   }
   
+  // Cache buster — pass through ?bust= param or use build timestamp
+  const bust = params.get('bust') || Date.now();
+  
   // Load CSS
   if (chosen.css) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = chosen.css;
+    link.href = chosen.css + '?v=' + bust;
     document.head.appendChild(link);
   }
   
@@ -58,7 +61,7 @@
   if (chosen.js) {
     var loadScript = function() {
       var script = document.createElement('script');
-      script.src = chosen.js;
+      script.src = chosen.js + '?v=' + bust;
       (document.body || document.documentElement).appendChild(script);
     };
     if (document.body) {
