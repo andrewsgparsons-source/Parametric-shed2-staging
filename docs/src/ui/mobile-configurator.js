@@ -188,7 +188,7 @@
       console.error('[mobile-configurator] applyMobileStyles FAILED:', e);
       // Fallback: inject a style tag with brute force
       var fallbackStyle = document.createElement('style');
-      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 10px !important; } #mobileConfigurator .boSubhead { font-size: 11px !important; } #mobileConfigurator .hint { font-size: 9px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 16px !important; }';
+      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 11px !important; } #mobileConfigurator .boSubhead { font-size: 12px !important; } #mobileConfigurator .hint { font-size: 10px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 16px !important; }';
       document.head.appendChild(fallbackStyle);
     }
 
@@ -236,12 +236,12 @@
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
       bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
-      bomDiv.innerHTML = '<p style="font-size:9px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
+      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
-        '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
-        '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
-        '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
-        '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
+        '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
+        '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
+        '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
+        '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
         '</div>';
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
@@ -352,16 +352,16 @@
       radius: '8px'
     };
 
-    // Labels — 65% reduction from 17px
+    // Labels
     container.querySelectorAll('label').forEach(function(el) {
-      el.style.setProperty('font-size', '10px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
-    // Subheadings — 65% reduction from 19px
+    // Subheadings
     container.querySelectorAll('.boSubhead').forEach(function(el) {
-      el.style.setProperty('font-size', '11px', 'important');
+      el.style.setProperty('font-size', '12px', 'important');
       el.style.setProperty('font-weight', '700', 'important');
       el.style.setProperty('color', mc.primary, 'important');
       el.style.setProperty('text-transform', 'uppercase', 'important');
@@ -374,8 +374,8 @@
     // Inputs and selects — 16px minimum for iOS (prevents auto-zoom), reduced padding
     container.querySelectorAll('input[type="number"], input[type="text"], select').forEach(function(el) {
       el.style.setProperty('font-size', '16px', 'important');
-      el.style.setProperty('padding', '6px 8px', 'important');
-      el.style.setProperty('min-height', '32px', 'important');
+      el.style.setProperty('padding', '7px 9px', 'important');
+      el.style.setProperty('min-height', '34px', 'important');
       el.style.setProperty('border', '1px solid ' + mc.border, 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
       el.style.setProperty('color', mc.text, 'important');
@@ -385,18 +385,18 @@
 
     // Buttons (not step pills or footer)
     container.querySelectorAll('#mcControls button').forEach(function(el) {
-      el.style.setProperty('font-size', '10px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
-      el.style.setProperty('padding', '6px 10px', 'important');
-      el.style.setProperty('min-height', '32px', 'important');
+      el.style.setProperty('padding', '7px 11px', 'important');
+      el.style.setProperty('min-height', '34px', 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
     });
 
     // Checkboxes and radios — text labels
     container.querySelectorAll('.check').forEach(function(el) {
-      el.style.setProperty('font-size', '10px', 'important');
-      el.style.setProperty('padding', '4px 0', 'important');
-      el.style.setProperty('min-height', '28px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
+      el.style.setProperty('padding', '5px 0', 'important');
+      el.style.setProperty('min-height', '30px', 'important');
       el.style.setProperty('gap', '6px', 'important');
     });
 
@@ -407,13 +407,13 @@
 
     // Hints
     container.querySelectorAll('.hint, p.hint').forEach(function(el) {
-      el.style.setProperty('font-size', '9px', 'important');
+      el.style.setProperty('font-size', '10px', 'important');
       el.style.setProperty('color', mc.muted, 'important');
     });
 
     // Titles
     container.querySelectorAll('.boTitle, .boTitle2').forEach(function(el) {
-      el.style.setProperty('font-size', '11px', 'important');
+      el.style.setProperty('font-size', '12px', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
@@ -422,7 +422,7 @@
       var current = window.getComputedStyle(el).fontSize;
       var px = parseFloat(current);
       if (px > 14) {
-        el.style.setProperty('font-size', '10px', 'important');
+        el.style.setProperty('font-size', '11px', 'important');
       }
     });
 
