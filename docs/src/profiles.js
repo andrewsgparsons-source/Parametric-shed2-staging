@@ -1649,7 +1649,7 @@ export var CONTROL_REGISTRY = {
   },
 
   display: {
-    label: "Display",
+    label: "BOM",
     controls: {
       viewSelect: { type: "select", elementIds: ["viewSelect"], label: "View Selector (3D/Cutting Lists)" }
     }

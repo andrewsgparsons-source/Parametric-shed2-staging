@@ -26,7 +26,7 @@
     { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
     { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
     { label: 'Visibility', section: 'Visibility',           profileKey: 'visibility' },
-    { label: 'BOM',        section: '__bom__',              profileKey: null },
+    { label: 'BOM',        section: '__bom__',              profileKey: 'display' },
     { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
     { label: 'Dev',        section: 'Developer',            profileKey: 'developer' }
   ];
