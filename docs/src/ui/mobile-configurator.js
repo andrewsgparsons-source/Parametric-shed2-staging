@@ -27,8 +27,8 @@
     { label: 'Attachments',section: 'Building Attachments' },
     { label: 'Visibility', section: 'Visibility' },
     { label: 'BOM',        section: '__bom__' },
-    { label: 'Save',       section: 'Save / Load Design' }
-    // Developer section hidden on mobile
+    { label: 'Save',       section: 'Save / Load Design' },
+    { label: 'Dev',        section: 'Developer' }
   ];
 
   var activeStep = 0;
