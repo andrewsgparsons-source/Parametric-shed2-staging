@@ -232,8 +232,9 @@
     // Runs after layout built, and again whenever profile changes
     updatePillVisibility();
 
-    // Listen for profile changes (profile-editor.js dispatches this)
-    document.addEventListener('profile-applied', function() {
+    // Listen for profile changes (profiles.js dispatches this)
+    document.addEventListener('profile-applied', function(e) {
+      console.log('[mobile-configurator] profile-applied event:', e.detail);
       updatePillVisibility();
     });
 
@@ -244,52 +245,104 @@
 
   /**
    * Check which steps should be hidden based on current profile,
-   * and show/hide the corresponding pills
+   * and show/hide the corresponding pills.
+   *
+   * Profile data can come from:
+   *   1. URL ?pc= param (compact format: { h: ["sectionKey", ...], c: {...} })
+   *   2. localStorage shedProfilesData (full format: { sections: { key: { visible: false } } })
+   *   3. profiles.json fetch (full format, same as #2)
    */
   function updatePillVisibility() {
     hiddenSteps = [];
 
-    // Read current profile from URL or localStorage
+    // Read current profile name from URL
     var profileName = null;
     try {
       var params = new URLSearchParams(window.location.search || '');
       profileName = params.get('profile');
     } catch (e) {}
 
-    if (!profileName) return; // admin/no profile = show everything
+    if (!profileName || profileName === 'admin') return; // admin = show everything
 
-    // Get profile data
-    var profileData = null;
+    // Collect hidden section keys from all available sources
+    var hiddenKeys = [];
+
+    // Source 1: Embedded compact profile in URL (?pc= param)
+    // Format: { h: ["saveLoad", "developer"], c: { ... } }
     try {
-      var stored = localStorage.getItem('shedProfilesData');
-      if (stored) {
-        var data = JSON.parse(stored);
-        var profiles = data.profiles || data;
-        profileData = profiles[profileName];
+      var params2 = new URLSearchParams(window.location.search || '');
+      var pc = params2.get('pc');
+      if (pc) {
+        var decoded = decodeURIComponent(escape(atob(pc)));
+        var compact = JSON.parse(decoded);
+        if (compact.h && Array.isArray(compact.h)) {
+          hiddenKeys = hiddenKeys.concat(compact.h);
+          console.log('[mobile-configurator] Hidden sections from URL pc:', compact.h);
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[mobile-configurator] Failed to parse pc param:', e);
+    }
 
-    // Fallback: check for embedded profile in URL
-    if (!profileData) {
+    // Source 2: localStorage (full profile format)
+    if (hiddenKeys.length === 0) {
       try {
-        var params2 = new URLSearchParams(window.location.search || '');
-        var pc = params2.get('pc');
-        if (pc) {
-          var decoded = atob(pc);
-          profileData = JSON.parse(decoded);
+        var stored = localStorage.getItem('shedProfilesData');
+        if (stored) {
+          var data = JSON.parse(stored);
+          var profiles = data.profiles || data;
+          var profileData = profiles[profileName];
+          if (profileData && profileData.sections) {
+            Object.keys(profileData.sections).forEach(function(key) {
+              if (profileData.sections[key].visible === false) {
+                hiddenKeys.push(key);
+              }
+            });
+            console.log('[mobile-configurator] Hidden sections from localStorage:', hiddenKeys);
+          }
         }
       } catch (e) {}
     }
 
-    if (!profileData || !profileData.sections) return;
+    // Source 3: Fetch profiles.json as last resort
+    if (hiddenKeys.length === 0 && profileName) {
+      fetch('./profiles.json')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var profiles = data.profiles || data;
+          var profileData = profiles[profileName];
+          if (profileData && profileData.sections) {
+            var keys = [];
+            Object.keys(profileData.sections).forEach(function(key) {
+              if (profileData.sections[key].visible === false) {
+                keys.push(key);
+              }
+            });
+            if (keys.length > 0) {
+              console.log('[mobile-configurator] Hidden sections from profiles.json:', keys);
+              applyHiddenKeys(keys);
+            }
+          }
+        })
+        .catch(function() {});
+    }
 
+    if (hiddenKeys.length > 0) {
+      applyHiddenKeys(hiddenKeys);
+    }
+  }
+
+  /**
+   * Apply hidden section keys — hide pills and update navigation
+   */
+  function applyHiddenKeys(hiddenKeys) {
+    hiddenSteps = [];
     var pills = document.querySelectorAll('.mc-step-pill');
 
     STEPS.forEach(function(step, i) {
       if (!step.profileKey) return; // BOM has no profile key
 
-      var sectionConfig = profileData.sections[step.profileKey];
-      if (sectionConfig && sectionConfig.visible === false) {
+      if (hiddenKeys.indexOf(step.profileKey) >= 0) {
         hiddenSteps.push(i);
         if (pills[i]) pills[i].style.display = 'none';
       } else {
@@ -299,14 +352,12 @@
 
     // If current step is hidden, jump to first visible step
     if (hiddenSteps.indexOf(activeStep) >= 0) {
-      var firstVisible = 0;
       for (var i = 0; i < STEPS.length; i++) {
-        if (hiddenSteps.indexOf(i) < 0) { firstVisible = i; break; }
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); break; }
       }
-      goToStep(firstVisible);
     }
 
-    console.log('[mobile-configurator] Profile pill visibility updated, hidden:', hiddenSteps.length);
+    console.log('[mobile-configurator] Pills updated, hidden steps:', hiddenSteps.length);
   }
 
   function goToStep(idx) {
