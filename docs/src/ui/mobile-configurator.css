@@ -233,6 +233,12 @@ body.mobile-configurator #mcControls .boSection .boBox {
   min-width: 0 !important;
   overflow: hidden !important;
 }
+/* Share Link row uses inline flex — constrain its select too */
+#mobileConfigurator #saveLoadBox #shareLinkProfileSelect {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 100px) !important;
+}
 
 #mobileConfigurator .row3 {
   display: grid !important;
