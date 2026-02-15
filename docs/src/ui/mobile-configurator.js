@@ -51,7 +51,9 @@
     }
 
     console.log('[mobile-configurator] Inputs ready after ' + attempts + ' attempts. Building layout...');
+    console.log('[mobile-configurator] PRE-BUILD devPanel exists:', !!document.getElementById('devPanel'), 'developerBox children:', document.getElementById('developerBox')?.children.length);
     buildLayout(panel);
+    console.log('[mobile-configurator] POST-BUILD devPanel exists:', !!document.getElementById('devPanel'), 'developerBox children:', document.getElementById('developerBox')?.children.length);
   }
 
   function buildLayout(panel) {
@@ -225,17 +227,111 @@
     activeStep = idx;
 
     var isBom = STEPS[idx].section === '__bom__';
+    var isDev = STEPS[idx].section === 'Developer';
 
     // Hide all sections
     sections.forEach(function(s, i) {
       if (s) s.style.display = 'none';
     });
 
-    // Remove any previous BOM content
+    // Remove any previous injected content
     var existingBom = document.getElementById('mcBomContent');
     if (existingBom) existingBom.remove();
+    var existingDev = document.getElementById('mcDevContent');
+    if (existingDev) existingDev.remove();
 
-    if (isBom) {
+    if (isDev) {
+      // === MOBILE DEV TOOLS — parallel UI, bypasses devPanel entirely ===
+      var devDiv = document.createElement('div');
+      devDiv.id = 'mcDevContent';
+      devDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
+
+      // Copy State button
+      var copyBtn = document.createElement('button');
+      copyBtn.textContent = '📋 Copy State to Clipboard';
+      copyBtn.style.cssText = 'width:100%;padding:12px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:8px;';
+      copyBtn.addEventListener('click', function() {
+        // Reuse the existing copyStateBtn handler if available
+        var origBtn = document.getElementById('copyStateBtn');
+        if (origBtn) {
+          origBtn.click();
+          copyBtn.textContent = '✅ Copied!';
+          setTimeout(function() { copyBtn.textContent = '📋 Copy State to Clipboard'; }, 2000);
+        }
+      });
+      devDiv.appendChild(copyBtn);
+
+      var copyHint = document.createElement('p');
+      copyHint.textContent = 'Copy current state JSON for adding to presets file.';
+      copyHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:0 0 16px 0;';
+      devDiv.appendChild(copyHint);
+
+      // Profile section
+      var profileHeading = document.createElement('div');
+      profileHeading.textContent = 'PROFILE EDITOR';
+      profileHeading.style.cssText = 'font-size:11px;font-weight:700;color:#2D5016;text-transform:uppercase;letter-spacing:0.03em;border-bottom:2px solid #E8F0E2;padding-bottom:4px;margin-bottom:12px;';
+      devDiv.appendChild(profileHeading);
+
+      // Profile selector row
+      var profileRow = document.createElement('div');
+      profileRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
+
+      // Clone the profile select or create a synced one
+      var origSelect = document.getElementById('profileEditorSelect');
+      var profileSelect = document.createElement('select');
+      profileSelect.id = 'mcProfileSelect';
+      profileSelect.style.cssText = 'flex:1;min-width:100px;padding:7px 9px;font-size:14px;border:1px solid #E0D5C8;border-radius:8px;';
+      // Populate from original
+      if (origSelect) {
+        Array.from(origSelect.options).forEach(function(opt) {
+          var newOpt = document.createElement('option');
+          newOpt.value = opt.value;
+          newOpt.textContent = opt.textContent;
+          newOpt.selected = opt.selected;
+          profileSelect.appendChild(newOpt);
+        });
+        profileSelect.addEventListener('change', function() {
+          origSelect.value = profileSelect.value;
+          origSelect.dispatchEvent(new Event('change'));
+        });
+      }
+      profileRow.appendChild(profileSelect);
+      devDiv.appendChild(profileRow);
+
+      // Profile action buttons
+      var btnGrid = document.createElement('div');
+      btnGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;';
+
+      var profileActions = [
+        { id: 'profileNewBtn', label: '➕ New' },
+        { id: 'profileRenameBtn', label: '✏️ Rename' },
+        { id: 'profileDeleteBtn', label: '🗑️ Delete' },
+        { id: 'profileImportBtn', label: '📥 Import' },
+        { id: 'profileExportBtn', label: '📤 Export' },
+        { id: 'profileResetBtn', label: '🔄 Reset' }
+      ];
+      profileActions.forEach(function(action) {
+        var btn = document.createElement('button');
+        btn.textContent = action.label;
+        btn.style.cssText = 'padding:10px 4px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;';
+        btn.addEventListener('click', function() {
+          var origBtn = document.getElementById(action.id);
+          if (origBtn) origBtn.click();
+        });
+        btnGrid.appendChild(btn);
+      });
+      devDiv.appendChild(btnGrid);
+
+      // Active profile hint
+      var activeHint = document.createElement('p');
+      activeHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:4px 0 0 0;';
+      var origHint = document.getElementById('profileActiveHint');
+      activeHint.textContent = origHint ? origHint.textContent : '';
+      devDiv.appendChild(activeHint);
+
+      var controls = document.getElementById('mcControls');
+      if (controls) controls.appendChild(devDiv);
+    } else if (isBom) {
       // Inject BOM buttons
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
