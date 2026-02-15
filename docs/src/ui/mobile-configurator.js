@@ -59,20 +59,24 @@
     var devPanel = document.getElementById('devPanel');
     var devCheck = document.getElementById('devModeCheck');
     
-    // (debug banner removed)
-
     if (!devPanel) {
       console.warn('[mobile-configurator] devPanel not found');
       return;
     }
 
-    // Force devPanel visible — bypass the checkbox toggle on mobile
+    // Force the checkbox checked — this triggers toggleDevMode(true) naturally
+    // via instances.js, which sets devPanel.style.display = "block"
+    if (devCheck && !devCheck.checked) {
+      devCheck.checked = true;
+      devCheck.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    // Belt-and-suspenders: also force display directly
     devPanel.style.setProperty('display', 'block', 'important');
 
-    // Also hide the "Show Dev Tools" checkbox row since it's always visible now
+    // Hide the checkbox row since dev tools are always shown on mobile
     if (devCheck) {
       var row = devCheck.closest('.row');
-      if (row) row.style.display = 'none';
+      if (row) row.style.setProperty('display', 'none', 'important');
     }
 
     // Ensure nested boSection details are open with visible summaries
@@ -90,7 +94,7 @@
       }
     });
 
-    // (debug output removed)
+    console.log('[mobile-configurator] fixDevPanel done. devPanel display:', devPanel.style.display, 'checkbox:', devCheck ? devCheck.checked : 'N/A');
   }
 
   function buildLayout(panel) {
