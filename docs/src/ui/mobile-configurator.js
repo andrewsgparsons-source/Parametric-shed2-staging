@@ -188,7 +188,7 @@
       console.error('[mobile-configurator] applyMobileStyles FAILED:', e);
       // Fallback: inject a style tag with brute force
       var fallbackStyle = document.createElement('style');
-      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 17px !important; } #mobileConfigurator .boSubhead { font-size: 19px !important; } #mobileConfigurator .hint { font-size: 15px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 18px !important; }';
+      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 10px !important; } #mobileConfigurator .boSubhead { font-size: 11px !important; } #mobileConfigurator .hint { font-size: 9px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 16px !important; }';
       document.head.appendChild(fallbackStyle);
     }
 
@@ -236,12 +236,12 @@
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
       bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
-      bomDiv.innerHTML = '<p style="font-size:15px;color:#5C5C5C;margin:0 0 16px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<button class="mc-bom-btn" data-view="base" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
-        '<button class="mc-bom-btn" data-view="walls" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
-        '<button class="mc-bom-btn" data-view="roof" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
-        '<button class="mc-bom-btn" data-view="openings" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
+      bomDiv.innerHTML = '<p style="font-size:9px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
+        '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
+        '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
+        '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:10px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
         '</div>';
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
@@ -352,31 +352,31 @@
       radius: '8px'
     };
 
-    // Labels — slightly bigger than last evening's 16px
+    // Labels — 65% reduction from 17px
     container.querySelectorAll('label').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
+      el.style.setProperty('font-size', '10px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
-    // Subheadings — slightly bigger than last evening's 18px
+    // Subheadings — 65% reduction from 19px
     container.querySelectorAll('.boSubhead').forEach(function(el) {
-      el.style.setProperty('font-size', '19px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('font-weight', '700', 'important');
       el.style.setProperty('color', mc.primary, 'important');
       el.style.setProperty('text-transform', 'uppercase', 'important');
       el.style.setProperty('letter-spacing', '0.03em', 'important');
       el.style.setProperty('border-bottom', '2px solid ' + mc.primaryLight, 'important');
-      el.style.setProperty('padding-bottom', '6px', 'important');
-      el.style.setProperty('margin-bottom', '12px', 'important');
+      el.style.setProperty('padding-bottom', '4px', 'important');
+      el.style.setProperty('margin-bottom', '8px', 'important');
     });
 
-    // Inputs and selects — 16px is iOS minimum, bump to 18px for comfort
+    // Inputs and selects — 16px minimum for iOS (prevents auto-zoom), reduced padding
     container.querySelectorAll('input[type="number"], input[type="text"], select').forEach(function(el) {
-      el.style.setProperty('font-size', '18px', 'important');
-      el.style.setProperty('padding', '12px 14px', 'important');
-      el.style.setProperty('min-height', '48px', 'important');
-      el.style.setProperty('border', '1.5px solid ' + mc.border, 'important');
+      el.style.setProperty('font-size', '16px', 'important');
+      el.style.setProperty('padding', '6px 8px', 'important');
+      el.style.setProperty('min-height', '32px', 'important');
+      el.style.setProperty('border', '1px solid ' + mc.border, 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
       el.style.setProperty('color', mc.text, 'important');
       el.style.setProperty('background', mc.bg, 'important');
@@ -385,44 +385,44 @@
 
     // Buttons (not step pills or footer)
     container.querySelectorAll('#mcControls button').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
+      el.style.setProperty('font-size', '10px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
-      el.style.setProperty('padding', '12px 16px', 'important');
-      el.style.setProperty('min-height', '48px', 'important');
+      el.style.setProperty('padding', '6px 10px', 'important');
+      el.style.setProperty('min-height', '32px', 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
     });
 
     // Checkboxes and radios — text labels
     container.querySelectorAll('.check').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
-      el.style.setProperty('padding', '10px 0', 'important');
-      el.style.setProperty('min-height', '44px', 'important');
-      el.style.setProperty('gap', '10px', 'important');
+      el.style.setProperty('font-size', '10px', 'important');
+      el.style.setProperty('padding', '4px 0', 'important');
+      el.style.setProperty('min-height', '28px', 'important');
+      el.style.setProperty('gap', '6px', 'important');
     });
 
     container.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function(el) {
-      el.style.setProperty('width', '26px', 'important');
-      el.style.setProperty('height', '26px', 'important');
+      el.style.setProperty('width', '18px', 'important');
+      el.style.setProperty('height', '18px', 'important');
     });
 
     // Hints
     container.querySelectorAll('.hint, p.hint').forEach(function(el) {
-      el.style.setProperty('font-size', '15px', 'important');
+      el.style.setProperty('font-size', '9px', 'important');
       el.style.setProperty('color', mc.muted, 'important');
     });
 
     // Titles
     container.querySelectorAll('.boTitle, .boTitle2').forEach(function(el) {
-      el.style.setProperty('font-size', '18px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
-    // All spans and divs — only bump up tiny text
+    // All spans and divs — no inflation, just normalise small text
     container.querySelectorAll('#mcControls span, #mcControls div').forEach(function(el) {
       var current = window.getComputedStyle(el).fontSize;
       var px = parseFloat(current);
-      if (px < 14) {
-        el.style.setProperty('font-size', '15px', 'important');
+      if (px > 14) {
+        el.style.setProperty('font-size', '10px', 'important');
       }
     });
 
