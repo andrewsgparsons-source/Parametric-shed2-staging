@@ -276,9 +276,10 @@
       var profileRow = document.createElement('div');
       profileRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
 
-      // Build profile select — populate from localStorage or profiles.json
+      // Use the SAME IDs as the original (now-nuked) devPanel elements
+      // so profile-editor.js can find and populate them
       var profileSelect = document.createElement('select');
-      profileSelect.id = 'mcProfileSelect';
+      profileSelect.id = 'profileEditorSelect';
       profileSelect.style.cssText = 'flex:1;min-width:100px;padding:7px 9px;font-size:14px;border:1px solid #E0D5C8;border-radius:8px;';
 
       function populateMobileProfileSelect(profiles) {
@@ -323,13 +324,13 @@
           });
       }
 
-      // When changed, delegate to the original select (if it exists) for profile apply
+      // Change handler — profile-editor.js wires its own 'change' listener
+      // on #profileEditorSelect during wireEditorEvents(), so if re-render
+      // runs, that listener will handle profile switching automatically.
+      // As a fallback for initial load, dispatch the event:
       profileSelect.addEventListener('change', function() {
-        var origSelect = document.getElementById('profileEditorSelect');
-        if (origSelect) {
-          origSelect.value = profileSelect.value;
-          origSelect.dispatchEvent(new Event('change'));
-        }
+        // profile-editor.js listens for this event on #profileEditorSelect
+        console.log('[mobile-configurator] Profile select changed to:', profileSelect.value);
       });
 
       profileRow.appendChild(profileSelect);
@@ -359,15 +360,26 @@
       });
       devDiv.appendChild(btnGrid);
 
-      // Active profile hint
+      // Active profile hint — use same ID so profile-editor.js can update it
       var activeHint = document.createElement('p');
-      activeHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:4px 0 0 0;';
-      var origHint = document.getElementById('profileActiveHint');
-      activeHint.textContent = origHint ? origHint.textContent : '';
+      activeHint.id = 'profileActiveHint';
+      activeHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:4px 0 12px 0;';
       devDiv.appendChild(activeHint);
+
+      // Profile controls container — same ID as the nuked original
+      // profile-editor.js renders section checkboxes into this
+      var profileControls = document.createElement('div');
+      profileControls.id = 'profileControlsContainer';
+      profileControls.style.cssText = 'max-height:50vh;overflow-y:auto;';
+      devDiv.appendChild(profileControls);
 
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(devDiv);
+
+      // Trigger profile-editor.js to re-render into our new containers
+      if (typeof window._mcRerenderProfiles === 'function') {
+        window._mcRerenderProfiles();
+      }
     } else if (isBom) {
       // Inject BOM buttons
       var bomDiv = document.createElement('div');
