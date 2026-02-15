@@ -20,19 +20,20 @@
   'use strict';
 
   var STEPS = [
-    { label: 'Size',       section: 'Size & Shape' },
-    { label: 'Roof',       section: 'Roof' },
-    { label: 'Walls',      section: 'Walls & Openings' },
-    { label: 'Appearance', section: 'Appearance' },
-    { label: 'Attachments',section: 'Building Attachments' },
-    { label: 'Visibility', section: 'Visibility' },
-    { label: 'BOM',        section: '__bom__' },
-    { label: 'Save',       section: 'Save / Load Design' },
-    { label: 'Dev',        section: 'Developer' }
+    { label: 'Size',       section: 'Size & Shape',        profileKey: 'sizeShape' },
+    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
+    { label: 'Walls',      section: 'Walls & Openings',    profileKey: 'wallsOpenings' },
+    { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
+    { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
+    { label: 'Visibility', section: 'Visibility',           profileKey: 'visibility' },
+    { label: 'BOM',        section: '__bom__',              profileKey: null },
+    { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
+    { label: 'Dev',        section: 'Developer',            profileKey: 'developer' }
   ];
 
   var activeStep = 0;
   var sections = [];
+  var hiddenSteps = []; // indices of steps hidden by profile
   var attempts = 0;
   var previewHeight = 40; // vh
 
@@ -167,14 +168,20 @@
     prevBtn.className = 'mc-footer-btn mc-prev';
     prevBtn.textContent = '← Back';
     prevBtn.addEventListener('click', function() {
-      if (activeStep > 0) goToStep(activeStep - 1);
+      // Find previous visible step
+      for (var i = activeStep - 1; i >= 0; i--) {
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); return; }
+      }
     });
 
     var nextBtn = document.createElement('button');
     nextBtn.className = 'mc-footer-btn mc-next';
     nextBtn.textContent = 'Next →';
     nextBtn.addEventListener('click', function() {
-      if (activeStep < STEPS.length - 1) goToStep(activeStep + 1);
+      // Find next visible step
+      for (var i = activeStep + 1; i < STEPS.length; i++) {
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); return; }
+      }
     });
 
     footer.appendChild(prevBtn);
@@ -220,10 +227,94 @@
     });
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
+
+    // Check profile restrictions and update pill visibility
+    // Runs after layout built, and again whenever profile changes
+    updatePillVisibility();
+
+    // Listen for profile changes (profile-editor.js dispatches this)
+    document.addEventListener('profile-applied', function() {
+      updatePillVisibility();
+    });
+
+    // Also poll briefly in case profile loads async after us
+    setTimeout(updatePillVisibility, 3000);
+    setTimeout(updatePillVisibility, 6000);
+  }
+
+  /**
+   * Check which steps should be hidden based on current profile,
+   * and show/hide the corresponding pills
+   */
+  function updatePillVisibility() {
+    hiddenSteps = [];
+
+    // Read current profile from URL or localStorage
+    var profileName = null;
+    try {
+      var params = new URLSearchParams(window.location.search || '');
+      profileName = params.get('profile');
+    } catch (e) {}
+
+    if (!profileName) return; // admin/no profile = show everything
+
+    // Get profile data
+    var profileData = null;
+    try {
+      var stored = localStorage.getItem('shedProfilesData');
+      if (stored) {
+        var data = JSON.parse(stored);
+        var profiles = data.profiles || data;
+        profileData = profiles[profileName];
+      }
+    } catch (e) {}
+
+    // Fallback: check for embedded profile in URL
+    if (!profileData) {
+      try {
+        var params2 = new URLSearchParams(window.location.search || '');
+        var pc = params2.get('pc');
+        if (pc) {
+          var decoded = atob(pc);
+          profileData = JSON.parse(decoded);
+        }
+      } catch (e) {}
+    }
+
+    if (!profileData || !profileData.sections) return;
+
+    var pills = document.querySelectorAll('.mc-step-pill');
+
+    STEPS.forEach(function(step, i) {
+      if (!step.profileKey) return; // BOM has no profile key
+
+      var sectionConfig = profileData.sections[step.profileKey];
+      if (sectionConfig && sectionConfig.visible === false) {
+        hiddenSteps.push(i);
+        if (pills[i]) pills[i].style.display = 'none';
+      } else {
+        if (pills[i]) pills[i].style.display = '';
+      }
+    });
+
+    // If current step is hidden, jump to first visible step
+    if (hiddenSteps.indexOf(activeStep) >= 0) {
+      var firstVisible = 0;
+      for (var i = 0; i < STEPS.length; i++) {
+        if (hiddenSteps.indexOf(i) < 0) { firstVisible = i; break; }
+      }
+      goToStep(firstVisible);
+    }
+
+    console.log('[mobile-configurator] Profile pill visibility updated, hidden:', hiddenSteps.length);
   }
 
   function goToStep(idx) {
     if (idx < 0 || idx >= STEPS.length) return;
+
+    // Skip hidden steps
+    if (hiddenSteps.indexOf(idx) >= 0) return;
+
     activeStep = idx;
 
     var isBom = STEPS[idx].section === '__bom__';

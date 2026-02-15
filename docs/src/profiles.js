@@ -1878,6 +1878,7 @@ export function applyProfile(profileName, store) {
   if (profileName === "viewer") {
     _currentProfileName = "viewer";
     applyViewerProfile();
+    try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
     return;
   }
 
@@ -1893,6 +1894,7 @@ export function applyProfile(profileName, store) {
     } catch (err) {
       console.error("[profiles] Error applying admin profile:", err);
     }
+    try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
     return;
   }
 
@@ -1981,6 +1983,9 @@ export function applyProfile(profileName, store) {
       }
     }
   }
+
+  // Notify mobile-configurator (and others) that profile has been applied
+  try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
 }
 
 /**
