@@ -30,7 +30,12 @@
     "window_hardware": 15.00,
     "door_timber_allowance": 65.00,
     "window_timber_allowance": 30.00,
-    "notes": "DGUs from local glazier (Dom): 6 units = £220. Timber allowance for handmade frames. Hardware estimated."
+    "skylight_premium": 70.00,
+    "notes": "DGUs from local glazier (Dom): 6 units = £220. Timber allowance for handmade frames. Hardware estimated. Skylight premium: £70 over window cost."
+  },
+  "shelving": {
+    "cost_per_m2": 25.00,
+    "notes": "£25 per square metre of shelf area (board + brackets). Confirmed 16 Feb 2026."
   },
   "roofing": {
     "felt_per_m2": 8.00,

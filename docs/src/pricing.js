@@ -41,6 +41,7 @@ export function estimatePrice(state) {
   // Count openings from state
   const doors = countOpenings(state, 'door');
   const windows = countOpenings(state, 'window');
+  const skylights = countSkylights(state);
 
   const breakdown = {};
 
@@ -113,8 +114,18 @@ export function estimatePrice(state) {
   // ─── 6. OPENINGS ───
   const doorCost = (pt.openings.dgu_per_unit + pt.openings.door_hardware + pt.openings.door_timber_allowance);
   const windowCost = (pt.openings.dgu_per_unit + pt.openings.window_hardware + pt.openings.window_timber_allowance);
+  const skylightCost = windowCost + (pt.openings.skylight_premium || 70);
   breakdown.doors = doors * doorCost;
   breakdown.windows = windows * windowCost;
+  breakdown.skylights = skylights * skylightCost;
+
+  // ─── 6b. SHELVING ───
+  const shelvingArea_m2 = calcShelvingArea(state);
+  const shelvingCostPerM2 = pt.shelving?.cost_per_m2 || 25;
+  breakdown.shelving = shelvingArea_m2 * shelvingCostPerM2;
+
+  // ─── 6c. INTERNAL DIVIDERS ───
+  breakdown.dividers = calcDividerCost(state, pt, w_mm, d_mm);
 
   // ─── 7. DPC / MEMBRANE ───
   breakdown.dpc = footprint_m2 * pt.sundries.dpc_membrane_per_m2;
@@ -161,29 +172,104 @@ export function estimatePrice(state) {
     gaugeLabel: (section.h >= 100) ? '100×50' : '75×50',
     doors,
     windows,
+    skylights,
+    shelvingArea_m2: Math.round(shelvingArea_m2 * 100) / 100,
+    dividerCount: (state.dividers?.items || []).filter(d => d && d.enabled !== false).length,
     breakdown: Object.fromEntries(
       Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
     )
   };
 }
 
-// ─── Helper: count openings ───
+// ─── Helper: count openings (doors/windows only — skylights counted separately) ───
 function countOpenings(state, type) {
   let count = 0;
-  // Openings are stored as a flat array at state.walls.openings
   const openings = state.walls?.openings;
   if (Array.isArray(openings)) {
     count = openings.filter(o => {
       if (!o.enabled) return false;
       const t = (o.type || '').toLowerCase();
       if (type === 'door') return t.includes('door');
-      if (type === 'window') return t.includes('window') || t === 'skylight';
+      if (type === 'window') return t.includes('window') && t !== 'skylight';
       return false;
     }).length;
   }
   // Minimum: 1 door if none found
   if (type === 'door' && count === 0) count = 1;
   return count;
+}
+
+// ─── Helper: count skylights from roof state ───
+function countSkylights(state) {
+  const skylights = state.roof?.skylights;
+  if (!Array.isArray(skylights)) return 0;
+  return skylights.filter(s => s && s.enabled !== false).length;
+}
+
+// ─── Helper: calculate total shelving area in m² ───
+function calcShelvingArea(state) {
+  const shelves = state.shelving;
+  if (!Array.isArray(shelves)) return 0;
+  let area = 0;
+  for (const s of shelves) {
+    if (!s || s.enabled === false) continue;
+    const len = s.length_mm || 0;
+    const depth = s.depth_mm || 0;
+    area += (len * depth) / 1_000_000; // mm² → m²
+  }
+  return area;
+}
+
+// ─── Helper: calculate divider cost from timber + coverings ───
+function calcDividerCost(state, pt, buildingW_mm, buildingD_mm) {
+  const items = state.dividers?.items;
+  if (!Array.isArray(items)) return 0;
+
+  const wallHeight_mm = state.walls?.height_mm || 2200;
+  let totalCost = 0;
+
+  for (const div of items) {
+    if (!div || div.enabled === false) continue;
+
+    // Divider length depends on axis
+    const axis = div.axis || 'x';
+    const divLength_mm = axis === 'x' ? buildingD_mm : buildingW_mm;
+    const divHeight_mm = wallHeight_mm;
+    const divArea_m2 = (divLength_mm * divHeight_mm) / 1_000_000;
+
+    // Timber framing: sole plate + top plate + studs at 600mm centres
+    const timberPerLm = pt.timber.structural_50x100_per_lm;
+    const plates_lm = (divLength_mm * 2) / 1000; // sole + top plate
+    const studCount = Math.ceil(divLength_mm / 600) + 1;
+    const studs_lm = studCount * (divHeight_mm / 1000);
+    const timberCost = (plates_lm + studs_lm) * timberPerLm;
+
+    // Coverings (each side can be none/osb/cladding)
+    const sheetArea_m2 = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000;
+    let coveringCost = 0;
+
+    for (const side of ['coveringLeft', 'coveringRight']) {
+      const cover = div[side] || 'none';
+      if (cover === 'osb') {
+        const sheets = Math.ceil(divArea_m2 / sheetArea_m2);
+        coveringCost += sheets * pt.sheets.osb_18mm_per_sheet;
+      } else if (cover === 'cladding' || cover === 'clad') {
+        // Use whichever cladding profile the building uses
+        const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
+        let costPerM2;
+        if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge') {
+          costPerM2 = pt.cladding.feather_edge_175x38_per_lm * (1000 / pt.cladding.feather_edge_cover_mm);
+        } else {
+          costPerM2 = pt.cladding.shiplap_150x25_per_lm * (1000 / pt.cladding.shiplap_cover_mm);
+        }
+        coveringCost += divArea_m2 * costPerM2;
+      }
+    }
+
+    totalCost += timberCost + coveringCost;
+  }
+
+  return totalCost;
 }
 
 // ─── Helper: estimate structural timber linear metres ───
@@ -275,7 +361,7 @@ export function renderPriceCard(state, containerId) {
       <div class="price-card-basis">
         Based on ${est.footprint_m2}m² footprint${est.isInsulated ? ', fully insulated' : ''}, 
         ${est.doors} door${est.doors !== 1 ? 's' : ''}, 
-        ${est.windows} window${est.windows !== 1 ? 's' : ''}${vatNote}
+        ${est.windows} window${est.windows !== 1 ? 's' : ''}${est.skylights ? `, ${est.skylights} skylight${est.skylights !== 1 ? 's' : ''}` : ''}${vatNote}
       </div>
       <div class="price-card-detail">
         <div class="price-detail-row">
@@ -352,7 +438,7 @@ export function renderPricingBreakdown(state, containerId) {
     <div class="pricing-breakdown">
       <div class="pb-header">
         <h3 style="margin:0 0 4px;color:#4a3728;">💰 Full Pricing Breakdown</h3>
-        <p style="margin:0;color:#888;font-size:0.85em;">${est.footprint_m2}m² footprint · ${est.isInsulated ? 'Insulated' : 'Basic'} · ${est.doors} door${est.doors !== 1 ? 's' : ''} · ${est.windows} window${est.windows !== 1 ? 's' : ''}</p>
+        <p style="margin:0;color:#888;font-size:0.85em;">${est.footprint_m2}m² footprint · ${est.isInsulated ? 'Insulated' : 'Basic'} · ${est.doors} door${est.doors !== 1 ? 's' : ''} · ${est.windows} window${est.windows !== 1 ? 's' : ''}${est.skylights ? ` · ${est.skylights} skylight${est.skylights !== 1 ? 's' : ''}` : ''}</p>
       </div>
 
       <div class="pb-section">
@@ -367,6 +453,9 @@ export function renderPricingBreakdown(state, containerId) {
           ${b.roofComplexity ? `<tr><td>Roof complexity (${est.roofStyle})</td><td class="pb-val">£${b.roofComplexity.toLocaleString()}</td></tr>` : ''}
           <tr><td>Doors</td><td class="pb-val">£${b.doors.toLocaleString()}</td></tr>
           <tr><td>Windows</td><td class="pb-val">£${b.windows.toLocaleString()}</td></tr>
+          ${b.skylights ? `<tr><td>Skylights</td><td class="pb-val">£${b.skylights.toLocaleString()}</td></tr>` : ''}
+          ${b.shelving ? `<tr><td>Shelving (${est.shelvingArea_m2}m²)</td><td class="pb-val">£${b.shelving.toLocaleString()}</td></tr>` : ''}
+          ${b.dividers ? `<tr><td>Internal dividers (${est.dividerCount})</td><td class="pb-val">£${b.dividers.toLocaleString()}</td></tr>` : ''}
           <tr><td>DPC membrane</td><td class="pb-val">£${b.dpc.toLocaleString()}</td></tr>
           <tr><td>Fixings (6%)</td><td class="pb-val">£${b.fixings.toLocaleString()}</td></tr>
           <tr><td>Delivery</td><td class="pb-val">£${b.delivery.toLocaleString()}</td></tr>
