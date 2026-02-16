@@ -316,21 +316,33 @@ function estimateWallArea(state, w_mm, d_mm, roofStyle) {
   return area;
 }
 
-// ─── Helper: estimate roof area ───
+// ─── Helper: estimate roof area (uses actual overhang values from state) ───
 function estimateRoofArea(w_mm, d_mm, roofStyle, state) {
   const span_m = Math.min(w_mm, d_mm) / 1000;
   const length_m = Math.max(w_mm, d_mm) / 1000;
-  const overhang_m = 0.075 * 2; // 75mm each side
+
+  // Read actual overhangs from state (fall back to uniform, then 75mm default)
+  const ovh = state?.overhang || {};
+  const uni = ovh.uniform_mm ?? 75;
+  const isUnset = (v) => v == null || v === '';
+  const l_mm = isUnset(ovh.left_mm)  ? uni : Number(ovh.left_mm)  || 0;
+  const r_mm = isUnset(ovh.right_mm) ? uni : Number(ovh.right_mm) || 0;
+  const f_mm = isUnset(ovh.front_mm) ? uni : Number(ovh.front_mm) || 0;
+  const b_mm = isUnset(ovh.back_mm)  ? uni : Number(ovh.back_mm)  || 0;
+
+  // Total overhang added to each dimension
+  const ovhSpan_m = (l_mm + r_mm) / 1000;   // added to the span (width)
+  const ovhLen_m  = (f_mm + b_mm) / 1000;    // added to the length (depth)
 
   if (roofStyle === 'pent') {
-    // Single slope
-    const slopeLen = (span_m + overhang_m) * 1.05; // slight pitch factor
-    return slopeLen * (length_m + overhang_m);
+    // Single slope — slope runs across the span
+    const slopeLen = (span_m + ovhSpan_m) * 1.05; // pitch factor
+    return slopeLen * (length_m + ovhLen_m);
   }
   // Apex / hipped — two slopes
-  const halfSpan = (span_m / 2 + overhang_m / 2);
+  const halfSpan = (span_m + ovhSpan_m) / 2;
   const slopeLen = halfSpan * 1.12; // pitch factor
-  return 2 * slopeLen * (length_m + overhang_m);
+  return 2 * slopeLen * (length_m + ovhLen_m);
 }
 
 // ─── UI: render price estimate card ───
