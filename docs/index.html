@@ -971,9 +971,12 @@
       if (ok) {
         window.__pricingReady = true;
         window.__updatePriceCard = function(state) {
-          // Update badge (always show for admin, hidden via checkbox toggle)
-          var badgeOff = state && state.showPriceBadge === false; // explicitly false = hidden
-          if (!badgeOff) {
+          // Badge visibility: show if showPriceBadge is true, or if admin profile and not explicitly false
+          var qs = new URLSearchParams(window.location.search || '');
+          var isAdmin = qs.get('profile') === 'admin';
+          var showBadge = state && state.showPriceBadge === true;
+          if (isAdmin && state && state.showPriceBadge !== false) showBadge = true;
+          if (showBadge) {
             renderPriceBadge(state);
           } else {
             hidePriceBadge();
@@ -991,8 +994,8 @@
         if (!window.__lastState && window.__dbg && window.__dbg.store && typeof window.__dbg.store.getState === 'function') {
           window.__lastState = window.__dbg.store.getState();
           console.log('[PRICING] Seeded __lastState from store (initial render already ran)');
-          // Show price badge immediately on load
-          renderPriceBadge(window.__lastState);
+          // Show price badge immediately on load (respects showPriceBadge + admin check)
+          window.__updatePriceCard(window.__lastState);
         }
         // Listen for breakdown render requests from sidebar
         window.addEventListener('renderPricingBreakdown', function(e) {
@@ -1004,14 +1007,21 @@
             renderPricingBreakdown(state, containerId);
           }
         });
-        // Wire price badge checkbox
+        // Wire price badge checkbox — writes to store so it persists in shared links
         var priceBadgeCheck = document.getElementById('showPriceBadgeCheck');
         if (priceBadgeCheck) {
+          // Init checkbox from store state (e.g. loaded from URL)
+          var initState = window.__dbg && window.__dbg.store && window.__dbg.store.getState();
+          if (initState && initState.showPriceBadge === true) priceBadgeCheck.checked = true;
           priceBadgeCheck.addEventListener('change', function() {
-            var state = window.__lastState || (window.__dbg && window.__dbg.store && window.__dbg.store.getState());
+            var store = window.__dbg && window.__dbg.store;
+            if (store && typeof store.setState === 'function') {
+              store.setState({ showPriceBadge: priceBadgeCheck.checked });
+            }
+            var state = window.__lastState || (store && store.getState());
             if (state) {
-              window.__lastState = state;
               state.showPriceBadge = priceBadgeCheck.checked;
+              window.__lastState = state;
               if (priceBadgeCheck.checked) {
                 renderPriceBadge(state);
               } else {

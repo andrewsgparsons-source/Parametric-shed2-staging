@@ -601,6 +601,12 @@ export function generateViewerUrl(state) {
     }
   }
 
+  // Price badge visibility (explicitly include so shared links respect the setting)
+  if (state.showPriceBadge === true) {
+    compact.showPriceBadge = true;
+  }
+  // If false or undefined, omit it — badge will be hidden by default for shared links
+
   // Encode as Base64 with UTF-8 support
   // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
   var json = JSON.stringify(compact);
@@ -1313,6 +1319,11 @@ export function generateProfileUrl(profileName, state) {
     if (hasVisChanges) {
       compact.vis = compactVis;
     }
+  }
+
+  // Price badge visibility
+  if (state.showPriceBadge === true) {
+    compact.showPriceBadge = true;
   }
 
   // Encode as Base64
