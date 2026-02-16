@@ -47,7 +47,10 @@ export function estimatePrice(state) {
   // ─── 1. TIMBER (structural framing) ───
   const timberPerLm = pt.timber.structural_50x100_per_lm;
   const timberLm = estimateTimberLinearMetres(state, w_mm, d_mm);
-  breakdown.timber = timberLm * timberPerLm;
+  // Frame gauge: 100×50 costs ~1/3 more than 75×50
+  const section = (isInsulated ? state.walls?.insulated?.section : state.walls?.basic?.section) || {};
+  const gaugeMultiplier = (section.h >= 100) ? 1.33 : 1.0;
+  breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
 
   // ─── 2. CLADDING ───
   const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
@@ -155,6 +158,7 @@ export function estimatePrice(state) {
     footprint_m2: Math.round(footprint_m2 * 100) / 100,
     isInsulated,
     roofStyle,
+    gaugeLabel: (section.h >= 100) ? '100×50' : '75×50',
     doors,
     windows,
     breakdown: Object.fromEntries(
@@ -354,7 +358,7 @@ export function renderPricingBreakdown(state, containerId) {
       <div class="pb-section">
         <h4 style="margin:12px 0 8px;color:#6b4c2a;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">📦 Materials</h4>
         <table class="pb-table">
-          <tr><td>Structural timber</td><td class="pb-val">£${b.timber.toLocaleString()}</td></tr>
+          <tr><td>Structural timber${est.gaugeLabel ? ` (${est.gaugeLabel})` : ''}</td><td class="pb-val">£${b.timber.toLocaleString()}</td></tr>
           <tr><td>Cladding</td><td class="pb-val">£${b.cladding.toLocaleString()}</td></tr>
           <tr><td>OSB sheathing</td><td class="pb-val">£${b.osb.toLocaleString()}</td></tr>
           ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
