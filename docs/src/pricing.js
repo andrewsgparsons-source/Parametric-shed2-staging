@@ -1,0 +1,413 @@
+// FILE: docs/src/pricing.js
+// Price Boundary Calculator — estimates a cost range from BOM quantities + price table
+// Shows "likely total range" to help customers understand ballpark cost
+
+import { CONFIG } from './params.js';
+
+let priceTable = null;
+
+/** Load the price table JSON (called once at startup) */
+export async function loadPriceTable() {
+  try {
+    const resp = await fetch('./data/price-table.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    priceTable = await resp.json();
+    console.log('[PRICING] Price table loaded:', priceTable.version);
+    return true;
+  } catch (err) {
+    console.warn('[PRICING] Could not load price table:', err.message);
+    return false;
+  }
+}
+
+/** Get the loaded price table (or null) */
+export function getPriceTable() { return priceTable; }
+
+/**
+ * Calculate price estimate from current state.
+ * Returns { low, high, breakdown } or null if price table not loaded.
+ */
+export function estimatePrice(state) {
+  if (!priceTable) return null;
+
+  const pt = priceTable;
+  const w_mm = (state.dim && state.dim.frameW_mm) || state.w || 1800;
+  const d_mm = (state.dim && state.dim.frameD_mm) || state.d || 2400;
+  const footprint_m2 = (w_mm * d_mm) / 1_000_000;
+  const isInsulated = state.walls?.variant === 'insulated';
+  const roofStyle = state.roof?.style || 'apex';
+  const roofCovering = state.roof?.covering || 'felt';
+
+  // Count openings from state
+  const doors = countOpenings(state, 'door');
+  const windows = countOpenings(state, 'window');
+
+  const breakdown = {};
+
+  // ─── 1. TIMBER (structural framing) ───
+  const timberPerLm = pt.timber.structural_50x100_per_lm;
+  const timberLm = estimateTimberLinearMetres(state, w_mm, d_mm);
+  breakdown.timber = timberLm * timberPerLm;
+
+  // ─── 2. CLADDING ───
+  const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
+  const wallArea_m2 = estimateWallArea(state, w_mm, d_mm, roofStyle);
+  let claddingCostPerM2;
+  if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge') {
+    claddingCostPerM2 = pt.cladding.feather_edge_175x38_per_lm * (1000 / pt.cladding.feather_edge_cover_mm);
+  } else {
+    // Default to shiplap
+    claddingCostPerM2 = pt.cladding.shiplap_150x25_per_lm * (1000 / pt.cladding.shiplap_cover_mm);
+  }
+  breakdown.cladding = wallArea_m2 * claddingCostPerM2;
+
+  // ─── 3. OSB DECKING ───
+  const sheetArea = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000; // ~2.977 m²
+  const osbSheets = Math.ceil(footprint_m2 / sheetArea);
+  breakdown.osb = osbSheets * pt.sheets.osb_18mm_per_sheet;
+
+  // ─── 4. INSULATION (floor + walls, if insulated) ───
+  breakdown.insulation = 0;
+  breakdown.plyLining = 0;
+  if (isInsulated) {
+    // Floor PIR
+    const pirFloorSheets = Math.ceil(footprint_m2 / sheetArea);
+    // Wall PIR
+    const pirWallSheets = Math.ceil(wallArea_m2 / sheetArea);
+    breakdown.insulation = (pirFloorSheets + pirWallSheets) * pt.sheets.pir_50mm_per_sheet;
+
+    // Ply lining (floor + walls)
+    const plyFloorSheets = Math.ceil(footprint_m2 / sheetArea);
+    const plyWallSheets = Math.ceil(wallArea_m2 / sheetArea);
+    breakdown.plyLining = (plyFloorSheets + plyWallSheets) * pt.sheets.ply_12mm_per_sheet;
+  }
+
+  // ─── 5. ROOF COVERING ───
+  const roofArea_m2 = estimateRoofArea(w_mm, d_mm, roofStyle, state);
+  if (roofCovering === 'epdm') {
+    breakdown.roofCovering = roofArea_m2 * pt.roofing.epdm_per_m2;
+  } else {
+    breakdown.roofCovering = roofArea_m2 * pt.roofing.felt_per_m2;
+  }
+
+  // ─── 5b. ROOF COMPLEXITY PREMIUM ───
+  // Pent = baseline (simple rafters). Apex adds trusses. Hipped adds hip rafters + complex cuts.
+  breakdown.roofComplexity = 0;
+  const span_m = Math.min(w_mm, d_mm) / 1000;
+  const length_m = Math.max(w_mm, d_mm) / 1000;
+  if (roofStyle === 'apex' || roofStyle === 'hipped') {
+    // Apex: £15 per truss-metre (truss width × number of trusses)
+    const trussSpacing_m = 0.6; // 600mm centres
+    const trussCount = Math.ceil(length_m / trussSpacing_m) + 1;
+    const trussWidth_m = span_m;
+    breakdown.roofComplexity = trussCount * trussWidth_m * 15;
+  }
+  if (roofStyle === 'hipped') {
+    // Hipped: additional £30 per m² of footprint on top of apex premium
+    breakdown.roofComplexity += footprint_m2 * 30;
+  }
+
+  // ─── 6. OPENINGS ───
+  const doorCost = (pt.openings.dgu_per_unit + pt.openings.door_hardware + pt.openings.door_timber_allowance);
+  const windowCost = (pt.openings.dgu_per_unit + pt.openings.window_hardware + pt.openings.window_timber_allowance);
+  breakdown.doors = doors * doorCost;
+  breakdown.windows = windows * windowCost;
+
+  // ─── 7. DPC / MEMBRANE ───
+  breakdown.dpc = footprint_m2 * pt.sundries.dpc_membrane_per_m2;
+
+  // ─── 8. MATERIALS SUBTOTAL ───
+  const materialsSubtotal = Object.values(breakdown).reduce((s, v) => s + v, 0);
+
+  // ─── 9. FIXINGS (% of materials) ───
+  breakdown.fixings = materialsSubtotal * pt.sundries.fixings_pct;
+
+  // ─── 10. DELIVERY ───
+  breakdown.delivery = pt.sundries.delivery_per_order * pt.sundries.delivery_orders_estimate;
+
+  // ─── TOTAL MATERIALS ───
+  const totalMaterials = Object.values(breakdown).reduce((s, v) => s + v, 0);
+
+  // ─── LABOUR ───
+  const daysPerM2 = isInsulated ? pt.labour.days_per_m2_insulated : pt.labour.days_per_m2_basic;
+  const labourDays = Math.max(pt.labour.min_days, Math.round(footprint_m2 * daysPerM2));
+  const labourCost = labourDays * pt.labour.day_rate;
+
+  // ─── TOTAL COST ───
+  const totalCost = totalMaterials + labourCost;
+
+  // ─── SELL PRICE (with margin) ───
+  // margin_pct is profit/revenue, so sell = cost / (1 - margin)
+  const marginPct = pt.margin.target_pct;
+  const bufferPct = pt.margin.range_buffer_pct;
+  const sellTarget = totalCost / (1 - marginPct);
+  const sellLow = totalCost / (1 - (marginPct - bufferPct));   // Lower margin = lower price
+  const sellHigh = totalCost / (1 - (marginPct + bufferPct));  // Higher margin = higher price
+
+  return {
+    low: Math.round(sellLow / 50) * 50,        // Round to nearest £50
+    high: Math.round(sellHigh / 50) * 50,
+    target: Math.round(sellTarget / 50) * 50,
+    totalCost: Math.round(totalCost),
+    totalMaterials: Math.round(totalMaterials),
+    labourCost: Math.round(labourCost),
+    labourDays,
+    footprint_m2: Math.round(footprint_m2 * 100) / 100,
+    isInsulated,
+    roofStyle,
+    doors,
+    windows,
+    breakdown: Object.fromEntries(
+      Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
+    )
+  };
+}
+
+// ─── Helper: count openings ───
+function countOpenings(state, type) {
+  let count = 0;
+  // Openings are stored as a flat array at state.walls.openings
+  const openings = state.walls?.openings;
+  if (Array.isArray(openings)) {
+    count = openings.filter(o => {
+      if (!o.enabled) return false;
+      const t = (o.type || '').toLowerCase();
+      if (type === 'door') return t.includes('door');
+      if (type === 'window') return t.includes('window') || t === 'skylight';
+      return false;
+    }).length;
+  }
+  // Minimum: 1 door if none found
+  if (type === 'door' && count === 0) count = 1;
+  return count;
+}
+
+// ─── Helper: estimate structural timber linear metres ───
+function estimateTimberLinearMetres(state, w_mm, d_mm) {
+  const perimeter_m = 2 * (w_mm + d_mm) / 1000;
+  const area_m2 = (w_mm * d_mm) / 1_000_000;
+
+  // Base: 2 rim joists + inner joists at 400mm spacing
+  const rimJoists_lm = 2 * Math.max(w_mm, d_mm) / 1000;
+  const innerJoistCount = Math.floor(Math.max(w_mm, d_mm) / 400);
+  const innerJoists_lm = innerJoistCount * Math.min(w_mm, d_mm) / 1000;
+
+  // Walls: sole plates + top plates (perimeter × 2) + studs (~every 600mm × wall height)
+  const wallHeight_m = (state.walls?.height_mm || 2200) / 1000;
+  const plates_lm = perimeter_m * 2; // sole + top plate
+  const studCount = Math.ceil(perimeter_m / 0.6);
+  const studs_lm = studCount * wallHeight_m;
+
+  // Roof: rafters (simplified — pair every 600mm along ridge)
+  const ridgeLen_m = Math.max(w_mm, d_mm) / 1000;
+  const rafterPairs = Math.ceil(ridgeLen_m / 0.6);
+  const rafterLen_m = (Math.min(w_mm, d_mm) / 2000) * 1.1; // half span + slope factor
+  const rafters_lm = rafterPairs * 2 * rafterLen_m;
+  const ridge_lm = ridgeLen_m;
+
+  return rimJoists_lm + innerJoists_lm + plates_lm + studs_lm + rafters_lm + ridge_lm;
+}
+
+// ─── Helper: estimate wall area (minus ~15% for openings) ───
+function estimateWallArea(state, w_mm, d_mm, roofStyle) {
+  const wallHeight_m = (state.walls?.height_mm || 2200) / 1000;
+  const perimeter_m = 2 * (w_mm + d_mm) / 1000;
+  let area = perimeter_m * wallHeight_m;
+
+  // Add gable triangles for apex/hipped
+  if (roofStyle === 'apex' || roofStyle === 'hipped') {
+    const gableWidth_m = Math.min(w_mm, d_mm) / 1000;
+    const ridgeHeight_m = 0.4; // rough estimate
+    area += gableWidth_m * ridgeHeight_m; // 2 triangles ≈ 1 rectangle
+  }
+
+  // Subtract ~15% for openings
+  area *= 0.85;
+  return area;
+}
+
+// ─── Helper: estimate roof area ───
+function estimateRoofArea(w_mm, d_mm, roofStyle, state) {
+  const span_m = Math.min(w_mm, d_mm) / 1000;
+  const length_m = Math.max(w_mm, d_mm) / 1000;
+  const overhang_m = 0.075 * 2; // 75mm each side
+
+  if (roofStyle === 'pent') {
+    // Single slope
+    const slopeLen = (span_m + overhang_m) * 1.05; // slight pitch factor
+    return slopeLen * (length_m + overhang_m);
+  }
+  // Apex / hipped — two slopes
+  const halfSpan = (span_m / 2 + overhang_m / 2);
+  const slopeLen = halfSpan * 1.12; // pitch factor
+  return 2 * slopeLen * (length_m + overhang_m);
+}
+
+// ─── UI: render price estimate card ───
+export function renderPriceCard(state, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const est = estimatePrice(state);
+  if (!est) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = '';
+  const vatNote = priceTable?.vatMode === 'ex' ? ' (ex-VAT)' : '';
+
+  container.innerHTML = `
+    <div class="price-card">
+      <div class="price-card-header">
+        <span class="price-card-icon">💰</span>
+        <span class="price-card-title">Estimated Cost Range</span>
+      </div>
+      <div class="price-card-range">
+        <span class="price-low">£${est.low.toLocaleString()}</span>
+        <span class="price-dash"> — </span>
+        <span class="price-high">£${est.high.toLocaleString()}</span>
+      </div>
+      <div class="price-card-basis">
+        Based on ${est.footprint_m2}m² footprint${est.isInsulated ? ', fully insulated' : ''}, 
+        ${est.doors} door${est.doors !== 1 ? 's' : ''}, 
+        ${est.windows} window${est.windows !== 1 ? 's' : ''}${vatNote}
+      </div>
+      <div class="price-card-detail">
+        <div class="price-detail-row">
+          <span>Materials</span><span>£${est.totalMaterials.toLocaleString()}</span>
+        </div>
+        <div class="price-detail-row">
+          <span>Labour (${est.labourDays} days)</span><span>£${est.labourCost.toLocaleString()}</span>
+        </div>
+        <div class="price-detail-row price-total-row">
+          <span>Cost</span><span>£${est.totalCost.toLocaleString()}</span>
+        </div>
+      </div>
+      <div class="price-card-note">
+        Final price depends on site access, ground preparation, and fit-out level.
+      </div>
+      <button class="price-cta-btn" onclick="window.open('https://bespokeshedcompany.co.uk/#contact','_blank')">
+        Get a Fixed Quote →
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Render the persistent price range badge (top-right corner).
+ * Small, unobtrusive — just the range.
+ */
+export function renderPriceBadge(state) {
+  let badge = document.getElementById('priceBadge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'priceBadge';
+    badge.style.cssText = 'position:fixed;top:12px;right:12px;background:linear-gradient(135deg, #e8f5e9, #f1f8e9);border:1px solid #a5d6a7;border-radius:10px;padding:8px 16px;font-family:inherit;z-index:900;box-shadow:0 2px 10px rgba(76,175,80,0.15);pointer-events:none;transition:opacity 0.3s;';
+    document.body.appendChild(badge);
+  }
+
+  const est = estimatePrice(state);
+  if (!est) {
+    badge.style.display = 'none';
+    return;
+  }
+
+  badge.style.display = '';
+  badge.innerHTML = `
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:2px;">Estimated Range</div>
+    <div style="font-size:18px;font-weight:700;color:#4a3728;">£${est.low.toLocaleString()} <span style="color:#aaa;font-weight:400;">—</span> £${est.high.toLocaleString()}</div>
+  `;
+}
+
+/** Hide the price badge */
+export function hidePriceBadge() {
+  const badge = document.getElementById('priceBadge');
+  if (badge) badge.style.display = 'none';
+}
+
+/**
+ * Render full pricing breakdown for the BOM section.
+ * Shows detailed cost table with all categories.
+ */
+export function renderPricingBreakdown(state, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const est = estimatePrice(state);
+  if (!est) {
+    container.innerHTML = '<p style="color:#888;padding:20px;">Price data not available. Ensure the price table is loaded.</p>';
+    return;
+  }
+
+  const b = est.breakdown;
+  const vatNote = priceTable?.vatMode === 'ex' ? 'All prices ex-VAT' : '';
+  const marginPct = Math.round((1 - est.totalCost / est.target) * 100);
+
+  container.innerHTML = `
+    <div class="pricing-breakdown">
+      <div class="pb-header">
+        <h3 style="margin:0 0 4px;color:#4a3728;">💰 Full Pricing Breakdown</h3>
+        <p style="margin:0;color:#888;font-size:0.85em;">${est.footprint_m2}m² footprint · ${est.isInsulated ? 'Insulated' : 'Basic'} · ${est.doors} door${est.doors !== 1 ? 's' : ''} · ${est.windows} window${est.windows !== 1 ? 's' : ''}</p>
+      </div>
+
+      <div class="pb-section">
+        <h4 style="margin:12px 0 8px;color:#6b4c2a;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">📦 Materials</h4>
+        <table class="pb-table">
+          <tr><td>Structural timber</td><td class="pb-val">£${b.timber.toLocaleString()}</td></tr>
+          <tr><td>Cladding</td><td class="pb-val">£${b.cladding.toLocaleString()}</td></tr>
+          <tr><td>OSB sheathing</td><td class="pb-val">£${b.osb.toLocaleString()}</td></tr>
+          ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
+          ${b.plyLining ? `<tr><td>Ply lining</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
+          <tr><td>Roof covering</td><td class="pb-val">£${b.roofCovering.toLocaleString()}</td></tr>
+          ${b.roofComplexity ? `<tr><td>Roof complexity (${est.roofStyle})</td><td class="pb-val">£${b.roofComplexity.toLocaleString()}</td></tr>` : ''}
+          <tr><td>Doors</td><td class="pb-val">£${b.doors.toLocaleString()}</td></tr>
+          <tr><td>Windows</td><td class="pb-val">£${b.windows.toLocaleString()}</td></tr>
+          <tr><td>DPC membrane</td><td class="pb-val">£${b.dpc.toLocaleString()}</td></tr>
+          <tr><td>Fixings (6%)</td><td class="pb-val">£${b.fixings.toLocaleString()}</td></tr>
+          <tr><td>Delivery</td><td class="pb-val">£${b.delivery.toLocaleString()}</td></tr>
+          <tr class="pb-subtotal"><td><strong>Materials Total</strong></td><td class="pb-val"><strong>£${est.totalMaterials.toLocaleString()}</strong></td></tr>
+        </table>
+      </div>
+
+      <div class="pb-section">
+        <h4 style="margin:12px 0 8px;color:#6b4c2a;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">👷 Labour</h4>
+        <table class="pb-table">
+          <tr><td>${est.labourDays} days × £${priceTable.labour.day_rate}/day</td><td class="pb-val">£${est.labourCost.toLocaleString()}</td></tr>
+          <tr><td style="color:#888;font-size:0.85em;">${est.isInsulated ? '1.2' : '0.75'} days/m² · min ${priceTable.labour.min_days} days</td><td></td></tr>
+        </table>
+      </div>
+
+      <div class="pb-section" style="background:#f5f0e8;border-radius:8px;padding:12px;margin-top:12px;">
+        <table class="pb-table">
+          <tr class="pb-total"><td><strong>Total Cost</strong></td><td class="pb-val"><strong>£${est.totalCost.toLocaleString()}</strong></td></tr>
+        </table>
+      </div>
+
+      <div class="pb-section">
+        <h4 style="margin:16px 0 8px;color:#6b4c2a;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">💷 Sell Price Range</h4>
+        <table class="pb-table">
+          <tr><td>Low (15% margin)</td><td class="pb-val">£${est.low.toLocaleString()}</td></tr>
+          <tr><td>Target (25% margin)</td><td class="pb-val" style="color:#2D5016;font-weight:600;">£${est.target.toLocaleString()}</td></tr>
+          <tr><td>High (35% margin)</td><td class="pb-val">£${est.high.toLocaleString()}</td></tr>
+        </table>
+      </div>
+
+      <p style="color:#999;font-size:0.8em;margin-top:12px;">${vatNote}. Final price depends on site access, ground preparation, and fit-out level.</p>
+    </div>
+  `;
+
+  // Inject table styles if not already present
+  if (!document.getElementById('pbStyles')) {
+    const style = document.createElement('style');
+    style.id = 'pbStyles';
+    style.textContent = `
+      .pb-table { width:100%; border-collapse:collapse; font-size:0.9em; }
+      .pb-table td { padding:4px 0; border-bottom:1px solid #f0ebe3; }
+      .pb-val { text-align:right; font-variant-numeric:tabular-nums; }
+      .pb-subtotal td { border-top:2px solid #d4c9b8; border-bottom:none; padding-top:8px; }
+      .pb-total td { font-size:1.1em; border:none; }
+    `;
+    document.head.appendChild(style);
+  }
+}

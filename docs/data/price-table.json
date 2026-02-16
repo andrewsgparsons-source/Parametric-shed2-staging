@@ -1,0 +1,59 @@
+{
+  "version": "2026-02-16",
+  "currency": "GBP",
+  "vatMode": "ex",
+  "notes": "All prices ex-VAT. Review monthly. Sources: East Bros (timber), James Latham (OSB), Wickes (PIR, ply), local glazier (DGUs).",
+  "timber": {
+    "structural_75x50_per_lm": 2.82,
+    "structural_50x100_per_lm": 3.50,
+    "boards_150x30_per_lm": 3.38,
+    "notes": "East Bros invoice #121732, 10 Feb 2026. 50x100 estimated (between 75x50 and 150x30)."
+  },
+  "cladding": {
+    "feather_edge_175x38_per_lm": 5.38,
+    "shiplap_150x25_per_lm": 4.10,
+    "feather_edge_cover_mm": 175,
+    "shiplap_cover_mm": 125,
+    "notes": "East Bros. Feather edge: invoice #121732. Shiplap: SO #77061, 29 Jan 2026."
+  },
+  "sheets": {
+    "osb_18mm_per_sheet": 17.18,
+    "ply_12mm_per_sheet": 20.00,
+    "pir_50mm_per_sheet": 29.17,
+    "sheet_w_mm": 1220,
+    "sheet_l_mm": 2440,
+    "notes": "OSB: Lathams invoice #549044 Sep 2025. Ply: Wickes £24 inc VAT = £20 ex. PIR Kingspan TP10: Wickes £35 inc VAT = £29.17 ex."
+  },
+  "openings": {
+    "dgu_per_unit": 37.00,
+    "door_hardware": 25.00,
+    "window_hardware": 15.00,
+    "door_timber_allowance": 65.00,
+    "window_timber_allowance": 30.00,
+    "notes": "DGUs from local glazier (Dom): 6 units = £220. Timber allowance for handmade frames. Hardware estimated."
+  },
+  "roofing": {
+    "felt_per_m2": 8.00,
+    "epdm_per_m2": 55.00,
+    "notes": "Estimated. Felt = standard mineral. EPDM = rubber membrane."
+  },
+  "sundries": {
+    "fixings_pct": 0.06,
+    "dpc_membrane_per_m2": 2.50,
+    "delivery_per_order": 60.00,
+    "delivery_orders_estimate": 2,
+    "notes": "Fixings = 6% of materials subtotal. Delivery based on East Bros/Lathams standard."
+  },
+  "labour": {
+    "day_rate": 180.00,
+    "days_per_m2_basic": 0.75,
+    "days_per_m2_insulated": 1.20,
+    "min_days": 4,
+    "notes": "Andrew's day rate confirmed 16 Feb 2026. Labour rates calibrated: 8 days for 6.76m² insulated build (Andrew's real estimate). Includes cutting, preparation, fiddly finishing."
+  },
+  "margin": {
+    "target_pct": 0.25,
+    "range_buffer_pct": 0.10,
+    "notes": "25% target margin confirmed 16 Feb 2026. Range buffer adds ±10% to account for unknowns."
+  }
+}

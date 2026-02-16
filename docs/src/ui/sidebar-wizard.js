@@ -257,6 +257,8 @@
         `).join('')}
       </div>
 
+      <div id="priceCard" style="display:none; padding: 0 12px 12px;"></div>
+
     `;
   }
 
@@ -303,6 +305,7 @@
           <button class="sw-bom-btn" data-view="walls">🧱 Walls</button>
           <button class="sw-bom-btn" data-view="roof">🏚️ Roof</button>
           <button class="sw-bom-btn" data-view="openings">🚪 Openings</button>
+          <button class="sw-bom-btn sw-bom-pricing" data-view="pricing">💰 Pricing</button>
         </div>
       `;
       document.getElementById('swFlyoutBody').appendChild(bomDiv);
@@ -310,6 +313,25 @@
       // Wire BOM buttons
       bomDiv.querySelectorAll('.sw-bom-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (btn.dataset.view === 'pricing') {
+            // Show pricing breakdown in flyout
+            var pricingDiv = document.getElementById('bomPricingBreakdown');
+            if (!pricingDiv) {
+              pricingDiv = document.createElement('div');
+              pricingDiv.id = 'bomPricingBreakdown';
+              pricingDiv.style.cssText = 'padding:12px 0;';
+              bomDiv.appendChild(pricingDiv);
+            }
+            // Toggle visibility
+            if (pricingDiv.style.display === 'none' || !pricingDiv.innerHTML) {
+              pricingDiv.style.display = '';
+              // Fire custom event for index.js to handle
+              window.dispatchEvent(new CustomEvent('renderPricingBreakdown', { detail: { containerId: 'bomPricingBreakdown' } }));
+            } else {
+              pricingDiv.style.display = 'none';
+            }
+            return;
+          }
           var viewSelect = document.getElementById('viewSelect');
           if (viewSelect) {
             viewSelect.value = btn.dataset.view;
