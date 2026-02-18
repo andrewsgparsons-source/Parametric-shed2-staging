@@ -1,9 +1,6 @@
 /**
  * Share Link — Creates short, shareable links via Cloudflare Worker
  * 
- * Captures a screenshot of the 3D view, sends it with the config URL
- * to the shed-share Worker, and copies the short link to clipboard.
- * 
  * ZERO changes to existing code — this is a standalone module.
  */
 
@@ -12,7 +9,7 @@ import { generateViewerUrl } from "./profiles.js";
 var WORKER_URL = "https://shed-share.andrewsgparsons.workers.dev";
 
 /**
- * Create a short share link with screenshot and customer name
+ * Create a short share link with customer name
  * @param {object} store - The state store (must have getState())
  * @param {HTMLCanvasElement} canvas - The Babylon.js canvas for screenshot
  * @param {function} onHint - Callback to show status messages
@@ -32,99 +29,12 @@ export function createShareLink(store, canvas, onHint) {
   var state = store.getState();
   var viewerUrl = generateViewerUrl(state);
 
-  // 3. Capture screenshot via Babylon.js Tools (handles preserveDrawingBuffer)
-  if (onHint) onHint("Capturing screenshot…");
+  // 3. Try to capture screenshot (best-effort, non-blocking)
+  var screenshot = quickScreenshot(canvas);
 
-  captureScreenshot(canvas, function(screenshot) {
-    postToWorker(name, viewerUrl, screenshot, onHint);
-  });
-}
-
-function captureScreenshot(canvas, callback) {
-  var done = false;
-
-  // Safety timeout — if screenshot takes too long, proceed without it
-  var timeout = setTimeout(function() {
-    if (!done) {
-      done = true;
-      console.warn("[share-link] Screenshot timed out, proceeding without image");
-      callback(null);
-    }
-  }, 3000);
-
-  function finish(result) {
-    if (done) return;
-    done = true;
-    clearTimeout(timeout);
-    callback(result);
-  }
-
-  // Try BABYLON.Tools.CreateScreenshotUsingRenderTarget
-  try {
-    if (window.BABYLON && BABYLON.Tools && BABYLON.Tools.CreateScreenshotUsingRenderTarget) {
-      var engine = (window.__dbg && window.__dbg.engine) ||
-                   (window.__dbg && window.__dbg.scene && window.__dbg.scene.getEngine());
-
-      if (engine) {
-        var scene = engine.scenes && engine.scenes[0];
-        var camera = scene && scene.activeCamera;
-        if (scene && camera) {
-          var width = Math.min(canvas.width, 1200);
-          var height = Math.round(canvas.height * (width / canvas.width));
-          BABYLON.Tools.CreateScreenshotUsingRenderTarget(engine, camera, { width: width, height: height }, function(dataUrl) {
-            if (dataUrl && dataUrl.indexOf("data:image") === 0) {
-              // Convert to JPEG for smaller size
-              var img = new Image();
-              img.onload = function() {
-                try {
-                  var tempCanvas = document.createElement("canvas");
-                  tempCanvas.width = width;
-                  tempCanvas.height = height;
-                  var ctx = tempCanvas.getContext("2d");
-                  ctx.drawImage(img, 0, 0);
-                  var jpegUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
-                  finish(jpegUrl.split(",")[1]);
-                } catch (e) {
-                  finish(null);
-                }
-              };
-              img.onerror = function() { finish(null); };
-              img.src = dataUrl;
-            } else {
-              finish(null);
-            }
-          });
-          return;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[share-link] Babylon screenshot error:", err);
-  }
-
-  // Fallback: try canvas.toDataURL directly
-  try {
-    var dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-    if (dataUrl && dataUrl.length > 100) {
-      finish(dataUrl.split(",")[1]);
-    } else {
-      finish(null);
-    }
-  } catch (err) {
-    console.warn("[share-link] Canvas screenshot error:", err);
-    finish(null);
-  }
-}
-
-function postToWorker(name, viewerUrl, screenshot, onHint) {
   // 4. POST to Worker
-  var payload = {
-    name: name,
-    url: viewerUrl
-  };
-  if (screenshot) {
-    payload.screenshot = screenshot;
-  }
+  var payload = { name: name, url: viewerUrl };
+  if (screenshot) payload.screenshot = screenshot;
 
   fetch(WORKER_URL + "/create", {
     method: "POST",
@@ -137,10 +47,7 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
         if (onHint) onHint("Error: " + (data.error || "Unknown error"));
         return;
       }
-
-      // 5. Deliver the short link to the user
-      var shareUrl = data.shareUrl;
-      deliverLink(shareUrl, name, onHint);
+      deliverLink(data.shareUrl, name, onHint);
     })
     .catch(function(err) {
       console.error("[share-link] Error:", err);
@@ -148,65 +55,105 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
     });
 }
 
-function deliverLink(shareUrl, customerName, onHint) {
-  // On mobile: use native Share API (opens WhatsApp/share sheet directly)
-  if (navigator.share) {
-    navigator.share({
-      title: customerName + "'s Garden Building",
-      text: "Take a look at your custom garden building design:",
-      url: shareUrl
-    }).then(function() {
-      if (onHint) onHint("✅ Shared!");
-    }).catch(function(err) {
-      // User cancelled share sheet — show the URL instead
-      if (err.name !== "AbortError") {
-        console.warn("[share-link] Share failed:", err);
-      }
-      showCopyableLink(shareUrl, onHint);
-    });
-    return;
+/**
+ * Quick synchronous screenshot — no async, no Babylon render target.
+ * Returns base64 JPEG string or null.
+ */
+function quickScreenshot(canvas) {
+  try {
+    var dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+    // Check it's not blank (blank canvas returns a very short data URL)
+    if (dataUrl && dataUrl.length > 1000) {
+      return dataUrl.split(",")[1];
+    }
+  } catch (e) {
+    console.warn("[share-link] Screenshot failed:", e);
   }
-
-  // Desktop: try clipboard, then fallback to showing the link
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(shareUrl)
-      .then(function() {
-        if (onHint) onHint("✅ Link copied! " + shareUrl);
-      })
-      .catch(function() {
-        showCopyableLink(shareUrl, onHint);
-      });
-  } else {
-    showCopyableLink(shareUrl, onHint);
-  }
+  return null;
 }
 
-function showCopyableLink(shareUrl, onHint) {
-  // Show a dialog with the URL in a selectable text field
+/**
+ * Deliver the share link to the user.
+ * Always shows a dialog with the link + share/copy buttons.
+ */
+function deliverLink(shareUrl, customerName, onHint) {
+  if (onHint) onHint("✅ Link ready!");
+
+  // Build a dialog with the link and action buttons
   var overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+
+  var canShare = !!navigator.share;
+
   overlay.innerHTML =
     '<div style="background:white;border-radius:16px;padding:24px;max-width:400px;width:100%;text-align:center;font-family:Inter,sans-serif;">' +
-      '<div style="font-size:24px;margin-bottom:8px;">📱</div>' +
-      '<h3 style="margin:0 0 12px;font-size:16px;">Share Link Ready!</h3>' +
+      '<div style="font-size:28px;margin-bottom:8px;">✅</div>' +
+      '<h3 style="margin:0 0 4px;font-size:16px;">' + escHtml(customerName) + '\'s Link Ready</h3>' +
+      '<p style="margin:0 0 12px;color:#57534E;font-size:13px;">Share this with your customer</p>' +
       '<input id="shareLinkInput" type="text" value="' + shareUrl + '" readonly ' +
-        'style="width:100%;padding:10px;border:1.5px solid #E7E0D8;border-radius:8px;font-size:14px;text-align:center;box-sizing:border-box;" />' +
-      '<p style="margin:8px 0 16px;color:#57534E;font-size:13px;">Tap the link above, select all, then copy</p>' +
-      '<button id="shareLinkClose" style="padding:10px 24px;border-radius:8px;border:none;background:#25D366;color:white;font-size:14px;font-weight:600;cursor:pointer;">Done</button>' +
+        'style="width:100%;padding:10px;border:1.5px solid #E7E0D8;border-radius:8px;font-size:13px;text-align:center;box-sizing:border-box;margin-bottom:12px;" />' +
+      '<div style="display:flex;gap:8px;justify-content:center;">' +
+        (canShare
+          ? '<button id="shareLinkShare" style="flex:1;padding:12px;border-radius:8px;border:none;background:#25D366;color:white;font-size:14px;font-weight:600;cursor:pointer;">📱 Share</button>'
+          : '') +
+        '<button id="shareLinkCopy" style="flex:1;padding:12px;border-radius:8px;border:none;background:#B45309;color:white;font-size:14px;font-weight:600;cursor:pointer;">📋 Copy</button>' +
+        '<button id="shareLinkClose" style="padding:12px 16px;border-radius:8px;border:1.5px solid #E7E0D8;background:white;font-size:14px;cursor:pointer;">✕</button>' +
+      '</div>' +
     '</div>';
+
   document.body.appendChild(overlay);
 
+  // Select URL on focus
   var input = document.getElementById("shareLinkInput");
-  input.addEventListener("focus", function() { this.select(); });
-  input.focus();
-  input.select();
+  input.addEventListener("click", function() { this.select(); });
 
+  // Share button — uses navigator.share() from a DIRECT user click (user gesture preserved)
+  var shareBtn = document.getElementById("shareLinkShare");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", function() {
+      navigator.share({
+        title: customerName + "'s Garden Building",
+        text: "Take a look at your custom garden building design:",
+        url: shareUrl
+      }).then(function() {
+        overlay.remove();
+        if (onHint) onHint("✅ Shared!");
+      }).catch(function() {
+        // User cancelled — that's fine, dialog stays open
+      });
+    });
+  }
+
+  // Copy button
+  var copyBtn = document.getElementById("shareLinkCopy");
+  copyBtn.addEventListener("click", function() {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(function() {
+        copyBtn.textContent = "✅ Copied!";
+        setTimeout(function() { copyBtn.textContent = "📋 Copy"; }, 2000);
+      }).catch(function() {
+        input.select();
+        document.execCommand("copy");
+        copyBtn.textContent = "✅ Copied!";
+        setTimeout(function() { copyBtn.textContent = "📋 Copy"; }, 2000);
+      });
+    } else {
+      input.select();
+      document.execCommand("copy");
+      copyBtn.textContent = "✅ Copied!";
+      setTimeout(function() { copyBtn.textContent = "📋 Copy"; }, 2000);
+    }
+  });
+
+  // Close button
   document.getElementById("shareLinkClose").addEventListener("click", function() {
     overlay.remove();
   });
   overlay.addEventListener("click", function(e) {
     if (e.target === overlay) overlay.remove();
   });
+}
 
-  if (onHint) onHint("✅ Link created! " + shareUrl);
+function escHtml(str) {
+  return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;").replace(/"/g, "&quot;");
 }
