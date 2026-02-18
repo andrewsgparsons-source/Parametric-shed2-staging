@@ -63,7 +63,7 @@ import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=11";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
-import { initInstancesUI } from "./instances.js?_v=10";
+import { initInstancesUI } from "./instances.js?_v=11";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
 import * as Skylights from "./elements/skylights.js?_v=11";
