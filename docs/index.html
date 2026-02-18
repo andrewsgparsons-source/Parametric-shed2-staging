@@ -967,6 +967,23 @@
   <script type="module" src="./src/index.js?_v=26"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
+  <!-- Share Link (standalone wiring — doesn't depend on main init) -->
+  <script type="module">
+    import { createShareLink } from './src/share-link.js';
+    var btn = document.getElementById('shareWhatsAppBtn');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        var store = window.__dbg && window.__dbg.store;
+        var canvas = document.getElementById('renderCanvas');
+        var hint = document.getElementById('instancesHint');
+        function setHint(msg) { if (hint) hint.textContent = msg; }
+        if (!store) { setHint('Error: app not ready yet'); return; }
+        createShareLink(store, canvas, setHint);
+      });
+      console.log('[share-link] Button wired');
+    }
+  </script>
+
   <!-- Price Estimate Module -->
   <script type="module">
     import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js';
