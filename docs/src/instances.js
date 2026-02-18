@@ -10,6 +10,7 @@
 import { DEFAULTS } from "./params.js";
 import { getBuiltInPresets, getDefaultBuiltInPresetId, findBuiltInPresetById } from "../instances.js?_v=9";
 import { copyViewerUrlToClipboard, isViewerMode, getProfileFromUrl } from "./profiles.js";
+import { createShareLink } from "./share-link.js";
 
 export function initInstancesUI({ store, ids, dbg }) {
   function $(id) { return document.getElementById(id); }
@@ -451,6 +452,15 @@ function applyState(stateObj) {
           setHint("Failed to copy description");
           console.error("[instances] Failed to copy shed description:", err);
         });
+      });
+    }
+
+    // WhatsApp share link button
+    var shareWhatsAppBtnEl = $("shareWhatsAppBtn");
+    if (shareWhatsAppBtnEl) {
+      shareWhatsAppBtnEl.addEventListener("click", function() {
+        var canvas = document.getElementById("renderCanvas");
+        createShareLink(store, canvas, setHint);
       });
     }
   }
