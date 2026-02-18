@@ -305,6 +305,7 @@
           <button class="sw-bom-btn" data-view="walls">🧱 Walls</button>
           <button class="sw-bom-btn" data-view="roof">🏚️ Roof</button>
           <button class="sw-bom-btn" data-view="openings">🚪 Openings</button>
+          <button class="sw-bom-btn" data-view="shelving">📐 Shelving</button>
           <button class="sw-bom-btn sw-bom-pricing" data-view="pricing">💰 Pricing</button>
         </div>
       `;

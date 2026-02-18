@@ -2493,6 +2493,11 @@ if (getWallsEnabled(state)) {
         updateOpeningsBOM(state);
         updateShelvingBOM(state);
 
+        // Update price estimate
+        if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
+          try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+        }
+
        // Apply all visibility settings
         try {
           var _baseOn = getBaseEnabled(state);
@@ -2641,6 +2646,11 @@ if (getWallsEnabled(state)) {
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
       updateOpeningsBOM(state);
       updateShelvingBOM(state);
+
+      // Update price estimate
+      if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
+        try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+      }
 
       // Apply all visibility settings to main building AND attachments
       try {

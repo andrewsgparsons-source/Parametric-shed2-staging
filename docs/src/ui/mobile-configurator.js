@@ -534,6 +534,7 @@
         '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
         '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
         '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>' +
+        '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>' +
         '</div>';
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
@@ -541,6 +542,24 @@
       // Wire BOM buttons to switch view
       bomDiv.querySelectorAll('.mc-bom-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (btn.dataset.view === 'pricing') {
+            // Show pricing breakdown inline
+            var pricingDiv = document.getElementById('mcBomPricingBreakdown');
+            if (!pricingDiv) {
+              pricingDiv = document.createElement('div');
+              pricingDiv.id = 'mcBomPricingBreakdown';
+              pricingDiv.style.cssText = 'padding:12px 0;';
+              bomDiv.appendChild(pricingDiv);
+            }
+            // Toggle visibility
+            if (pricingDiv.style.display === 'none' || !pricingDiv.innerHTML) {
+              pricingDiv.style.display = '';
+              window.dispatchEvent(new CustomEvent('renderPricingBreakdown', { detail: { containerId: 'mcBomPricingBreakdown' } }));
+            } else {
+              pricingDiv.style.display = 'none';
+            }
+            return;
+          }
           var viewSelect = document.getElementById('viewSelect');
           if (viewSelect) {
             viewSelect.value = btn.dataset.view;
