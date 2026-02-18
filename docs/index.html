@@ -971,11 +971,10 @@
       if (ok) {
         window.__pricingReady = true;
         window.__updatePriceCard = function(state) {
-          // Badge visibility: show if showPriceBadge is true, or if admin profile and not explicitly false
+          // Badge visibility: show by default unless explicitly disabled
           var qs = new URLSearchParams(window.location.search || '');
           var isAdmin = qs.get('profile') === 'admin';
-          var showBadge = state && state.showPriceBadge === true;
-          if (isAdmin && state && state.showPriceBadge !== false) showBadge = true;
+          var showBadge = state && state.showPriceBadge !== false;
           if (showBadge) {
             renderPriceBadge(state);
           } else {
@@ -1010,9 +1009,9 @@
         // Wire price badge checkbox — writes to store so it persists in shared links
         var priceBadgeCheck = document.getElementById('showPriceBadgeCheck');
         if (priceBadgeCheck) {
-          // Init checkbox from store state (e.g. loaded from URL)
+          // Init checkbox from store state — default to checked (badge visible by default)
           var initState = window.__dbg && window.__dbg.store && window.__dbg.store.getState();
-          if (initState && initState.showPriceBadge === true) priceBadgeCheck.checked = true;
+          priceBadgeCheck.checked = !(initState && initState.showPriceBadge === false);
           priceBadgeCheck.addEventListener('change', function() {
             var store = window.__dbg && window.__dbg.store;
             if (store && typeof store.setState === 'function') {
