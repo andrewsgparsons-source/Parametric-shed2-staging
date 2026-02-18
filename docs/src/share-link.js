@@ -41,58 +41,78 @@ export function createShareLink(store, canvas, onHint) {
 }
 
 function captureScreenshot(canvas, callback) {
-  // Try BABYLON.Tools.CreateScreenshot if available (handles buffer correctly)
-  if (window.BABYLON && BABYLON.Tools && BABYLON.Tools.CreateScreenshotUsingRenderTarget) {
-    var engine = canvas.__babylonEngine || (canvas.getContext && null);
-    // Fallback: use the engine from global debug object
-    if (!engine && window.__dbg && window.__dbg.engine) {
-      engine = window.__dbg.engine;
-    }
-    if (!engine && window.__dbg && window.__dbg.scene) {
-      engine = window.__dbg.scene.getEngine();
-    }
+  var done = false;
 
-    if (engine) {
-      var scene = engine.scenes && engine.scenes[0];
-      var camera = scene && scene.activeCamera;
-      if (scene && camera) {
-        var width = Math.min(canvas.width, 1200);
-        var height = Math.round(canvas.height * (width / canvas.width));
-        BABYLON.Tools.CreateScreenshotUsingRenderTarget(engine, camera, { width: width, height: height }, function(dataUrl) {
-          if (dataUrl && dataUrl.indexOf("data:image") === 0) {
-            // Convert to JPEG for smaller size
-            var img = new Image();
-            img.onload = function() {
-              var tempCanvas = document.createElement("canvas");
-              tempCanvas.width = width;
-              tempCanvas.height = height;
-              var ctx = tempCanvas.getContext("2d");
-              ctx.drawImage(img, 0, 0);
-              var jpegUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
-              callback(jpegUrl.split(",")[1]);
-            };
-            img.onerror = function() { callback(null); };
-            img.src = dataUrl;
-          } else {
-            callback(null);
-          }
-        });
-        return;
-      }
+  // Safety timeout — if screenshot takes too long, proceed without it
+  var timeout = setTimeout(function() {
+    if (!done) {
+      done = true;
+      console.warn("[share-link] Screenshot timed out, proceeding without image");
+      callback(null);
     }
+  }, 3000);
+
+  function finish(result) {
+    if (done) return;
+    done = true;
+    clearTimeout(timeout);
+    callback(result);
   }
 
-  // Fallback: try canvas.toDataURL directly (may be blank without preserveDrawingBuffer)
+  // Try BABYLON.Tools.CreateScreenshotUsingRenderTarget
+  try {
+    if (window.BABYLON && BABYLON.Tools && BABYLON.Tools.CreateScreenshotUsingRenderTarget) {
+      var engine = (window.__dbg && window.__dbg.engine) ||
+                   (window.__dbg && window.__dbg.scene && window.__dbg.scene.getEngine());
+
+      if (engine) {
+        var scene = engine.scenes && engine.scenes[0];
+        var camera = scene && scene.activeCamera;
+        if (scene && camera) {
+          var width = Math.min(canvas.width, 1200);
+          var height = Math.round(canvas.height * (width / canvas.width));
+          BABYLON.Tools.CreateScreenshotUsingRenderTarget(engine, camera, { width: width, height: height }, function(dataUrl) {
+            if (dataUrl && dataUrl.indexOf("data:image") === 0) {
+              // Convert to JPEG for smaller size
+              var img = new Image();
+              img.onload = function() {
+                try {
+                  var tempCanvas = document.createElement("canvas");
+                  tempCanvas.width = width;
+                  tempCanvas.height = height;
+                  var ctx = tempCanvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0);
+                  var jpegUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
+                  finish(jpegUrl.split(",")[1]);
+                } catch (e) {
+                  finish(null);
+                }
+              };
+              img.onerror = function() { finish(null); };
+              img.src = dataUrl;
+            } else {
+              finish(null);
+            }
+          });
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[share-link] Babylon screenshot error:", err);
+  }
+
+  // Fallback: try canvas.toDataURL directly
   try {
     var dataUrl = canvas.toDataURL("image/jpeg", 0.7);
     if (dataUrl && dataUrl.length > 100) {
-      callback(dataUrl.split(",")[1]);
+      finish(dataUrl.split(",")[1]);
     } else {
-      callback(null);
+      finish(null);
     }
   } catch (err) {
-    console.warn("[share-link] Could not capture screenshot:", err);
-    callback(null);
+    console.warn("[share-link] Canvas screenshot error:", err);
+    finish(null);
   }
 }
 
