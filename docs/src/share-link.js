@@ -118,20 +118,9 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
         return;
       }
 
-      // 5. Copy short link to clipboard
+      // 5. Deliver the short link to the user
       var shareUrl = data.shareUrl;
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareUrl)
-          .then(function() {
-            if (onHint) onHint("✅ Link copied! " + shareUrl);
-          })
-          .catch(function() {
-            fallbackCopy(shareUrl, onHint);
-          });
-      } else {
-        fallbackCopy(shareUrl, onHint);
-      }
+      deliverLink(shareUrl, name, onHint);
     })
     .catch(function(err) {
       console.error("[share-link] Error:", err);
@@ -139,20 +128,65 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
     });
 }
 
-function fallbackCopy(text, onHint) {
-  var ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.left = "0";
-  ta.style.top = "0";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    document.execCommand("copy");
-    if (onHint) onHint("✅ Link copied! " + text);
-  } catch (e) {
-    if (onHint) onHint("Link: " + text + " (copy manually)");
+function deliverLink(shareUrl, customerName, onHint) {
+  // On mobile: use native Share API (opens WhatsApp/share sheet directly)
+  if (navigator.share) {
+    navigator.share({
+      title: customerName + "'s Garden Building",
+      text: "Take a look at your custom garden building design:",
+      url: shareUrl
+    }).then(function() {
+      if (onHint) onHint("✅ Shared!");
+    }).catch(function(err) {
+      // User cancelled share sheet — show the URL instead
+      if (err.name !== "AbortError") {
+        console.warn("[share-link] Share failed:", err);
+      }
+      showCopyableLink(shareUrl, onHint);
+    });
+    return;
   }
-  document.body.removeChild(ta);
+
+  // Desktop: try clipboard, then fallback to showing the link
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl)
+      .then(function() {
+        if (onHint) onHint("✅ Link copied! " + shareUrl);
+      })
+      .catch(function() {
+        showCopyableLink(shareUrl, onHint);
+      });
+  } else {
+    showCopyableLink(shareUrl, onHint);
+  }
+}
+
+function showCopyableLink(shareUrl, onHint) {
+  // Show a dialog with the URL in a selectable text field
+  var overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  overlay.innerHTML =
+    '<div style="background:white;border-radius:16px;padding:24px;max-width:400px;width:100%;text-align:center;font-family:Inter,sans-serif;">' +
+      '<div style="font-size:24px;margin-bottom:8px;">📱</div>' +
+      '<h3 style="margin:0 0 12px;font-size:16px;">Share Link Ready!</h3>' +
+      '<input id="shareLinkInput" type="text" value="' + shareUrl + '" readonly ' +
+        'style="width:100%;padding:10px;border:1.5px solid #E7E0D8;border-radius:8px;font-size:14px;text-align:center;box-sizing:border-box;" />' +
+      '<p style="margin:8px 0 16px;color:#57534E;font-size:13px;">Tap the link above, select all, then copy</p>' +
+      '<button id="shareLinkClose" style="padding:10px 24px;border-radius:8px;border:none;background:#25D366;color:white;font-size:14px;font-weight:600;cursor:pointer;">Done</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var input = document.getElementById("shareLinkInput");
+  input.addEventListener("focus", function() { this.select(); });
+  input.focus();
+  input.select();
+
+  document.getElementById("shareLinkClose").addEventListener("click", function() {
+    overlay.remove();
+  });
+  overlay.addEventListener("click", function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  if (onHint) onHint("✅ Link created! " + shareUrl);
 }
