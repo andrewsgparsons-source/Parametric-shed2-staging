@@ -133,38 +133,35 @@ function isMobile() {
 }
 
 function deliverLink(shareUrl, customerName, onHint) {
-  // On mobile: use native Share API (opens WhatsApp/share sheet directly)
-  // Only on mobile — desktop Chrome has navigator.share but rejects it
-  // when called outside a direct user gesture (our fetch callback loses it)
+  // Always copy to clipboard first (works on both mobile and desktop)
+  var clipboardDone = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl)
+      .then(function() { clipboardDone = true; })
+      .catch(function() { /* best effort */ });
+  }
+
+  // On mobile: also open native Share API (share sheet)
+  // Only on mobile — desktop Chrome rejects navigator.share outside user gesture
   if (navigator.share && isMobile()) {
     navigator.share({
       title: customerName + "'s Garden Building",
       text: "Take a look at your custom garden building design:",
       url: shareUrl
     }).then(function() {
-      if (onHint) onHint("✅ Shared!");
+      if (onHint) onHint("✅ Shared! Link also copied to clipboard.");
     }).catch(function(err) {
-      // User cancelled share sheet — show the URL instead
+      // User cancelled share sheet — that's fine, link is still on clipboard
       if (err.name !== "AbortError") {
         console.warn("[share-link] Share failed:", err);
       }
-      showCopyableLink(shareUrl, onHint);
+      if (onHint) onHint("✅ Link copied to clipboard! " + shareUrl);
     });
     return;
   }
 
-  // Desktop: try clipboard, then fallback to showing the link
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(shareUrl)
-      .then(function() {
-        if (onHint) onHint("✅ Link copied! " + shareUrl);
-      })
-      .catch(function() {
-        showCopyableLink(shareUrl, onHint);
-      });
-  } else {
-    showCopyableLink(shareUrl, onHint);
-  }
+  // Desktop: clipboard already done above, just show confirmation
+  if (onHint) onHint("✅ Link copied! " + shareUrl);
 }
 
 function showCopyableLink(shareUrl, onHint) {
