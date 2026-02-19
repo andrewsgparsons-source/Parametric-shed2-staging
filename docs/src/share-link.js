@@ -128,9 +128,15 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
     });
 }
 
+function isMobile() {
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
 function deliverLink(shareUrl, customerName, onHint) {
   // On mobile: use native Share API (opens WhatsApp/share sheet directly)
-  if (navigator.share) {
+  // Only on mobile — desktop Chrome has navigator.share but rejects it
+  // when called outside a direct user gesture (our fetch callback loses it)
+  if (navigator.share && isMobile()) {
     navigator.share({
       title: customerName + "'s Garden Building",
       text: "Take a look at your custom garden building design:",
