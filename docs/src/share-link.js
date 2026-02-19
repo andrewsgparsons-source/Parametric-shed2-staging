@@ -116,6 +116,7 @@ function deliverLink(shareUrl, customerName, onHint) {
     '</div>';
 
   document.body.appendChild(overlay);
+  console.log("[share-link] Overlay appended to body");
 
   // Select URL on focus
   var input = document.getElementById("shareLinkInput");
@@ -159,13 +160,18 @@ function deliverLink(shareUrl, customerName, onHint) {
     }
   });
 
-  // Close button
+  // Close button + background click-to-close
+  // Delay attaching the background close handler to prevent mobile tap-through:
+  // When the user taps "OK" on the prompt(), the touch event can pass through
+  // and immediately hit the overlay background, closing it instantly.
   document.getElementById("shareLinkClose").addEventListener("click", function() {
     overlay.remove();
   });
-  overlay.addEventListener("click", function(e) {
-    if (e.target === overlay) overlay.remove();
-  });
+  setTimeout(function() {
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) overlay.remove();
+    });
+  }, 400);
 }
 
 function escHtml(str) {
