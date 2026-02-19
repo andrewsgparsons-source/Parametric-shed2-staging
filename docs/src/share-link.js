@@ -26,37 +26,23 @@ export function createShareLink(store, canvas, onHint) {
   if (onHint) onHint("Creating share link…");
 
   // 2. Generate the full viewer URL
-  var state, viewerUrl, screenshot;
-  try {
-    state = store.getState();
-    viewerUrl = generateViewerUrl(state);
-    console.log("[share-link] Generated URL:", viewerUrl);
-  } catch (e) {
-    console.error("[share-link] Error generating URL:", e);
-    if (onHint) onHint("Error generating link: " + e.message);
-    return;
-  }
+  var state = store.getState();
+  var viewerUrl = generateViewerUrl(state);
 
   // 3. Try to capture screenshot (best-effort, non-blocking)
-  screenshot = quickScreenshot(canvas);
+  var screenshot = quickScreenshot(canvas);
 
   // 4. POST to Worker
   var payload = { name: name, url: viewerUrl };
   if (screenshot) payload.screenshot = screenshot;
-
-  console.log("[share-link] Posting to worker…", { name: name, urlLength: viewerUrl.length });
 
   fetch(WORKER_URL + "/create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   })
-    .then(function(res) {
-      console.log("[share-link] Worker response status:", res.status);
-      return res.json();
-    })
+    .then(function(res) { return res.json(); })
     .then(function(data) {
-      console.log("[share-link] Worker response data:", data);
       if (!data.success) {
         if (onHint) onHint("Error: " + (data.error || "Unknown error"));
         return;
@@ -65,7 +51,7 @@ export function createShareLink(store, canvas, onHint) {
     })
     .catch(function(err) {
       console.error("[share-link] Error:", err);
-      if (onHint) onHint("Network error: " + (err.message || "check connection"));
+      if (onHint) onHint("Network error — check connection");
     });
 }
 
@@ -116,7 +102,6 @@ function deliverLink(shareUrl, customerName, onHint) {
     '</div>';
 
   document.body.appendChild(overlay);
-  console.log("[share-link] Overlay appended to body");
 
   // Select URL on focus
   var input = document.getElementById("shareLinkInput");
@@ -161,9 +146,7 @@ function deliverLink(shareUrl, customerName, onHint) {
   });
 
   // Close button + background click-to-close
-  // Delay attaching the background close handler to prevent mobile tap-through:
-  // When the user taps "OK" on the prompt(), the touch event can pass through
-  // and immediately hit the overlay background, closing it instantly.
+  // Delay background close handler to prevent mobile tap-through from prompt()
   document.getElementById("shareLinkClose").addEventListener("click", function() {
     overlay.remove();
   });
