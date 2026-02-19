@@ -63,6 +63,7 @@ import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=11";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
+import { updateAttachmentBOM } from "./bom/attachments.js";
 import { initInstancesUI } from "./instances.js?_v=11";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
@@ -2514,6 +2515,7 @@ if (getWallsEnabled(state)) {
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
         updateOpeningsBOM(state);
         updateShelvingBOM(state);
+        try { updateAttachmentBOM(state); } catch(ae) { console.warn('[BOM] Attachment BOM error:', ae); }
 
         // Update price estimate
         if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
@@ -2681,6 +2683,7 @@ if (getWallsEnabled(state)) {
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
       updateOpeningsBOM(state);
       updateShelvingBOM(state);
+      try { updateAttachmentBOM(state); } catch(ae) { console.warn('[BOM] Attachment BOM error:', ae); }
 
       // Update price estimate
       if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
