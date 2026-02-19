@@ -95,7 +95,7 @@ function deliverLink(shareUrl, customerName, onHint) {
 
   // Build a dialog with the link and action buttons
   var overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2147483002;display:flex;align-items:center;justify-content:center;padding:20px;";
 
   var canShare = !!navigator.share;
 
