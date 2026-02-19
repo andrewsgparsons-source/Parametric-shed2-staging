@@ -51,10 +51,12 @@
   },
   "labour": {
     "day_rate": 180.00,
-    "days_per_m2_basic": 0.75,
-    "days_per_m2_insulated": 1.20,
-    "min_days": 4,
-    "notes": "Andrew's day rate confirmed 16 Feb 2026. Labour rates calibrated: 8 days for 6.76m² insulated build (Andrew's real estimate). Includes cutting, preparation, fiddly finishing."
+    "base_days_basic": 3.2,
+    "rate_per_m2_basic": 0.2,
+    "base_days_insulated": 3.2,
+    "rate_per_m2_insulated": 0.35,
+    "min_days": 3,
+    "notes": "Base+rate formula calibrated 19 Feb 2026 from Andrew's gut-feel estimates: 4m²=4d, 9m²=5d, 24m²=8d (basic). Base=3.2d fixed overhead (mobilisation/setup/first-fix), rate=0.2d/m² size-dependent. Insulated rate estimated ~1.75× basic rate. Day rate confirmed 16 Feb 2026."
   },
   "margin": {
     "target_pct": 0.25,

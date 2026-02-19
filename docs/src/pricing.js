@@ -143,8 +143,11 @@ export function estimatePrice(state) {
   const totalMaterials = Object.values(breakdown).reduce((s, v) => s + v, 0);
 
   // ─── LABOUR ───
-  const daysPerM2 = isInsulated ? pt.labour.days_per_m2_insulated : pt.labour.days_per_m2_basic;
-  const labourDays = Math.max(pt.labour.min_days, Math.round(footprint_m2 * daysPerM2));
+  // Base + rate formula: fixed overhead (mobilisation/setup) + per-m² scaling
+  // Calibrated 19 Feb 2026: 4m²=4d, 9m²=5d, 24m²=8d (basic, from Andrew)
+  const baseDays = isInsulated ? pt.labour.base_days_insulated : pt.labour.base_days_basic;
+  const ratePerM2 = isInsulated ? pt.labour.rate_per_m2_insulated : pt.labour.rate_per_m2_basic;
+  const labourDays = Math.max(pt.labour.min_days, Math.round(baseDays + footprint_m2 * ratePerM2));
   const labourCost = labourDays * pt.labour.day_rate;
 
   // ─── TOTAL COST ───
