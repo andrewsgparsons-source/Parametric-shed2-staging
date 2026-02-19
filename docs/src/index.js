@@ -510,6 +510,10 @@ function initApp() {
     var vInsEl = $("vIns");
     var vDeckEl = $("vDeck");
     var vCladdingEl = $("vCladding");
+    var vCladFrontEl = $("vCladFront");
+    var vCladBackEl = $("vCladBack");
+    var vCladLeftEl = $("vCladLeft");
+    var vCladRightEl = $("vCladRight");
     var vOpeningsEl = $("vOpenings");
 
 var unitModeMetricEl = $("unitModeMetric");
@@ -915,6 +919,24 @@ function formatDimension(mm, unitMode) {
                      (m.metadata && m.metadata.cladding === true);
         if (!isClad) continue;
 
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Per-wall cladding visibility — hides/shows cladding on a specific wall
+    function applyPerWallCladdingVisibility(scene, wall, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      var wallTag = "clad-" + wall;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        // Match main building cladding for this wall (e.g. "clad-front-panel-0", "section-main-clad-left-...")
+        // But NOT attachment cladding (starts with "att-")
+        if (nm.indexOf(wallTag) < 0) continue;
+        if (nm.indexOf("att-") === 0) continue;
         try { m.isVisible = visible; } catch (e0) {}
         try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
       }
@@ -2533,6 +2555,13 @@ if (getWallsEnabled(state)) {
             applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
           }
           applyCladdingVisibility(ctx.scene, _cladOn);
+          // Per-wall cladding visibility (apply after master toggle)
+          var _cp = (state && state.vis && state.vis.cladParts) ? state.vis.cladParts : {};
+          if (_cladOn) {
+            ["front", "back", "left", "right"].forEach(function (w) {
+              if (_cp[w] === false) applyPerWallCladdingVisibility(ctx.scene, w, false);
+            });
+          }
           applyOpeningsVisibility(ctx.scene, _openOn);
           applyAllAttachmentVisibility(ctx.scene, state);
 
@@ -2551,6 +2580,12 @@ if (getWallsEnabled(state)) {
               try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
             }
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+            // Per-wall cladding (re-apply after master in rAF too)
+            if (_cladOn) {
+              ["front", "back", "left", "right"].forEach(function (w) {
+                if (_cp[w] === false) try { applyPerWallCladdingVisibility(ctx.scene, w, false); } catch (e0) {}
+              });
+            }
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
             try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
           });
@@ -2687,6 +2722,13 @@ if (getWallsEnabled(state)) {
           applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
         }
         applyCladdingVisibility(ctx.scene, _cladOn);
+        // Per-wall cladding visibility
+        var _cp2 = (state && state.vis && state.vis.cladParts) ? state.vis.cladParts : {};
+        if (_cladOn) {
+          ["front", "back", "left", "right"].forEach(function (w) {
+            if (_cp2[w] === false) applyPerWallCladdingVisibility(ctx.scene, w, false);
+          });
+        }
         applyOpeningsVisibility(ctx.scene, _openOn);
         applyAllAttachmentVisibility(ctx.scene, state);
 
@@ -2705,6 +2747,12 @@ if (getWallsEnabled(state)) {
             try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
           }
           try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+          // Per-wall cladding (re-apply after master in rAF too)
+          if (_cladOn) {
+            ["front", "back", "left", "right"].forEach(function (w) {
+              if (_cp2[w] === false) try { applyPerWallCladdingVisibility(ctx.scene, w, false); } catch (e0) {}
+            });
+          }
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
         });
@@ -4404,6 +4452,12 @@ if (state && state.overhang) {
         if (vWallsEl) vWallsEl.checked = getWallsEnabled(state);
         if (vRoofEl) vRoofEl.checked = getRoofEnabled(state);
         if (vCladdingEl) vCladdingEl.checked = getCladdingEnabled(state);
+        // Per-wall cladding checkboxes
+        var cp = (state && state.vis && state.vis.cladParts && typeof state.vis.cladParts === "object") ? state.vis.cladParts : null;
+        if (vCladFrontEl) vCladFrontEl.checked = cp ? (cp.front !== false) : getCladdingEnabled(state);
+        if (vCladBackEl) vCladBackEl.checked = cp ? (cp.back !== false) : getCladdingEnabled(state);
+        if (vCladLeftEl) vCladLeftEl.checked = cp ? (cp.left !== false) : getCladdingEnabled(state);
+        if (vCladRightEl) vCladRightEl.checked = cp ? (cp.right !== false) : getCladdingEnabled(state);
         if (vOpeningsEl) vOpeningsEl.checked = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
 
         var rp = (state && state.vis && state.vis.roofParts && typeof state.vis.roofParts === "object") ? state.vis.roofParts : null;
@@ -4940,7 +4994,34 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       var on = !!(e && e.target && e.target.checked);
       try { applyCladdingVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       store.setState({ vis: { cladding: on } });
+      // Sync per-wall toggles with master
+      if (vCladFrontEl) vCladFrontEl.checked = on;
+      if (vCladBackEl) vCladBackEl.checked = on;
+      if (vCladLeftEl) vCladLeftEl.checked = on;
+      if (vCladRightEl) vCladRightEl.checked = on;
+      store.setState({ vis: { cladParts: { front: on, back: on, left: on, right: on } } });
       console.log("[vis] cladding=", on ? "ON" : "OFF");
+    });
+
+    // Per-wall cladding visibility
+    ["front", "back", "left", "right"].forEach(function (wall) {
+      var el = $("vClad" + wall.charAt(0).toUpperCase() + wall.slice(1));
+      if (!el) return;
+      el.addEventListener("change", function (e) {
+        var on = !!(e && e.target && e.target.checked);
+        try { applyPerWallCladdingVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, wall, on); } catch (e0) {}
+        var update = {};
+        update[wall] = on;
+        store.setState({ vis: { cladParts: update } });
+        // If all per-wall toggles are off, uncheck master; if all on, check master
+        var allOn = (!vCladFrontEl || vCladFrontEl.checked) && (!vCladBackEl || vCladBackEl.checked) &&
+                    (!vCladLeftEl || vCladLeftEl.checked) && (!vCladRightEl || vCladRightEl.checked);
+        var anyOn = (vCladFrontEl && vCladFrontEl.checked) || (vCladBackEl && vCladBackEl.checked) ||
+                    (vCladLeftEl && vCladLeftEl.checked) || (vCladRightEl && vCladRightEl.checked);
+        if (vCladdingEl) vCladdingEl.checked = anyOn;
+        store.setState({ vis: { cladding: anyOn } });
+        console.log("[vis] cladding." + wall + "=", on ? "ON" : "OFF");
+      });
     });
 
     if (unitModeMetricEl) unitModeMetricEl.addEventListener("change", function () {

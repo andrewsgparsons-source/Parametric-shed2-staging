@@ -38,10 +38,33 @@ export function estimatePrice(state) {
   const roofStyle = state.roof?.style || 'apex';
   const roofCovering = state.roof?.covering || 'felt';
 
+  // ─── VISIBILITY STATE ───
+  // If something is hidden via visibility toggles, exclude it from pricing
+  const vis = state.vis || {};
+  const visBase = vis.baseAll !== false;
+  const visWalls = (typeof vis.walls === 'boolean') ? vis.walls : (vis.wallsEnabled !== false);
+  const visRoof = vis.roof !== false;
+  const visCladding = vis.cladding !== false;
+  const visOpenings = vis.openings !== false;
+  // Per-wall cladding visibility
+  const cladParts = vis.cladParts || {};
+  const visCladFront = visCladding && (cladParts.front !== false);
+  const visCladBack = visCladding && (cladParts.back !== false);
+  const visCladLeft = visCladding && (cladParts.left !== false);
+  const visCladRight = visCladding && (cladParts.right !== false);
+  // Roof sub-components
+  const roofParts = vis.roofParts || {};
+  const visRoofCovering = visRoof && (roofParts.covering !== false);
+  const visRoofInsulation = visRoof && (roofParts.insulation !== false);
+  const visRoofPly = visRoof && (roofParts.ply !== false);
+  // Wall sub-components
+  const visWallIns = visWalls && (vis.wallIns !== false);
+  const visWallPly = visWalls && (vis.wallPly !== false);
+
   // Count openings from state
-  const doors = countOpenings(state, 'door');
-  const windows = countOpenings(state, 'window');
-  const skylights = countSkylights(state);
+  const doors = visOpenings ? countOpenings(state, 'door') : 0;
+  const windows = visOpenings ? countOpenings(state, 'window') : 0;
+  const skylights = visRoof ? countSkylights(state) : 0;
 
   const breakdown = {};
 
@@ -54,8 +77,11 @@ export function estimatePrice(state) {
   breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
 
   // ─── 2. CLADDING ───
+  // Per-wall cladding: only price walls that are visible
   const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
   const wallArea_m2 = estimateWallArea(state, w_mm, d_mm, roofStyle);
+  const claddedWallArea_m2 = estimateCladdedWallArea(state, w_mm, d_mm, roofStyle,
+    { front: visCladFront, back: visCladBack, left: visCladLeft, right: visCladRight });
   let claddingCostPerM2;
   if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge') {
     claddingCostPerM2 = pt.cladding.feather_edge_175x38_per_lm * (1000 / pt.cladding.feather_edge_cover_mm);
@@ -63,32 +89,34 @@ export function estimatePrice(state) {
     // Default to shiplap
     claddingCostPerM2 = pt.cladding.shiplap_150x25_per_lm * (1000 / pt.cladding.shiplap_cover_mm);
   }
-  breakdown.cladding = wallArea_m2 * claddingCostPerM2;
+  breakdown.cladding = claddedWallArea_m2 * claddingCostPerM2;
 
   // ─── 3. OSB DECKING ───
   const sheetArea = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000; // ~2.977 m²
-  const osbSheets = Math.ceil(footprint_m2 / sheetArea);
+  const osbSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
   breakdown.osb = osbSheets * pt.sheets.osb_18mm_per_sheet;
 
   // ─── 4. INSULATION (floor + walls, if insulated) ───
   breakdown.insulation = 0;
   breakdown.plyLining = 0;
   if (isInsulated) {
-    // Floor PIR
-    const pirFloorSheets = Math.ceil(footprint_m2 / sheetArea);
-    // Wall PIR
-    const pirWallSheets = Math.ceil(wallArea_m2 / sheetArea);
+    // Floor PIR (only if base visible)
+    const pirFloorSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
+    // Wall PIR (only if wall insulation visible)
+    const pirWallSheets = visWallIns ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.insulation = (pirFloorSheets + pirWallSheets) * pt.sheets.pir_50mm_per_sheet;
 
-    // Ply lining (floor + walls)
-    const plyFloorSheets = Math.ceil(footprint_m2 / sheetArea);
-    const plyWallSheets = Math.ceil(wallArea_m2 / sheetArea);
+    // Ply lining (floor if base visible + walls if wall ply visible)
+    const plyFloorSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
+    const plyWallSheets = visWallPly ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.plyLining = (plyFloorSheets + plyWallSheets) * pt.sheets.ply_12mm_per_sheet;
   }
 
   // ─── 5. ROOF COVERING ───
   const roofArea_m2 = estimateRoofArea(w_mm, d_mm, roofStyle, state);
-  if (roofCovering === 'epdm') {
+  if (!visRoofCovering) {
+    breakdown.roofCovering = 0;
+  } else if (roofCovering === 'epdm') {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.epdm_per_m2;
   } else {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.felt_per_m2;
@@ -99,7 +127,7 @@ export function estimatePrice(state) {
   breakdown.roofComplexity = 0;
   const span_m = Math.min(w_mm, d_mm) / 1000;
   const length_m = Math.max(w_mm, d_mm) / 1000;
-  if (roofStyle === 'apex' || roofStyle === 'hipped') {
+  if (visRoof && (roofStyle === 'apex' || roofStyle === 'hipped')) {
     // Apex: £15 per truss-metre (truss width × number of trusses)
     const trussSpacing_m = 0.6; // 600mm centres
     const trussCount = Math.ceil(length_m / trussSpacing_m) + 1;
@@ -128,7 +156,7 @@ export function estimatePrice(state) {
   breakdown.dividers = calcDividerCost(state, pt, w_mm, d_mm);
 
   // ─── 7. DPC / MEMBRANE ───
-  breakdown.dpc = footprint_m2 * pt.sundries.dpc_membrane_per_m2;
+  breakdown.dpc = visBase ? footprint_m2 * pt.sundries.dpc_membrane_per_m2 : 0;
 
   // ─── 8. MATERIALS SUBTOTAL ───
   const materialsSubtotal = Object.values(breakdown).reduce((s, v) => s + v, 0);
@@ -315,6 +343,33 @@ function estimateWallArea(state, w_mm, d_mm, roofStyle) {
   }
 
   // Subtract ~15% for openings
+  area *= 0.85;
+  return area;
+}
+
+// ─── Helper: estimate cladded wall area (respects per-wall visibility) ───
+function estimateCladdedWallArea(state, w_mm, d_mm, roofStyle, wallVis) {
+  const wallHeight_m = (state.walls?.height_mm || 2200) / 1000;
+  const w_m = w_mm / 1000;
+  const d_m = d_mm / 1000;
+
+  // Calculate area per wall pair (front/back are width, left/right are depth)
+  let area = 0;
+  if (wallVis.front) area += w_m * wallHeight_m;
+  if (wallVis.back) area += w_m * wallHeight_m;
+  if (wallVis.left) area += d_m * wallHeight_m;
+  if (wallVis.right) area += d_m * wallHeight_m;
+
+  // Add gable triangles for apex/hipped (front + back gables)
+  if (roofStyle === 'apex' || roofStyle === 'hipped') {
+    const gableWidth_m = Math.min(w_m, d_m);
+    const ridgeHeight_m = 0.4;
+    // Gable triangle area split between the two gable walls (front + back for typical apex)
+    if (wallVis.front) area += (gableWidth_m * ridgeHeight_m) / 2;
+    if (wallVis.back) area += (gableWidth_m * ridgeHeight_m) / 2;
+  }
+
+  // Subtract ~15% for openings (proportional)
   area *= 0.85;
   return area;
 }
