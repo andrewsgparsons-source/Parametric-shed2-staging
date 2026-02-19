@@ -23,8 +23,11 @@ export function createShareLink(store, canvas, onHint) {
   }
   name = name.trim();
 
-  // 2. We know the share URL pattern — construct it NOW while still in user gesture
-  var shareUrl = WORKER_URL + "/s/" + encodeURIComponent(name);
+  // 2. Normalise slug to lowercase (worker stores lowercase, URLs are case-sensitive)
+  var slug = name.toLowerCase();
+
+  // 3. We know the share URL pattern — construct it NOW while still in user gesture
+  var shareUrl = WORKER_URL + "/s/" + encodeURIComponent(slug);
 
   // 3. Copy to clipboard IMMEDIATELY (still in user gesture context)
   //    This is the key fix — clipboard API requires user gesture, so do it before any async
@@ -44,7 +47,7 @@ export function createShareLink(store, canvas, onHint) {
   var viewerUrl = generateViewerUrl(state);
   var screenshot = quickScreenshot(canvas);
 
-  var payload = { name: name, url: viewerUrl };
+  var payload = { name: slug, url: viewerUrl };
   if (screenshot) payload.screenshot = screenshot;
 
   fetch(WORKER_URL + "/create", {
