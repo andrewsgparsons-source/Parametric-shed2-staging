@@ -54,6 +54,7 @@ export function estimatePrice(state) {
   const visCladRight = visCladding && (cladParts.right !== false);
   // Roof sub-components
   const roofParts = vis.roofParts || {};
+  const visRoofOsb = visRoof && (roofParts.osb !== false);
   const visRoofCovering = visRoof && (roofParts.covering !== false);
   const visRoofInsulation = visRoof && (roofParts.insulation !== false);
   const visRoofPly = visRoof && (roofParts.ply !== false);
@@ -119,8 +120,13 @@ export function estimatePrice(state) {
     breakdown.plyLining = (plyFloorSheets + plyWallSheets) * pt.sheets.ply_12mm_per_sheet;
   }
 
-  // ─── 5. ROOF COVERING ───
+  // ─── 4b. ROOF OSB / SHEATHING ───
+  // Same 18mm OSB sheets as floor, calculated from roof area + 1 extra for waste/damage
   const roofArea_m2 = estimateRoofArea(w_mm, d_mm, roofStyle, state);
+  const roofOsbSheets = visRoofOsb ? Math.ceil(roofArea_m2 / sheetArea) + 1 : 0;  // +1 waste board
+  breakdown.roofOsb = roofOsbSheets * pt.sheets.osb_18mm_per_sheet;
+
+  // ─── 5. ROOF COVERING ───
   if (!visRoofCovering) {
     breakdown.roofCovering = 0;
   } else if (roofCovering === 'epdm') {
