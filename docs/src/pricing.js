@@ -171,6 +171,80 @@ export function estimatePrice(state) {
   // ─── 7. DPC / MEMBRANE ───
   breakdown.dpc = visBase ? footprint_m2 * pt.sundries.dpc_membrane_per_m2 : 0;
 
+  // ─── 7b. ATTACHMENTS ───
+  // Each attachment is priced as a mini-building: timber, cladding (3 walls), roof OSB, covering, grids, openings
+  breakdown.attachments = 0;
+  const attachments = state.sections?.attachments || [];
+  const attVis = vis.attachments || {};  // { base: bool, walls: bool, roof: bool, cladding: bool }
+  const attVisBase = attVis.base !== false;
+  const attVisWalls = attVis.walls !== false;
+  const attVisRoof = attVis.roof !== false;
+  const attVisCladding = attVis.cladding !== false;
+
+  for (const att of attachments) {
+    if (!att || att.enabled === false) continue;
+
+    const attW_mm = att.dimensions?.width_mm || 1800;
+    const attD_mm = att.dimensions?.depth_mm || 1200;
+    const attFootprint_m2 = (attW_mm * attD_mm) / 1_000_000;
+    const attWallHeight_m = (att.walls?.height_mm || state.walls?.height_mm || 2200) / 1000;
+    const attW_m = attW_mm / 1000;
+    const attD_m = attD_mm / 1000;
+
+    // Attachment has 3 walls (shared wall with main building has no cladding/framing)
+    // 1 wall = width (outer), 2 walls = depth (sides)
+    const attWallArea_m2 = (attW_m * attWallHeight_m + 2 * attD_m * attWallHeight_m) * 0.85;
+
+    // Timber framing (structural) — simplified linear metre estimate for 3 walls + base + roof
+    if (attVisWalls) {
+      const attPerimeter3 = attW_m + 2 * attD_m;  // 3 walls only
+      const attPlates_lm = attPerimeter3 * 2;  // top + bottom plates
+      const attStudCount = Math.ceil(attPerimeter3 / 0.4);
+      const attStuds_lm = attStudCount * attWallHeight_m;
+      // Base joists
+      const attBaseJoists = Math.ceil(attW_m / 0.4) + 2;
+      const attBase_lm = attBaseJoists * attD_m + 2 * attW_m;
+      // Roof rafters
+      const attRafterCount = Math.ceil(attW_m / 0.6) + 1;
+      const attRafter_lm = attRafterCount * attD_m * 1.05;
+      const attTimber_lm = attPlates_lm + attStuds_lm + attBase_lm + attRafter_lm;
+      breakdown.attachments += attTimber_lm * timberPerLm * gaugeMultiplier;
+    }
+
+    // Cladding (3 walls only, not the shared wall)
+    if (attVisCladding) {
+      breakdown.attachments += attWallArea_m2 * claddingCostPerM2;
+    }
+
+    // Base: OSB deck + grids + DPC
+    if (attVisBase) {
+      const attOsbSheets = Math.ceil(attFootprint_m2 / sheetArea);
+      breakdown.attachments += attOsbSheets * pt.sheets.osb_18mm_per_sheet;
+      breakdown.attachments += attFootprint_m2 * gridCostPerM2;
+      breakdown.attachments += attFootprint_m2 * pt.sundries.dpc_membrane_per_m2;
+    }
+
+    // Roof: OSB + covering
+    if (attVisRoof) {
+      const attRoofArea_m2 = attFootprint_m2 * 1.1;  // rough slope factor
+      const attRoofOsbSheets = Math.ceil(attRoofArea_m2 / sheetArea) + 1;  // +1 waste
+      breakdown.attachments += attRoofOsbSheets * pt.sheets.osb_18mm_per_sheet;
+      if (roofCovering === 'epdm') {
+        breakdown.attachments += attRoofArea_m2 * pt.roofing.epdm_per_m2;
+      } else {
+        breakdown.attachments += attRoofArea_m2 * pt.roofing.felt_per_m2;
+      }
+    }
+
+    // Openings on attachment
+    const attOpenings = att.walls?.openings || [];
+    for (const op of attOpenings) {
+      if (!op || op.enabled === false) continue;
+      if (op.type === 'door') breakdown.attachments += doorCost;
+      else if (op.type === 'window') breakdown.attachments += windowCost;
+    }
+  }
+
   // ─── 8. MATERIALS SUBTOTAL ───
   const materialsSubtotal = Object.values(breakdown).reduce((s, v) => s + v, 0);
 
@@ -186,9 +260,15 @@ export function estimatePrice(state) {
   // ─── LABOUR ───
   // Base + rate formula: fixed overhead (mobilisation/setup) + per-m² scaling
   // Calibrated 19 Feb 2026: 4m²=4d, 9m²=5d, 24m²=8d (basic, from Andrew)
+  // Include attachment footprint in total area for labour calculation
+  let totalFootprint_m2 = footprint_m2;
+  for (const att of attachments) {
+    if (!att || att.enabled === false) continue;
+    totalFootprint_m2 += ((att.dimensions?.width_mm || 0) * (att.dimensions?.depth_mm || 0)) / 1_000_000;
+  }
   const baseDays = isInsulated ? pt.labour.base_days_insulated : pt.labour.base_days_basic;
   const ratePerM2 = isInsulated ? pt.labour.rate_per_m2_insulated : pt.labour.rate_per_m2_basic;
-  const labourDays = Math.max(pt.labour.min_days, Math.round(baseDays + footprint_m2 * ratePerM2));
+  const labourDays = Math.max(pt.labour.min_days, Math.round(baseDays + totalFootprint_m2 * ratePerM2));
   const labourCost = labourDays * pt.labour.day_rate;
 
   // ─── TOTAL COST ───
@@ -218,6 +298,8 @@ export function estimatePrice(state) {
     windows,
     skylights,
     shelvingArea_m2: Math.round(shelvingArea_m2 * 100) / 100,
+    attachmentCount: attachments.filter(a => a && a.enabled !== false).length,
+    totalFootprint_m2: Math.round(totalFootprint_m2 * 100) / 100,
     dividerCount: (state.dividers?.items || []).filter(d => d && d.enabled !== false).length,
     breakdown: Object.fromEntries(
       Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
