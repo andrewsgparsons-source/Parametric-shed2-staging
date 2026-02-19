@@ -38,8 +38,8 @@
     "notes": "£25 per square metre of shelf area (board + brackets). Confirmed 16 Feb 2026."
   },
   "base_grids": {
-    "cost_per_m2": 4.00,
-    "notes": "Plastic ground grids, 0.5×0.5m tiles. ~£4/m². Optional — not all builds need them. Tied to base Grid visibility toggle."
+    "cost_per_m2": 16.00,
+    "notes": "Plastic ground grids, 0.5×0.5m tiles at ~£4 each = £16/m². Optional — not all builds need them. Tied to base Grid visibility toggle."
   },
   "roofing": {
     "felt_per_m2": 8.00,
