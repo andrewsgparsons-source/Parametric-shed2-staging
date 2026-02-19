@@ -1,9 +1,6 @@
 /**
  * Share Link — Creates short, shareable links via Cloudflare Worker
  * 
- * Captures a screenshot of the 3D view, sends it with the config URL
- * to the shed-share Worker, and copies the short link to clipboard.
- * 
  * ZERO changes to existing code — this is a standalone module.
  */
 
@@ -12,13 +9,13 @@ import { generateViewerUrl } from "./profiles.js";
 var WORKER_URL = "https://shed-share.andrewsgparsons.workers.dev";
 
 /**
- * Create a short share link with screenshot and customer name
+ * Create a short share link with customer name
  * @param {object} store - The state store (must have getState())
  * @param {HTMLCanvasElement} canvas - The Babylon.js canvas for screenshot
  * @param {function} onHint - Callback to show status messages
  */
 export function createShareLink(store, canvas, onHint) {
-  // 1. Ask for customer name
+  // 1. Ask for customer name (still within user gesture)
   var name = prompt("Customer name (for the link):");
   if (!name || !name.trim()) {
     if (onHint) onHint("Cancelled — no name entered");
@@ -26,85 +23,29 @@ export function createShareLink(store, canvas, onHint) {
   }
   name = name.trim();
 
-  if (onHint) onHint("Creating share link…");
+  // 2. We know the share URL pattern — construct it NOW while still in user gesture
+  var shareUrl = WORKER_URL + "/s/" + encodeURIComponent(name);
 
-  // 2. Generate the full viewer URL
+  // 3. Copy to clipboard IMMEDIATELY (still in user gesture context)
+  //    This is the key fix — clipboard API requires user gesture, so do it before any async
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl).catch(function() {
+      // Fallback: execCommand
+      fallbackCopy(shareUrl);
+    });
+  } else {
+    fallbackCopy(shareUrl);
+  }
+
+  if (onHint) onHint("📋 Link copied! Creating share link…");
+
+  // 4. Generate the full viewer URL and POST to worker (async, in background)
   var state = store.getState();
   var viewerUrl = generateViewerUrl(state);
+  var screenshot = quickScreenshot(canvas);
 
-  // 3. Capture screenshot via Babylon.js Tools (handles preserveDrawingBuffer)
-  if (onHint) onHint("Capturing screenshot…");
-
-  captureScreenshot(canvas, function(screenshot) {
-    postToWorker(name, viewerUrl, screenshot, onHint);
-  });
-}
-
-function captureScreenshot(canvas, callback) {
-  // Try BABYLON.Tools.CreateScreenshot if available (handles buffer correctly)
-  if (window.BABYLON && BABYLON.Tools && BABYLON.Tools.CreateScreenshotUsingRenderTarget) {
-    var engine = canvas.__babylonEngine || (canvas.getContext && null);
-    // Fallback: use the engine from global debug object
-    if (!engine && window.__dbg && window.__dbg.engine) {
-      engine = window.__dbg.engine;
-    }
-    if (!engine && window.__dbg && window.__dbg.scene) {
-      engine = window.__dbg.scene.getEngine();
-    }
-
-    if (engine) {
-      var scene = engine.scenes && engine.scenes[0];
-      var camera = scene && scene.activeCamera;
-      if (scene && camera) {
-        var width = Math.min(canvas.width, 1200);
-        var height = Math.round(canvas.height * (width / canvas.width));
-        BABYLON.Tools.CreateScreenshotUsingRenderTarget(engine, camera, { width: width, height: height }, function(dataUrl) {
-          if (dataUrl && dataUrl.indexOf("data:image") === 0) {
-            // Convert to JPEG for smaller size
-            var img = new Image();
-            img.onload = function() {
-              var tempCanvas = document.createElement("canvas");
-              tempCanvas.width = width;
-              tempCanvas.height = height;
-              var ctx = tempCanvas.getContext("2d");
-              ctx.drawImage(img, 0, 0);
-              var jpegUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
-              callback(jpegUrl.split(",")[1]);
-            };
-            img.onerror = function() { callback(null); };
-            img.src = dataUrl;
-          } else {
-            callback(null);
-          }
-        });
-        return;
-      }
-    }
-  }
-
-  // Fallback: try canvas.toDataURL directly (may be blank without preserveDrawingBuffer)
-  try {
-    var dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-    if (dataUrl && dataUrl.length > 100) {
-      callback(dataUrl.split(",")[1]);
-    } else {
-      callback(null);
-    }
-  } catch (err) {
-    console.warn("[share-link] Could not capture screenshot:", err);
-    callback(null);
-  }
-}
-
-function postToWorker(name, viewerUrl, screenshot, onHint) {
-  // 4. POST to Worker
-  var payload = {
-    name: name,
-    url: viewerUrl
-  };
-  if (screenshot) {
-    payload.screenshot = screenshot;
-  }
+  var payload = { name: name, url: viewerUrl };
+  if (screenshot) payload.screenshot = screenshot;
 
   fetch(WORKER_URL + "/create", {
     method: "POST",
@@ -117,79 +58,57 @@ function postToWorker(name, viewerUrl, screenshot, onHint) {
         if (onHint) onHint("Error: " + (data.error || "Unknown error"));
         return;
       }
-
-      // 5. Deliver the short link to the user
-      var shareUrl = data.shareUrl;
-      deliverLink(shareUrl, name, onHint);
+      // 5. On mobile, also open share sheet (best effort — gesture may be lost)
+      if (navigator.share && isMobile()) {
+        navigator.share({
+          title: name + "'s Garden Building",
+          text: "Take a look at your custom garden building design:",
+          url: data.shareUrl
+        }).then(function() {
+          if (onHint) onHint("✅ Shared! Link also on clipboard.");
+        }).catch(function() {
+          if (onHint) onHint("✅ Link copied! " + data.shareUrl);
+        });
+      } else {
+        if (onHint) onHint("✅ Link copied! " + data.shareUrl);
+      }
     })
     .catch(function(err) {
       console.error("[share-link] Error:", err);
-      if (onHint) onHint("Network error — check connection");
+      if (onHint) onHint("Network error — link may not work. Check connection.");
     });
+}
+
+/**
+ * Fallback clipboard copy using execCommand
+ */
+function fallbackCopy(text) {
+  var textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try { document.execCommand("copy"); } catch (e) { /* best effort */ }
+  textarea.remove();
+}
+
+/**
+ * Quick synchronous screenshot — no async, no Babylon render target.
+ * Returns base64 JPEG string or null.
+ */
+function quickScreenshot(canvas) {
+  try {
+    var dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+    if (dataUrl && dataUrl.length > 1000) {
+      return dataUrl.split(",")[1];
+    }
+  } catch (e) {
+    console.warn("[share-link] Screenshot failed:", e);
+  }
+  return null;
 }
 
 function isMobile() {
-  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-}
-
-function deliverLink(shareUrl, customerName, onHint) {
-  // Always copy to clipboard first (works on both mobile and desktop)
-  var clipboardDone = false;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(shareUrl)
-      .then(function() { clipboardDone = true; })
-      .catch(function() { /* best effort */ });
-  }
-
-  // On mobile: also open native Share API (share sheet)
-  // Only on mobile — desktop Chrome rejects navigator.share outside user gesture
-  if (navigator.share && isMobile()) {
-    navigator.share({
-      title: customerName + "'s Garden Building",
-      text: "Take a look at your custom garden building design:",
-      url: shareUrl
-    }).then(function() {
-      if (onHint) onHint("✅ Shared! Link also copied to clipboard.");
-    }).catch(function(err) {
-      // User cancelled share sheet — that's fine, link is still on clipboard
-      if (err.name !== "AbortError") {
-        console.warn("[share-link] Share failed:", err);
-      }
-      if (onHint) onHint("✅ Link copied to clipboard! " + shareUrl);
-    });
-    return;
-  }
-
-  // Desktop: clipboard already done above, just show confirmation
-  if (onHint) onHint("✅ Link copied! " + shareUrl);
-}
-
-function showCopyableLink(shareUrl, onHint) {
-  // Show a dialog with the URL in a selectable text field
-  var overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2147483002;display:flex;align-items:center;justify-content:center;padding:20px;";
-  overlay.innerHTML =
-    '<div style="background:white;border-radius:16px;padding:24px;max-width:400px;width:100%;text-align:center;font-family:Inter,sans-serif;">' +
-      '<div style="font-size:24px;margin-bottom:8px;">📱</div>' +
-      '<h3 style="margin:0 0 12px;font-size:16px;">Share Link Ready!</h3>' +
-      '<input id="shareLinkInput" type="text" value="' + shareUrl + '" readonly ' +
-        'style="width:100%;padding:10px;border:1.5px solid #E7E0D8;border-radius:8px;font-size:14px;text-align:center;box-sizing:border-box;" />' +
-      '<p style="margin:8px 0 16px;color:#57534E;font-size:13px;">Tap the link above, select all, then copy</p>' +
-      '<button id="shareLinkClose" style="padding:10px 24px;border-radius:8px;border:none;background:#25D366;color:white;font-size:14px;font-weight:600;cursor:pointer;">Done</button>' +
-    '</div>';
-  document.body.appendChild(overlay);
-
-  var input = document.getElementById("shareLinkInput");
-  input.addEventListener("focus", function() { this.select(); });
-  input.focus();
-  input.select();
-
-  document.getElementById("shareLinkClose").addEventListener("click", function() {
-    overlay.remove();
-  });
-  overlay.addEventListener("click", function(e) {
-    if (e.target === overlay) overlay.remove();
-  });
-
-  if (onHint) onHint("✅ Link created! " + shareUrl);
+  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
 }
