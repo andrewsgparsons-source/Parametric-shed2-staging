@@ -60,6 +60,8 @@ export function estimatePrice(state) {
   // Wall sub-components
   const visWallIns = visWalls && (vis.wallIns !== false);
   const visWallPly = visWalls && (vis.wallPly !== false);
+  // Base sub-components (Grid = plastic ground grids)
+  const visBaseGrid = visBase && (vis.base !== false);
 
   // Count openings from state
   const doors = visOpenings ? countOpenings(state, 'door') : 0;
@@ -75,6 +77,11 @@ export function estimatePrice(state) {
   const section = (isInsulated ? state.walls?.insulated?.section : state.walls?.basic?.section) || {};
   const gaugeMultiplier = (section.h >= 100) ? 1.33 : 1.0;
   breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
+
+  // ─── 1b. BASE GRIDS (plastic ground grids) ───
+  // Only priced when Grid is visible in base visibility
+  const gridCostPerM2 = pt.base_grids?.cost_per_m2 || 0;
+  breakdown.baseGrids = visBaseGrid ? footprint_m2 * gridCostPerM2 : 0;
 
   // ─── 2. CLADDING ───
   // Per-wall cladding: only price walls that are visible
