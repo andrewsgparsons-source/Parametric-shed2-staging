@@ -133,6 +133,18 @@ export function estimatePrice(state) {
   const roofOsbSheets = visRoofOsb ? Math.ceil(roofArea_m2 / sheetArea) + 1 : 0;  // +1 waste board
   breakdown.roofOsb = roofOsbSheets * pt.sheets.osb_18mm_per_sheet;
 
+  // ─── 4c. ROOF INSULATION (PIR, insulated variant only) ───
+  breakdown.roofInsulation = 0;
+  breakdown.roofPly = 0;
+  if (isInsulated) {
+    const roofPirSheets = visRoofInsulation ? Math.ceil(roofArea_m2 / sheetArea) : 0;
+    breakdown.roofInsulation = roofPirSheets * pt.sheets.pir_50mm_per_sheet;
+
+    // ─── 4d. ROOF INTERIOR PLYWOOD (12mm lining) ───
+    const roofPlySheets = visRoofPly ? Math.ceil(roofArea_m2 / sheetArea) : 0;
+    breakdown.roofPly = roofPlySheets * pt.sheets.ply_12mm_per_sheet;
+  }
+
   // ─── 5. ROOF COVERING ───
   if (!visRoofCovering) {
     breakdown.roofCovering = 0;
@@ -630,6 +642,8 @@ export function renderPricingBreakdown(state, containerId) {
           ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
           ${b.plyLining ? `<tr><td>Ply lining</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
           <tr><td>Roof covering</td><td class="pb-val">£${b.roofCovering.toLocaleString()}</td></tr>
+          ${b.roofInsulation ? `<tr><td>Roof insulation (PIR)</td><td class="pb-val">£${b.roofInsulation.toLocaleString()}</td></tr>` : ''}
+          ${b.roofPly ? `<tr><td>Roof interior plywood</td><td class="pb-val">£${b.roofPly.toLocaleString()}</td></tr>` : ''}
           ${b.roofComplexity ? `<tr><td>Roof complexity (${est.roofStyle})</td><td class="pb-val">£${b.roofComplexity.toLocaleString()}</td></tr>` : ''}
           <tr><td>Doors</td><td class="pb-val">£${b.doors.toLocaleString()}</td></tr>
           <tr><td>Windows</td><td class="pb-val">£${b.windows.toLocaleString()}</td></tr>

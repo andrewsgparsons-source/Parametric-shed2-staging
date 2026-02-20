@@ -1066,6 +1066,34 @@ function updateBOM_Pent(state, tbody) {
     });
   }
 
+  // ---- Insulation (PIR panels between rafters, insulated variant only) ----
+  const isInsulated = state.walls?.variant === 'insulated';
+  if (isInsulated && data.rafters.length >= 2) {
+    for (let i = 0; i < data.rafters.length - 1; i++) {
+      const bayStart = data.rafters[i].b0_mm + data.rafterW_mm;
+      const bayEnd = data.rafters[i + 1].b0_mm;
+      const bayWidth = bayEnd - bayStart;
+      if (bayWidth <= 0) continue;
+      rows.push({
+        item: "Roof PIR Insulation",
+        qty: 1,
+        L: rafterLenPhys_mm,
+        W: bayWidth,
+        notes: "50mm PIR; bay " + (i + 1) + " of " + (data.rafters.length - 1),
+      });
+    }
+
+    // Interior plywood (12mm, full coverage)
+    const plyB = data.isWShort ? data.roofD_mm : data.roofW_mm;
+    rows.push({
+      item: "Roof Interior Plywood",
+      qty: 1,
+      L: rafterLenPhys_mm,
+      W: plyB,
+      notes: "12mm plywood lining; full interior coverage",
+    });
+  }
+
   rows.sort((a, b) => {
     const ai = String(a.item), bi = String(b.item);
     if (ai !== bi) return ai.localeCompare(bi);
