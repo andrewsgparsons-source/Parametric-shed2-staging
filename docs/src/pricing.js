@@ -61,8 +61,11 @@ export function estimatePrice(state) {
   // Wall sub-components
   const visWallIns = visWalls && (vis.wallIns !== false);
   const visWallPly = visWalls && (vis.wallPly !== false);
-  // Base sub-components (Grid = plastic ground grids)
-  const visBaseGrid = visBase && (vis.base !== false);
+  // Base sub-components — respect individual toggles
+  const visBaseGrid = visBase && (vis.base !== false);   // Plastic ground grids
+  const visBaseFrame = visBase && (vis.frame !== false);  // Timber frame joists
+  const visBaseDeck = visBase && (vis.deck !== false);    // OSB decking
+  const visBaseIns = visBase && (vis.ins !== false);      // Floor insulation
 
   // Count openings from state
   const doors = visOpenings ? countOpenings(state, 'door') : 0;
@@ -73,10 +76,14 @@ export function estimatePrice(state) {
 
   // ─── 1. TIMBER (structural framing) ───
   const timberPerLm = pt.timber.structural_50x100_per_lm;
-  const timberLm = estimateTimberLinearMetres(state, w_mm, d_mm);
   // Frame gauge: 100×50 costs ~1/3 more than 75×50
   const section = (isInsulated ? state.walls?.insulated?.section : state.walls?.basic?.section) || {};
   const gaugeMultiplier = (section.h >= 100) ? 1.33 : 1.0;
+  // Split timber into base frame vs walls+roof so each respects its visibility toggle
+  const timberParts = estimateTimberLinearMetresSplit(state, w_mm, d_mm);
+  const timberLm = (visBaseFrame ? timberParts.base : 0)
+                 + (visWalls ? timberParts.walls : 0)
+                 + (visRoof ? timberParts.roof : 0);
   breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
 
   // ─── 1b. BASE GRIDS (plastic ground grids) ───
@@ -101,21 +108,21 @@ export function estimatePrice(state) {
 
   // ─── 3. OSB DECKING ───
   const sheetArea = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000; // ~2.977 m²
-  const osbSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
+  const osbSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
   breakdown.osb = osbSheets * pt.sheets.osb_18mm_per_sheet;
 
   // ─── 4. INSULATION (floor + walls, if insulated) ───
   breakdown.insulation = 0;
   breakdown.plyLining = 0;
   if (isInsulated) {
-    // Floor PIR (only if base visible)
-    const pirFloorSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
+    // Floor PIR (only if base insulation visible)
+    const pirFloorSheets = visBaseIns ? Math.ceil(footprint_m2 / sheetArea) : 0;
     // Wall PIR (only if wall insulation visible)
     const pirWallSheets = visWallIns ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.insulation = (pirFloorSheets + pirWallSheets) * pt.sheets.pir_50mm_per_sheet;
 
-    // Ply lining (floor if base visible + walls if wall ply visible)
-    const plyFloorSheets = visBase ? Math.ceil(footprint_m2 / sheetArea) : 0;
+    // Ply lining (floor if base deck visible + walls if wall ply visible)
+    const plyFloorSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
     const plyWallSheets = visWallPly ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.plyLining = (plyFloorSheets + plyWallSheets) * pt.sheets.ply_12mm_per_sheet;
   }
@@ -398,21 +405,22 @@ function calcDividerCost(state, pt, buildingW_mm, buildingD_mm) {
   return totalCost;
 }
 
-// ─── Helper: estimate structural timber linear metres ───
-function estimateTimberLinearMetres(state, w_mm, d_mm) {
+// ─── Helper: estimate structural timber linear metres (split by component) ───
+function estimateTimberLinearMetresSplit(state, w_mm, d_mm) {
   const perimeter_m = 2 * (w_mm + d_mm) / 1000;
-  const area_m2 = (w_mm * d_mm) / 1_000_000;
 
   // Base: 2 rim joists + inner joists at 400mm spacing
   const rimJoists_lm = 2 * Math.max(w_mm, d_mm) / 1000;
   const innerJoistCount = Math.floor(Math.max(w_mm, d_mm) / 400);
   const innerJoists_lm = innerJoistCount * Math.min(w_mm, d_mm) / 1000;
+  const baseLm = rimJoists_lm + innerJoists_lm;
 
   // Walls: sole plates + top plates (perimeter × 2) + studs (~every 600mm × wall height)
   const wallHeight_m = (state.walls?.height_mm || 2200) / 1000;
   const plates_lm = perimeter_m * 2; // sole + top plate
   const studCount = Math.ceil(perimeter_m / 0.6);
   const studs_lm = studCount * wallHeight_m;
+  const wallsLm = plates_lm + studs_lm;
 
   // Roof: rafters (simplified — pair every 600mm along ridge)
   const ridgeLen_m = Math.max(w_mm, d_mm) / 1000;
@@ -420,8 +428,15 @@ function estimateTimberLinearMetres(state, w_mm, d_mm) {
   const rafterLen_m = (Math.min(w_mm, d_mm) / 2000) * 1.1; // half span + slope factor
   const rafters_lm = rafterPairs * 2 * rafterLen_m;
   const ridge_lm = ridgeLen_m;
+  const roofLm = rafters_lm + ridge_lm;
 
-  return rimJoists_lm + innerJoists_lm + plates_lm + studs_lm + rafters_lm + ridge_lm;
+  return { base: baseLm, walls: wallsLm, roof: roofLm };
+}
+
+// Legacy wrapper for backward compatibility
+function estimateTimberLinearMetres(state, w_mm, d_mm) {
+  const parts = estimateTimberLinearMetresSplit(state, w_mm, d_mm);
+  return parts.base + parts.walls + parts.roof;
 }
 
 // ─── Helper: estimate wall area (minus ~15% for openings) ───
