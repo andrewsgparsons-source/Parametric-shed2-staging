@@ -775,6 +775,74 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
       );
     }
   }
+  // ---- PENT ROOF INSULATION (PIR panels between rafters, interior side) ----
+  // Only for insulated variant. Panels sit below rafters, between them.
+  if (roofParts.insulation && data.rafters.length >= 2) {
+    const INS_THICKNESS_MM = 50; // 50mm PIR
+    const insBottomY_m = -INS_THICKNESS_MM / 1000; // Below rafter underside (local y=0 is rafter bottom)
+
+    const insMat = new BABYLON.StandardMaterial(`${meshPrefix}roofInsMat-pent`, scene);
+    insMat.diffuseColor = new BABYLON.Color3(0.75, 0.85, 0.45); // Green PIR
+
+    for (let i = 0; i < data.rafters.length - 1; i++) {
+      const bayStart_b = data.rafters[i].b0_mm + data.rafterW_mm; // inside edge of rafter i
+      const bayEnd_b = data.rafters[i + 1].b0_mm;                  // inside edge of rafter i+1
+      const bayWidth_b = bayEnd_b - bayStart_b;
+      if (bayWidth_b <= 0) continue;
+
+      // Insulation panel runs along A (slope axis), same length as rafters but slope-scaled
+      const insLen_a = A_phys_mm;
+
+      const m = mapABtoLocalXZ(0, bayStart_b, insLen_a, bayWidth_b, data.isWShort);
+      mkBoxBottomLocal(
+        `${meshPrefix}roof-ins-bay${i}`,
+        m.lenX,
+        INS_THICKNESS_MM,
+        m.lenZ,
+        m.x0,
+        insBottomY_m,
+        m.z0,
+        roofRoot,
+        insMat,
+        { roof: "pent", part: "insulation", bay: i }
+      );
+    }
+    console.log('[ROOF_INS] Pent: Created insulation for', data.rafters.length - 1, 'bays');
+  }
+
+  // ---- PENT ROOF INTERIOR PLYWOOD (12mm lining below insulation) ----
+  // Only for insulated variant. Continuous sheet below insulation.
+  if (roofParts.ply && data.rafters.length >= 2) {
+    const INS_THICKNESS_MM = 50;
+    const PLY_THICKNESS_MM = 12;
+    // Plywood sits below insulation
+    const plyBottomY_m = -(INS_THICKNESS_MM + PLY_THICKNESS_MM) / 1000;
+
+    const plyMat = new BABYLON.StandardMaterial(`${meshPrefix}roofPlyMat-pent`, scene);
+    plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65); // Light wood
+
+    // Full panel spanning entire roof interior (between first and last rafter)
+    const plyStart_b = data.rafters[0].b0_mm;
+    const plyEnd_b = data.rafters[data.rafters.length - 1].b0_mm + data.rafterW_mm;
+    const plyWidth_b = plyEnd_b - plyStart_b;
+    const plyLen_a = A_phys_mm;
+
+    const m = mapABtoLocalXZ(0, plyStart_b, plyLen_a, plyWidth_b, data.isWShort);
+    mkBoxBottomLocal(
+      `${meshPrefix}roof-ply`,
+      m.lenX,
+      PLY_THICKNESS_MM,
+      m.lenZ,
+      m.x0,
+      plyBottomY_m,
+      m.z0,
+      roofRoot,
+      plyMat,
+      { roof: "pent", part: "ply" }
+    );
+    console.log('[ROOF_PLY] Pent: Created interior plywood lining');
+  }
+
   // ---- Analytic alignment (no wall mesh queries) ----
   // Authoritative roof plan extents in world:
   // - Frame is at world X:[0..frameW], Z:[0..frameD]
@@ -4641,10 +4709,13 @@ function getRoofFrameGauge(state) {
 function getRoofParts(state) {
   var vis = state && state.vis ? state.vis : null;
   var rp = vis && vis.roofParts && typeof vis.roofParts === "object" ? vis.roofParts : null;
+  var isInsulated = state && state.walls && state.walls.variant === "insulated";
   return {
     structure: rp ? (rp.structure !== false) : true,
     osb: rp ? (rp.osb !== false) : true,
-    covering: rp ? (rp.covering !== false) : true
+    covering: rp ? (rp.covering !== false) : true,
+    insulation: (rp ? (rp.insulation !== false) : true) && isInsulated,
+    ply: (rp ? (rp.ply !== false) : true) && isInsulated
   };
 }
 
