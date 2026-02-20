@@ -532,6 +532,19 @@ export function generateViewerUrl(state) {
     if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
     if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
 
+    // Per-wall cladding visibility
+    if (state.vis.cladParts && typeof state.vis.cladParts === 'object') {
+      var cp = state.vis.cladParts;
+      if (cp.front === false || cp.back === false || cp.left === false || cp.right === false) {
+        compactVis.cladParts = {};
+        if (cp.front === false) compactVis.cladParts.front = false;
+        if (cp.back === false) compactVis.cladParts.back = false;
+        if (cp.left === false) compactVis.cladParts.left = false;
+        if (cp.right === false) compactVis.cladParts.right = false;
+        hasVisChanges = true;
+      }
+    }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -599,6 +612,25 @@ export function generateViewerUrl(state) {
     if (hasVisChanges) {
       compact.vis = compactVis;
     }
+  }
+
+  // Shelving
+  if (Array.isArray(state.shelving) && state.shelving.length > 0) {
+    compact.shelving = state.shelving.filter(function(s) { return s && s.enabled !== false; }).map(function(s) {
+      var shelf = {
+        wall: s.wall,
+        x_mm: s.x_mm,
+        y_mm: s.y_mm,
+        length_mm: s.length_mm,
+        depth_mm: s.depth_mm
+      };
+      if (s.thickness_mm != null) shelf.thickness_mm = s.thickness_mm;
+      if (s.bracket_size_mm != null) shelf.bracket_size_mm = s.bracket_size_mm;
+      if (s.side && s.side !== 'inside') shelf.side = s.side;
+      if (s.id != null) shelf.id = s.id;
+      shelf.enabled = true;
+      return shelf;
+    });
   }
 
   // Price badge visibility (explicitly include so shared links respect the setting)
@@ -1261,6 +1293,19 @@ export function generateProfileUrl(profileName, state) {
     if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
     if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
 
+    // Per-wall cladding visibility
+    if (state.vis.cladParts && typeof state.vis.cladParts === 'object') {
+      var cp = state.vis.cladParts;
+      if (cp.front === false || cp.back === false || cp.left === false || cp.right === false) {
+        compactVis.cladParts = {};
+        if (cp.front === false) compactVis.cladParts.front = false;
+        if (cp.back === false) compactVis.cladParts.back = false;
+        if (cp.left === false) compactVis.cladParts.left = false;
+        if (cp.right === false) compactVis.cladParts.right = false;
+        hasVisChanges = true;
+      }
+    }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -1319,6 +1364,25 @@ export function generateProfileUrl(profileName, state) {
     if (hasVisChanges) {
       compact.vis = compactVis;
     }
+  }
+
+  // Shelving
+  if (Array.isArray(state.shelving) && state.shelving.length > 0) {
+    compact.shelving = state.shelving.filter(function(s) { return s && s.enabled !== false; }).map(function(s) {
+      var shelf = {
+        wall: s.wall,
+        x_mm: s.x_mm,
+        y_mm: s.y_mm,
+        length_mm: s.length_mm,
+        depth_mm: s.depth_mm
+      };
+      if (s.thickness_mm != null) shelf.thickness_mm = s.thickness_mm;
+      if (s.bracket_size_mm != null) shelf.bracket_size_mm = s.bracket_size_mm;
+      if (s.side && s.side !== 'inside') shelf.side = s.side;
+      if (s.id != null) shelf.id = s.id;
+      shelf.enabled = true;
+      return shelf;
+    });
   }
 
   // Price badge visibility
