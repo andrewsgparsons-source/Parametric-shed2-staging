@@ -633,11 +633,12 @@ export function generateViewerUrl(state) {
     });
   }
 
-  // Price badge visibility (explicitly include so shared links respect the setting)
+  // Price badge visibility — include both true and false so shared links respect the setting
   if (state.showPriceBadge === true) {
     compact.showPriceBadge = true;
+  } else if (state.showPriceBadge === false) {
+    compact.showPriceBadge = false;
   }
-  // If false or undefined, omit it — badge will be hidden by default for shared links
 
   // Encode as Base64 with UTF-8 support
   // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
@@ -1385,9 +1386,11 @@ export function generateProfileUrl(profileName, state) {
     });
   }
 
-  // Price badge visibility
+  // Price badge visibility — include both true and false so shared links respect the setting
   if (state.showPriceBadge === true) {
     compact.showPriceBadge = true;
+  } else if (state.showPriceBadge === false) {
+    compact.showPriceBadge = false;
   }
 
   // Encode as Base64
