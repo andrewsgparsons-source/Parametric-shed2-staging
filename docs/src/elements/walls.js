@@ -2407,12 +2407,7 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
       const wGap = Math.max(100, Math.floor(d.width_mm || 800));
       const x0_door = Math.floor(d.x_mm ?? 0);
       const x1_door = x0_door + wGap;
-      let h = Math.max(100, Math.floor(d.height_mm || 2000));
-
-      // Half-height doors (e.g. bin store) — wall cutout is half the normal height
-      if (d.style === "double-half") {
-        h = Math.max(600, Math.floor(h * 0.5));
-      }
+      const h = Math.max(100, Math.floor(d.height_mm || 2000));
 
       // FIX: Reduce cutout height to match actual door boards height (door - 40mm)
       const hActual = Math.max(100, h - 40);
@@ -3389,9 +3384,7 @@ function buildWallInsulationAndLining(state, scene, materials, dims, height, pro
       if (String(d.wall || "front") !== wallId) continue;
       const w = Math.max(100, Math.floor(d.width_mm || 800));
       const x0 = Math.floor(d.x_mm ?? 0);
-      let h = Math.max(100, Math.floor(d.height_mm || 2000));
-      // Half-height doors (e.g. bin store)
-      if (d.style === "double-half") h = Math.max(600, Math.floor(h * 0.5));
+      const h = Math.max(100, Math.floor(d.height_mm || 2000));
       openings.push({ x0, x1: x0 + w, y0: 0, y1: h, type: 'door' });
     }
     // Add windows
@@ -3851,9 +3844,7 @@ function getDoorIntervalsForWallFromState(state, wallId) {
     const wGap = Math.max(100, Math.floor(d.width_mm || 800));
     const x0 = Math.floor(d.x_mm ?? 0);
     const x1 = x0 + wGap;
-    let h = Math.max(100, Math.floor(d.height_mm || 2000));
-    // Half-height doors (e.g. bin store)
-    if (d.style === "double-half") h = Math.max(600, Math.floor(h * 0.5));
+    const h = Math.max(100, Math.floor(d.height_mm || 2000));
     list.push({ id: String(d.id || ""), x0, x1, w: wGap, h });
   }
   return list;

@@ -1768,9 +1768,7 @@ function buildAttWallInsulation(scene, root, attId, wallId, axis, length, origin
 function addAttDoorFramingAlongX(attId, wallId, origin, door, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
   const x_mm = door.x_mm || 0;
   const width_mm = door.width_mm || 800;
-  let height_mm = door.height_mm || 1900;
-  // Half-height doors (e.g. bin store)
-  if (door.style === 'double-half') height_mm = Math.max(600, Math.floor(height_mm * 0.5));
+  const height_mm = door.height_mm || 1900;
   const id = door.id || 'unknown';
   const studH = wallThk; // Header beam height = stud depth (75mm)
 
@@ -1831,9 +1829,7 @@ function addAttDoorFramingAlongX(attId, wallId, origin, door, baseY, plateH, stu
 function addAttDoorFramingAlongZ(attId, wallId, origin, door, baseY, plateH, studW, wallThk, isSloped, heightAt, mkBox, mat) {
   const z_mm = door.x_mm || 0; // x_mm in opening def = position along wall (Z here)
   const width_mm = door.width_mm || 800;
-  let height_mm = door.height_mm || 1900;
-  // Half-height doors (e.g. bin store)
-  if (door.style === 'double-half') height_mm = Math.max(600, Math.floor(height_mm * 0.5));
+  const height_mm = door.height_mm || 1900;
   const id = door.id || 'unknown';
   const studH = wallThk; // 75mm
 
@@ -2412,13 +2408,9 @@ function buildCladdingAlongX(scene, root, attId, wallId, length, baseY, zPos, is
         if (o.enabled === false) continue;
         const ox = (o.x_mm || 0) + xOffset; // position along wall + any X offset
         const ow = o.width_mm || (o.type === 'door' ? 800 : 600);
-        let oh = o.type === 'door'
+        const oh = o.type === 'door'
           ? (o.height_mm || 1900)
           : (o.height_mm || 400);
-        // Half-height doors (e.g. bin store)
-        if (o.type === 'door' && o.style === 'double-half') {
-          oh = Math.max(600, Math.floor(oh * 0.5));
-        }
 
         // Y span for cutter
         let y0, y1;
@@ -2821,13 +2813,9 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
         if (o.enabled === false) continue;
         const oz = (o.x_mm || 0) + zOffset; // position along wall + Z offset
         const ow = o.width_mm || (o.type === 'door' ? 800 : 600);
-        let oh = o.type === 'door'
+        const oh = o.type === 'door'
           ? (o.height_mm || 1900)
           : (o.height_mm || 400);
-        // Half-height doors (e.g. bin store)
-        if (o.type === 'door' && o.style === 'double-half') {
-          oh = Math.max(600, Math.floor(oh * 0.5));
-        }
 
         // Y span for cutter
         let y0, y1;
