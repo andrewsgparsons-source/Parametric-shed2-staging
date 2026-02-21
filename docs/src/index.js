@@ -3676,13 +3676,16 @@ var styleSel = document.createElement("select");
           if (doorWidthMm > 1200) {
             styleOptions += '<option value="french">French Doors</option>';
           }
+          if (doorWidthMm >= 1200) {
+            styleOptions += '<option value="double-half">Double Half (Bin Store)</option>';
+          }
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
           if (currentStyle === "french" && doorWidthMm <= 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
-          if ((currentStyle === "double-standard" || currentStyle === "double-mortise-tenon") && doorWidthMm < 1200) {
+          if ((currentStyle === "double-standard" || currentStyle === "double-mortise-tenon" || currentStyle === "double-half") && doorWidthMm < 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
@@ -6207,6 +6210,9 @@ function parseOverhangInput(val) {
                   }
                   if (doorWidth > 1200) {
                     styleHtml += '<option value="french">French Doors</option>';
+                  }
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-half">Double Half (Bin Store)</option>';
                   }
                   styleSel.innerHTML = styleHtml;
                   styleSel.value = String(opening.style || "standard");
