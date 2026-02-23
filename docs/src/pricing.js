@@ -121,10 +121,24 @@ export function estimatePrice(state) {
     const pirWallSheets = visWallIns ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.insulation = (pirFloorSheets + pirWallSheets) * pt.sheets.pir_50mm_per_sheet;
 
-    // Ply lining (floor if base deck visible + walls if wall ply visible)
+    // Internal lining (floor always ply + walls depend on lining type selection)
+    const liningType = state?.walls?.internalLining || "plywood";
     const plyFloorSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
-    const plyWallSheets = visWallPly ? Math.ceil(wallArea_m2 / sheetArea) : 0;
-    breakdown.plyLining = (plyFloorSheets + plyWallSheets) * pt.sheets.ply_12mm_per_sheet;
+    const floorPlyCost = plyFloorSheets * pt.sheets.ply_12mm_per_sheet;
+    
+    let wallLiningCost = 0;
+    if (visWallPly) {
+      if (liningType === "pine-tg" && pt.internal_lining) {
+        // Pine T&G: price per m² of wall area
+        wallLiningCost = wallArea_m2 * pt.internal_lining.pine_tg_per_m2;
+      } else {
+        // Plywood sheets
+        const plyWallSheets = Math.ceil(wallArea_m2 / sheetArea);
+        wallLiningCost = plyWallSheets * pt.sheets.ply_12mm_per_sheet;
+      }
+    }
+    breakdown.plyLining = floorPlyCost + wallLiningCost;
+    breakdown.liningLabel = liningType === "pine-tg" ? "Internal lining (Pine T&G)" : "Ply lining";
   }
 
   // ─── 4b. ROOF OSB / SHEATHING ───
@@ -640,7 +654,7 @@ export function renderPricingBreakdown(state, containerId) {
           <tr><td>Cladding</td><td class="pb-val">£${b.cladding.toLocaleString()}</td></tr>
           <tr><td>OSB sheathing</td><td class="pb-val">£${b.osb.toLocaleString()}</td></tr>
           ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
-          ${b.plyLining ? `<tr><td>Ply lining</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
+          ${b.plyLining ? `<tr><td>${b.liningLabel || 'Ply lining'}</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
           <tr><td>Roof covering</td><td class="pb-val">£${b.roofCovering.toLocaleString()}</td></tr>
           ${b.roofInsulation ? `<tr><td>Roof insulation (PIR)</td><td class="pb-val">£${b.roofInsulation.toLocaleString()}</td></tr>` : ''}
           ${b.roofPly ? `<tr><td>Roof interior plywood</td><td class="pb-val">£${b.roofPly.toLocaleString()}</td></tr>` : ''}

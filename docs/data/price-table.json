@@ -24,6 +24,16 @@
     "sheet_l_mm": 2440,
     "notes": "OSB: Lathams invoice #549044 Sep 2025. Ply: Wickes £24 inc VAT = £20 ex. PIR Kingspan TP10: Wickes £35 inc VAT = £29.17 ex."
   },
+  "internal_lining": {
+    "pine_tg_per_m2": 15.67,
+    "pine_tg_board_length_mm": 2400,
+    "pine_tg_cover_mm": 88,
+    "pine_tg_thickness_mm": 8,
+    "pine_tg_pack_qty": 5,
+    "pine_tg_pack_price_ex": 16.46,
+    "pine_tg_pack_coverage_m2": 1.05,
+    "notes": "Wickes V-Jointed Traditional Softwood Cladding 8×94×2400mm (product #121322). £19.75 inc VAT = £16.46 ex. Pack of 5 boards covers 1.05m². £15.67/m² ex VAT."
+  },
   "openings": {
     "dgu_per_unit": 37.00,
     "door_hardware": 25.00,
