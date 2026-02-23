@@ -591,12 +591,19 @@ export function renderPriceCard(state, containerId) {
  * Small, unobtrusive — just the range.
  */
 export function renderPriceBadge(state) {
+  const mode = state?.priceBadgeMode || 'range';
+  
   let badge = document.getElementById('priceBadge');
   if (!badge) {
     badge = document.createElement('div');
     badge.id = 'priceBadge';
     badge.style.cssText = 'position:fixed;top:12px;right:12px;background:linear-gradient(135deg, #e8f5e9, #f1f8e9);border:1px solid #a5d6a7;border-radius:10px;padding:8px 16px;font-family:inherit;z-index:900;box-shadow:0 2px 10px rgba(76,175,80,0.15);pointer-events:none;transition:opacity 0.3s;';
     document.body.appendChild(badge);
+  }
+
+  if (mode === 'none') {
+    badge.style.display = 'none';
+    return;
   }
 
   const est = estimatePrice(state);
@@ -606,9 +613,31 @@ export function renderPriceBadge(state) {
   }
 
   badge.style.display = '';
+  
+  let label, valueHtml;
+  switch (mode) {
+    case 'low':
+      label = 'Estimated Price';
+      valueHtml = `£${est.low.toLocaleString()}`;
+      break;
+    case 'mid':
+      label = 'Estimated Price';
+      valueHtml = `£${est.target.toLocaleString()}`;
+      break;
+    case 'high':
+      label = 'Estimated Price';
+      valueHtml = `£${est.high.toLocaleString()}`;
+      break;
+    case 'range':
+    default:
+      label = 'Estimated Range';
+      valueHtml = `£${est.low.toLocaleString()} <span style="color:#aaa;font-weight:400;">—</span> £${est.high.toLocaleString()}`;
+      break;
+  }
+  
   badge.innerHTML = `
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:2px;">Estimated Range</div>
-    <div style="font-size:18px;font-weight:700;color:#4a3728;">£${est.low.toLocaleString()} <span style="color:#aaa;font-weight:400;">—</span> £${est.high.toLocaleString()}</div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:2px;">${label}</div>
+    <div style="font-size:18px;font-weight:700;color:#4a3728;">${valueHtml}</div>
   `;
 }
 

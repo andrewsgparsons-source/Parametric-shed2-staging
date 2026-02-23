@@ -596,8 +596,15 @@
                   <button id="shareWhatsAppBtn" type="button" style="width:100%; background:#25D366; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600;">📱 Create Share Link (WhatsApp)</button>
                 </div>
                 <div class="row" style="margin-top:6px;">
-                  <label class="check">
-                    <input id="showPriceBadgeCheck" type="checkbox" /> Show Price Range on screen
+                  <label>
+                    Pricing Display
+                    <select id="priceBadgeMode" aria-label="Pricing Display">
+                      <option value="none">No Pricing</option>
+                      <option value="range" selected>Price Range</option>
+                      <option value="low">Lower Tier</option>
+                      <option value="mid">Mid Tier</option>
+                      <option value="high">Higher Tier</option>
+                    </select>
                   </label>
                 </div>
 
@@ -998,8 +1005,12 @@
           // Badge visibility: show by default unless explicitly disabled
           var qs = new URLSearchParams(window.location.search || '');
           var isAdmin = qs.get('profile') === 'admin';
-          var showBadge = state && state.showPriceBadge !== false;
-          if (showBadge) {
+          // Backwards compat: convert old showPriceBadge to priceBadgeMode
+          if (state && !state.priceBadgeMode && state.showPriceBadge === false) {
+            state.priceBadgeMode = 'none';
+          }
+          var badgeMode = (state && state.priceBadgeMode) || 'range';
+          if (badgeMode !== 'none') {
             renderPriceBadge(state);
           } else {
             hidePriceBadge();
@@ -1030,22 +1041,28 @@
             renderPricingBreakdown(state, containerId);
           }
         });
-        // Wire price badge checkbox — writes to store so it persists in shared links
-        var priceBadgeCheck = document.getElementById('showPriceBadgeCheck');
-        if (priceBadgeCheck) {
-          // Init checkbox from store state — default to checked (badge visible by default)
+        // Wire price badge mode dropdown — writes to store so it persists in shared links
+        var priceBadgeModeEl = document.getElementById('priceBadgeMode');
+        if (priceBadgeModeEl) {
+          // Init dropdown from store state — default to 'range'
           var initState = window.__dbg && window.__dbg.store && window.__dbg.store.getState();
-          priceBadgeCheck.checked = !(initState && initState.showPriceBadge === false);
-          priceBadgeCheck.addEventListener('change', function() {
+          if (initState && initState.priceBadgeMode) {
+            priceBadgeModeEl.value = initState.priceBadgeMode;
+          }
+          // Backwards compat: if old showPriceBadge === false, set to 'none'
+          if (initState && initState.showPriceBadge === false && !initState.priceBadgeMode) {
+            priceBadgeModeEl.value = 'none';
+          }
+          priceBadgeModeEl.addEventListener('change', function() {
             var store = window.__dbg && window.__dbg.store;
             if (store && typeof store.setState === 'function') {
-              store.setState({ showPriceBadge: priceBadgeCheck.checked });
+              store.setState({ priceBadgeMode: priceBadgeModeEl.value });
             }
             var state = window.__lastState || (store && store.getState());
             if (state) {
-              state.showPriceBadge = priceBadgeCheck.checked;
+              state.priceBadgeMode = priceBadgeModeEl.value;
               window.__lastState = state;
-              if (priceBadgeCheck.checked) {
+              if (priceBadgeModeEl.value !== 'none') {
                 renderPriceBadge(state);
               } else {
                 hidePriceBadge();

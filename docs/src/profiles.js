@@ -640,11 +640,13 @@ export function generateViewerUrl(state) {
     });
   }
 
-  // Price badge visibility — include both true and false so shared links respect the setting
-  if (state.showPriceBadge === true) {
-    compact.showPriceBadge = true;
-  } else if (state.showPriceBadge === false) {
-    compact.showPriceBadge = false;
+  // Price badge display mode
+  if (state.priceBadgeMode && state.priceBadgeMode !== "range") {
+    compact.priceBadgeMode = state.priceBadgeMode;
+  }
+  // Backwards compat: convert old showPriceBadge=false to priceBadgeMode=none
+  if (state.showPriceBadge === false && !state.priceBadgeMode) {
+    compact.priceBadgeMode = "none";
   }
 
   // Encode as Base64 with UTF-8 support
@@ -1396,12 +1398,13 @@ export function generateProfileUrl(profileName, state) {
       return shelf;
     });
   }
-
-  // Price badge visibility — include both true and false so shared links respect the setting
-  if (state.showPriceBadge === true) {
-    compact.showPriceBadge = true;
-  } else if (state.showPriceBadge === false) {
-    compact.showPriceBadge = false;
+  // Price badge display mode
+  if (state.priceBadgeMode && state.priceBadgeMode !== "range") {
+    compact.priceBadgeMode = state.priceBadgeMode;
+  }
+  if (state.showPriceBadge === false && !state.priceBadgeMode) {
+    compact.priceBadgeMode = "none";
+  }
   }
 
   // Encode as Base64
