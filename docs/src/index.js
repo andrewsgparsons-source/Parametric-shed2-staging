@@ -84,6 +84,17 @@ function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", Stri
  * Toggle roof covering visibility checkboxes based on covering type
  * Shows standard "Covering" for felt/shingles, or "Tiles" + "Membrane & Battens" for slate
  */
+/**
+ * Show/hide internal lining dropdown based on variant
+ * Only visible when variant is "insulated"
+ */
+function updateInternalLiningVisibility(variant) {
+  var label = $("internalLiningLabel");
+  if (label) {
+    label.style.display = (variant === "insulated") ? "" : "none";
+  }
+}
+
 function updateRoofCoveringToggles(coveringType) {
   var coveringLabel = $("vRoofCoveringLabel");
   var tilesLabel = $("vRoofTilesLabel");
@@ -613,6 +624,8 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
 
     var wallSectionEl = $("wallSection"); // NEW
     var wallsVariantEl = $("wallsVariant");
+    var internalLiningEl = $("internalLining");
+    var internalLiningLabel = $("internalLiningLabel");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
     var claddingColourEl = $("claddingColour");
@@ -4489,6 +4502,9 @@ if (state && state.overhang) {
         if (vWallPlywoodEl) vWallPlywoodEl.checked = state?.vis?.wallPly !== false;
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
+        // Sync internal lining dropdown
+        updateInternalLiningVisibility(state?.walls?.variant || "insulated");
+        if (internalLiningEl && state && state.walls && state.walls.internalLining) internalLiningEl.value = state.walls.internalLining;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
         if (claddingColourEl && state && state.cladding && state.cladding.colour) claddingColourEl.value = state.cladding.colour;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
@@ -5539,7 +5555,11 @@ function parseOverhangInput(val) {
       });
     }
 
-    if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
+    if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { 
+      store.setState({ walls: { variant: wallsVariantEl.value } }); 
+      updateInternalLiningVisibility(wallsVariantEl.value);
+    });
+    if (internalLiningEl) internalLiningEl.addEventListener("change", function () { store.setState({ walls: { internalLining: internalLiningEl.value } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value, colour: (claddingColourEl ? claddingColourEl.value : "natural-wood") } }); });
     if (claddingColourEl) claddingColourEl.addEventListener("change", function () { store.setState({ cladding: { style: (claddingStyleEl ? claddingStyleEl.value : "shiplap"), colour: claddingColourEl.value } }); });
     if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 

@@ -3331,19 +3331,62 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
  */
 function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true, isPent = false, minH = height, maxH = height) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
-  const PLY_THICKNESS = 12; // 12mm plywood internal lining
+  
+  // Internal lining type: "plywood" (12mm) or "pine-tg" (12.5mm horizontal T&G)
+  const liningType = state?.walls?.internalLining || "plywood";
+  const PLY_THICKNESS = liningType === "pine-tg" ? 12.5 : 12; // T&G is 12.5mm finished, ply is 12mm
+  
   const STUD_SPACING = prof.spacing || 400;
   const studW = prof.studW;
   
-  console.log('[WALL_INS] Building wall insulation - dims:', dims, 'height:', height, 'studW:', studW, 'spacing:', STUD_SPACING);
+  console.log('[WALL_INS] Building wall insulation - dims:', dims, 'height:', height, 'studW:', studW, 'spacing:', STUD_SPACING, 'liningType:', liningType);
   
   // Insulation material (yellow/cream PIR color)
   const insMat = new BABYLON.StandardMaterial('wallInsMat-' + Date.now(), scene);
   insMat.diffuseColor = new BABYLON.Color3(0.95, 0.9, 0.4); // Brighter yellow
   
-  // Plywood material (light wood color)
-  const plyMat = new BABYLON.StandardMaterial('wallPlyMat-' + Date.now(), scene);
-  plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+  // Internal lining material — depends on lining type
+  const plyMat = new BABYLON.StandardMaterial('wallLiningMat-' + Date.now(), scene);
+  if (liningType === "pine-tg") {
+    // Warm pine — slightly lighter than Douglas fir external cladding (0.85, 0.72, 0.55)
+    // Use a dynamic texture with horizontal groove lines to represent tongue & groove boards
+    const tgTexSize = 512;
+    const tgTex = new BABYLON.DynamicTexture('pineTgTex-' + Date.now(), { width: tgTexSize, height: tgTexSize }, scene, false);
+    const tgCtx = tgTex.getContext();
+    // Fill with warm pine base colour
+    tgCtx.fillStyle = '#EBD2A6'; // Warm light pine (RGB ~0.92, 0.82, 0.65)
+    tgCtx.fillRect(0, 0, tgTexSize, tgTexSize);
+    // Draw horizontal groove lines — each board ~100mm, so scale: 512px represents ~1m of wall height
+    // That's ~10 boards per texture tile, groove every ~51px
+    const boardPx = Math.round(tgTexSize / 10);
+    tgCtx.strokeStyle = '#C4A872'; // Slightly darker groove line
+    tgCtx.lineWidth = 2;
+    for (let y = boardPx; y < tgTexSize; y += boardPx) {
+      tgCtx.beginPath();
+      tgCtx.moveTo(0, y);
+      tgCtx.lineTo(tgTexSize, y);
+      tgCtx.stroke();
+      // Add a subtle shadow line below the groove for depth
+      tgCtx.strokeStyle = '#D9BF8E';
+      tgCtx.lineWidth = 1;
+      tgCtx.beginPath();
+      tgCtx.moveTo(0, y + 2);
+      tgCtx.lineTo(tgTexSize, y + 2);
+      tgCtx.stroke();
+      tgCtx.strokeStyle = '#C4A872';
+      tgCtx.lineWidth = 2;
+    }
+    tgTex.update();
+    plyMat.diffuseTexture = tgTex;
+    // Scale UV so the grooves repeat proportionally to actual wall height
+    // ~10 boards per metre, texture tile = 1m
+    tgTex.uScale = 1;
+    tgTex.vScale = 1;
+    plyMat.diffuseColor = new BABYLON.Color3(1, 1, 1); // Let texture control colour
+  } else {
+    // Plywood (original)
+    plyMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.65);
+  }
 
   // Get root node for wall meshes - try multiple methods
   let shedRoot = scene.getTransformNodeByName("shedRoot");
@@ -4116,9 +4159,39 @@ function updateWallInsulationBOM(state, variant, isPent) {
   if (wallPirSummaryEl) wallPirSummaryEl.textContent = pirSummaryText;
   if (wallPirSummaryEl2) wallPirSummaryEl2.textContent = pirSummaryText;
   
-  // Calculate plywood lining
+  // Calculate internal lining BOM (plywood sheets OR pine T&G boards)
+  const liningType = state?.walls?.internalLining || "plywood";
+  const isPineTG = liningType === "pine-tg";
+  
+  // Update BOM section titles and descriptions based on lining type
+  const wallPlyTitleEl = document.getElementById('wallPlyTitle');
+  const wallPlyTitleEl2 = document.getElementById('wallPlyTitle2');
+  const wallPlyDescEl = document.getElementById('wallPlyDesc');
+  const wallPlyDescEl2 = document.getElementById('wallPlyDesc2');
+  const wallPlyTheadEl = document.getElementById('wallPlyThead');
+  const wallPlyTheadEl2 = document.getElementById('wallPlyThead2');
+  
+  if (isPineTG) {
+    if (wallPlyTitleEl) wallPlyTitleEl.textContent = 'Pine T&G Internal Lining (Walls) — 12.5mm Horizontal';
+    if (wallPlyTitleEl2) wallPlyTitleEl2.textContent = 'Pine T&G Internal Lining — 12.5mm Horizontal';
+    if (wallPlyDescEl) wallPlyDescEl.textContent = 'Horizontal tongue & groove pine boards. Insulated variant only.';
+    if (wallPlyDescEl2) wallPlyDescEl2.textContent = 'Horizontal tongue & groove pine boards. Insulated variant only.';
+    if (wallPlyTheadEl) wallPlyTheadEl.innerHTML = '<tr><th>Wall</th><th>Boards</th><th>Board Length</th><th>Notes</th></tr>';
+    if (wallPlyTheadEl2) wallPlyTheadEl2.innerHTML = '<tr><th>Wall</th><th>Boards</th><th>Board Length</th><th>Notes</th></tr>';
+  } else {
+    if (wallPlyTitleEl) wallPlyTitleEl.textContent = 'Plywood Internal Lining (Walls) — 12mm';
+    if (wallPlyTitleEl2) wallPlyTitleEl2.textContent = 'Internal Plywood Lining — 12mm';
+    if (wallPlyDescEl) wallPlyDescEl.textContent = 'Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.';
+    if (wallPlyDescEl2) wallPlyDescEl2.textContent = 'Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.';
+    if (wallPlyTheadEl) wallPlyTheadEl.innerHTML = '<tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr>';
+    if (wallPlyTheadEl2) wallPlyTheadEl2.innerHTML = '<tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr>';
+  }
+  
   let wallPlyHtml = '';
   let totalPlyArea = 0;
+  let totalTgBoards = 0;
+  let totalTgLinearMm = 0;
+  const TG_BOARD_WIDTH = 100; // 100mm cover width per T&G board (typical pine T&G)
   
   for (const wname of walls) {
     const wallLen = lengths[wname];
@@ -4128,35 +4201,55 @@ function updateWallInsulationBOM(state, variant, isPent) {
     const panelH = height;
     const panelW = wallLen;
     
-    const sheetsAcross = Math.ceil(panelW / PLY_SHEET_L);
-    const sheetsUp = Math.ceil(panelH / PLY_SHEET_W);
-    
-    let openingArea = 0;
-    for (const d of doorsW) {
-      openingArea += (d.w || 800) * (d.h || 2000);
+    if (isPineTG) {
+      // T&G: horizontal boards run the width of the wall
+      // Number of boards = wall height / board cover width
+      const boardCount = Math.ceil(panelH / TG_BOARD_WIDTH);
+      const boardLength = panelW; // Each board spans the wall width
+      totalTgBoards += boardCount;
+      totalTgLinearMm += boardCount * boardLength;
+      
+      const hasOpenings = doorsW.length + winsW.length > 0;
+      wallPlyHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${boardCount}</td><td>${boardLength}mm</td><td>${hasOpenings ? 'Cut around openings' : 'Full width'}</td></tr>`;
+    } else {
+      // Plywood sheets (original logic)
+      const sheetsAcross = Math.ceil(panelW / PLY_SHEET_L);
+      const sheetsUp = Math.ceil(panelH / PLY_SHEET_W);
+      
+      let openingArea = 0;
+      for (const d of doorsW) {
+        openingArea += (d.w || 800) * (d.h || 2000);
+      }
+      for (const w of winsW) {
+        openingArea += (w.w || 600) * (w.h || 400);
+      }
+      
+      const grossArea = panelH * panelW;
+      const netArea = Math.max(0, grossArea - openingArea);
+      totalPlyArea += netArea;
+      
+      wallPlyHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${sheetsAcross * sheetsUp}</td><td>${panelH}mm × ${panelW}mm</td><td>${doorsW.length + winsW.length > 0 ? 'Cut for openings' : 'Full panel'}</td></tr>`;
     }
-    for (const w of winsW) {
-      openingArea += (w.w || 600) * (w.h || 400);
-    }
-    
-    const grossArea = panelH * panelW;
-    const netArea = Math.max(0, grossArea - openingArea);
-    totalPlyArea += netArea;
-    
-    wallPlyHtml += `<tr><td>${wname.charAt(0).toUpperCase() + wname.slice(1)}</td><td>${sheetsAcross * sheetsUp}</td><td>${panelH}mm × ${panelW}mm</td><td>${doorsW.length + winsW.length > 0 ? 'Cut for openings' : 'Full panel'}</td></tr>`;
   }
   
   const plyHtmlContent = wallPlyHtml || `<tr><td colspan="4">None</td></tr>`;
   if (wallPlyBodyEl) wallPlyBodyEl.innerHTML = plyHtmlContent;
   if (wallPlyBodyEl2) wallPlyBodyEl2.innerHTML = plyHtmlContent;
   
-  const plySheetArea = PLY_SHEET_W * PLY_SHEET_L;
-  const plyMinSheets = plySheetArea > 0 ? Math.ceil(totalPlyArea / plySheetArea) : 0;
-  const plySummaryText = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
-  if (wallPlySummaryEl) wallPlySummaryEl.textContent = plySummaryText;
-  if (wallPlySummaryEl2) wallPlySummaryEl2.textContent = plySummaryText;
+  if (isPineTG) {
+    const totalLinearM = (totalTgLinearMm / 1000).toFixed(1);
+    const plySummaryText = `12.5mm Pine T&G (100mm cover) — ${totalTgBoards} boards, ${totalLinearM} linear metres total`;
+    if (wallPlySummaryEl) wallPlySummaryEl.textContent = plySummaryText;
+    if (wallPlySummaryEl2) wallPlySummaryEl2.textContent = plySummaryText;
+  } else {
+    const plySheetArea = PLY_SHEET_W * PLY_SHEET_L;
+    const plyMinSheets = plySheetArea > 0 ? Math.ceil(totalPlyArea / plySheetArea) : 0;
+    const plySummaryText = `12mm Plywood - Minimum 8×4ft sheets required: ${plyMinSheets}`;
+    if (wallPlySummaryEl) wallPlySummaryEl.textContent = plySummaryText;
+    if (wallPlySummaryEl2) wallPlySummaryEl2.textContent = plySummaryText;
+  }
   
-  console.log('[WALL_INS_BOM] Done - PIR sheets:', pirMinSheets, 'Ply sheets:', plyMinSheets);
+  console.log('[WALL_INS_BOM] Done - PIR sheets:', pirMinSheets, 'liningType:', liningType, isPineTG ? 'T&G boards:' + totalTgBoards : 'Ply sheets:' + (totalPlyArea > 0 ? Math.ceil(totalPlyArea / (PLY_SHEET_W * PLY_SHEET_L)) : 0));
 }
 
 /**

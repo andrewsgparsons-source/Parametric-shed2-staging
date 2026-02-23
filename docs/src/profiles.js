@@ -305,6 +305,10 @@ export function parseUrlState() {
     state.walls = state.walls || {};
     state.walls.variant = params.get("wallsVariant");
   }
+  if (params.has("internalLining")) {
+    state.walls = state.walls || {};
+    state.walls.internalLining = params.get("internalLining");
+  }
   if (params.has("wallSection")) {
     var section = params.get("wallSection");
     var parts = section.split("x");
@@ -428,6 +432,9 @@ export function generateViewerUrl(state) {
     }
     if (state.walls.height_mm != null) {
       compact.walls.height_mm = state.walls.height_mm;
+    }
+    if (state.walls.internalLining && state.walls.internalLining !== "plywood") {
+      compact.walls.internalLining = state.walls.internalLining;
     }
   }
 
@@ -675,6 +682,7 @@ export function applyViewerProfile() {
     "dInput",
     "roofStyle",
     "wallsVariant",
+    "internalLining",
     "wallSection",
 
     // Walls & Openings - hide add/remove buttons (keep lists for door open toggle)
@@ -1191,6 +1199,9 @@ export function generateProfileUrl(profileName, state) {
     if (state.walls.height_mm != null) {
       compact.walls.height_mm = state.walls.height_mm;
     }
+    if (state.walls.internalLining && state.walls.internalLining !== "plywood") {
+      compact.walls.internalLining = state.walls.internalLining;
+    }
   }
 
 
@@ -1499,6 +1510,15 @@ export var CONTROL_REGISTRY = {
         options: [
           { value: "insulated", label: "Insulated" },
           { value: "basic", label: "Basic" }
+        ]
+      },
+      internalLining: {
+        type: "select",
+        elementIds: ["internalLining"],
+        label: "Internal Lining",
+        options: [
+          { value: "plywood", label: "Plywood (12mm)" },
+          { value: "pine-tg", label: "Pine T&G (Horizontal)" }
         ]
       },
       wallSection: {
@@ -2476,6 +2496,7 @@ function applyControlDefault(controlKey, value, store) {
     dInput: { path: "dim.frameD_mm" },
     roofStyle: { path: "roof.style" },
     wallsVariant: { path: "walls.variant" },
+    internalLining: { path: "walls.internalLining" },
     wallSection: { path: null, custom: true }, // Needs custom handling
     roofApexEaveHeight: { path: "roof.apex.heightToEaves_mm" },
     roofApexCrestHeight: { path: "roof.apex.heightToCrest_mm" },

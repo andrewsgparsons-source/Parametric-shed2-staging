@@ -130,6 +130,13 @@
                       <option value="basic">Basic</option>
                     </select>
                   </label>
+                  <label id="internalLiningLabel" style="display: none;">
+                    Internal Lining
+                    <select id="internalLining" aria-label="Internal Lining">
+                      <option value="plywood" selected>Plywood (12mm)</option>
+                      <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
+                    </select>
+                  </label>
                 </div>
 
                 <div class="row">
@@ -723,10 +730,10 @@
     </div>
 
     <div id="wallPlySection" class="schedule-section">
-      <h4>Plywood Internal Lining (Walls) — 12mm</h4>
-      <p class="subtle">Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <h4 id="wallPlyTitle">Plywood Internal Lining (Walls) — 12mm</h4>
+      <p id="wallPlyDesc" class="subtle">Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
       <table>
-        <thead><tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
+        <thead id="wallPlyThead"><tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
         <tbody id="wallPlyBody"></tbody>
       </table>
       <p id="wallPlySummary" class="subtle"></p>
@@ -775,10 +782,10 @@
     </div>
 
     <div id="wallPlySection2" class="schedule-section">
-      <h4>Internal Plywood Lining — 12mm</h4>
-      <p class="subtle">Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <h4 id="wallPlyTitle2">Internal Plywood Lining — 12mm</h4>
+      <p id="wallPlyDesc2" class="subtle">Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
       <table class="sticky-table">
-        <thead><tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr></thead>
+        <thead id="wallPlyThead2"><tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr></thead>
         <tbody id="wallPlyBody2"></tbody>
       </table>
       <p id="wallPlySummary2" class="subtle"></p>
