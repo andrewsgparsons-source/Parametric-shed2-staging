@@ -12,9 +12,13 @@
   "cladding": {
     "feather_edge_175x38_per_lm": 5.38,
     "shiplap_150x25_per_lm": 4.10,
+    "composite_panel_per_m2": 40.67,
     "feather_edge_cover_mm": 175,
     "shiplap_cover_mm": 125,
-    "notes": "East Bros. Feather edge: invoice #121732. Shiplap: SO #77061, 29 Jan 2026."
+    "composite_panel_cover_mm": 135,
+    "composite_panel_board_length_mm": 3600,
+    "composite_panel_board_price_ex": 18.30,
+    "notes": "East Bros. Feather edge: invoice #121732. Shiplap: SO #77061, 29 Jan 2026. Composite: Cladco Signature Woodgrain 3.6m Teak, £21.96 inc = £18.30 ex, 135mm cover, 0.45m²/board = £40.67/m²."
   },
   "sheets": {
     "osb_18mm_per_sheet": 17.18,

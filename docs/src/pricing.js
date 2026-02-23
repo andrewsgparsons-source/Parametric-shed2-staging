@@ -98,8 +98,10 @@ export function estimatePrice(state) {
   const claddedWallArea_m2 = estimateCladdedWallArea(state, w_mm, d_mm, roofStyle,
     { front: visCladFront, back: visCladBack, left: visCladLeft, right: visCladRight });
   let claddingCostPerM2;
-  if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge') {
+  if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge' || claddingProfile === 'overlap') {
     claddingCostPerM2 = pt.cladding.feather_edge_175x38_per_lm * (1000 / pt.cladding.feather_edge_cover_mm);
+  } else if (claddingProfile === 'composite-panel') {
+    claddingCostPerM2 = pt.cladding.composite_panel_per_m2;
   } else {
     // Default to shiplap
     claddingCostPerM2 = pt.cladding.shiplap_150x25_per_lm * (1000 / pt.cladding.shiplap_cover_mm);
@@ -412,8 +414,10 @@ function calcDividerCost(state, pt, buildingW_mm, buildingD_mm) {
         // Use whichever cladding profile the building uses
         const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
         let costPerM2;
-        if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge') {
+        if (claddingProfile === 'featherEdge' || claddingProfile === 'feather_edge' || claddingProfile === 'overlap') {
           costPerM2 = pt.cladding.feather_edge_175x38_per_lm * (1000 / pt.cladding.feather_edge_cover_mm);
+        } else if (claddingProfile === 'composite-panel') {
+          costPerM2 = pt.cladding.composite_panel_per_m2;
         } else {
           costPerM2 = pt.cladding.shiplap_150x25_per_lm * (1000 / pt.cladding.shiplap_cover_mm);
         }

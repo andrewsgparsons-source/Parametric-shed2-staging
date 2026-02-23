@@ -185,12 +185,13 @@ export function build3D(state, ctx, sectionContext) {
     CLAD_BOTTOM_DROP_MM = 40;
     CLAD_Rt = 0; CLAD_Ht = 0; CLAD_Rb = 0; CLAD_Hb = CLAD_H;
   } else if (isCompositePanel) {
-    // Composite panel: consistent-depth horizontal boards
-    CLAD_H = 150;           // Board face height
-    CLAD_T = 22;            // Consistent depth (no taper)
-    CLAD_T_TOP = 22;
-    CLAD_T_BOTTOM = 22;
-    CLAD_DRIP = 25;
+    // Composite panel: Cladco Signature Woodgrain 3.6m boards
+    // 157mm wide, 21mm thick, 135mm cover once installed
+    CLAD_H = 135;           // Board cover height (face visible after T&G interlock)
+    CLAD_T = 21;            // Consistent depth (no taper)
+    CLAD_T_TOP = 21;
+    CLAD_T_BOTTOM = 21;
+    CLAD_DRIP = 22;
     CLAD_BOTTOM_DROP_MM = 50;
     CLAD_Rt = 0; CLAD_Ht = 0; CLAD_Rb = 0; CLAD_Hb = CLAD_H;
   } else {

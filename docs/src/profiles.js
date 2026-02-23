@@ -1693,6 +1693,7 @@ export var CONTROL_REGISTRY = {
         options: [
           { value: "shiplap", label: "Shiplap" },
           { value: "overlap", label: "Overlap (Featheredge)" },
+          { value: "composite-panel", label: "Composite (Woodgrain)" },
           { value: "loglap", label: "Log Lap" }
         ]
       }
