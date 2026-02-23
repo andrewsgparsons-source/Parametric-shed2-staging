@@ -121,10 +121,8 @@ export function estimatePrice(state) {
     const pirWallSheets = visWallIns ? Math.ceil(wallArea_m2 / sheetArea) : 0;
     breakdown.insulation = (pirFloorSheets + pirWallSheets) * pt.sheets.pir_50mm_per_sheet;
 
-    // Internal lining (floor always ply + walls depend on lining type selection)
+    // Internal wall lining only (no floor ply — floor is OSB decking only)
     const liningType = state?.walls?.internalLining || "plywood";
-    const plyFloorSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
-    const floorPlyCost = plyFloorSheets * pt.sheets.ply_12mm_per_sheet;
     
     let wallLiningCost = 0;
     if (visWallPly) {
@@ -137,8 +135,8 @@ export function estimatePrice(state) {
         wallLiningCost = plyWallSheets * pt.sheets.ply_12mm_per_sheet;
       }
     }
-    breakdown.plyLining = floorPlyCost + wallLiningCost;
-    breakdown.liningLabel = liningType === "pine-tg" ? "Internal lining (Pine T&G)" : "Ply lining";
+    breakdown.plyLining = wallLiningCost;
+    breakdown.liningLabel = liningType === "pine-tg" ? "Internal lining (Pine T&G)" : "Internal lining (Ply)";
   }
 
   // ─── 4b. ROOF OSB / SHEATHING ───
