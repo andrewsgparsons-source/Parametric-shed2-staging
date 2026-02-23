@@ -1405,7 +1405,6 @@ export function generateProfileUrl(profileName, state) {
   if (state.showPriceBadge === false && !state.priceBadgeMode) {
     compact.priceBadgeMode = "none";
   }
-  }
 
   // Encode as Base64
   var json = JSON.stringify(compact);
