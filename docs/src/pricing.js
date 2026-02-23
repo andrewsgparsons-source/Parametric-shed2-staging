@@ -277,7 +277,7 @@ export function estimatePrice(state) {
   }
 
   // ─── 8. MATERIALS SUBTOTAL ───
-  const materialsSubtotal = Object.values(breakdown).reduce((s, v) => s + v, 0);
+  const materialsSubtotal = Object.values(breakdown).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
 
   // ─── 9. FIXINGS (% of materials) ───
   breakdown.fixings = materialsSubtotal * pt.sundries.fixings_pct;
@@ -286,7 +286,7 @@ export function estimatePrice(state) {
   breakdown.delivery = pt.sundries.delivery_per_order * pt.sundries.delivery_orders_estimate;
 
   // ─── TOTAL MATERIALS ───
-  const totalMaterials = Object.values(breakdown).reduce((s, v) => s + v, 0);
+  const totalMaterials = Object.values(breakdown).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
 
   // ─── LABOUR ───
   // Base + rate formula: fixed overhead (mobilisation/setup) + per-m² scaling
