@@ -1517,6 +1517,7 @@ export var CONTROL_REGISTRY = {
         elementIds: ["internalLining"],
         label: "Internal Lining",
         options: [
+          { value: "none", label: "None" },
           { value: "plywood", label: "Plywood (12mm)" },
           { value: "pine-tg", label: "Pine T&G (Horizontal)" }
         ]

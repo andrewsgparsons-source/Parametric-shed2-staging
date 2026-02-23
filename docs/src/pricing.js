@@ -125,18 +125,16 @@ export function estimatePrice(state) {
     const liningType = state?.walls?.internalLining || "plywood";
     
     let wallLiningCost = 0;
-    if (visWallPly) {
+    if (visWallPly && liningType !== "none") {
       if (liningType === "pine-tg" && pt.internal_lining) {
-        // Pine T&G: price per m² of wall area
         wallLiningCost = wallArea_m2 * pt.internal_lining.pine_tg_per_m2;
       } else {
-        // Plywood sheets
         const plyWallSheets = Math.ceil(wallArea_m2 / sheetArea);
         wallLiningCost = plyWallSheets * pt.sheets.ply_12mm_per_sheet;
       }
     }
     breakdown.plyLining = wallLiningCost;
-    breakdown.liningLabel = liningType === "pine-tg" ? "Internal lining (Pine T&G)" : "Internal lining (Ply)";
+    breakdown.liningLabel = liningType === "none" ? "" : (liningType === "pine-tg" ? "Internal lining (Pine T&G)" : "Internal lining (Ply)");
   }
 
   // ─── 4b. ROOF OSB / SHEATHING ───

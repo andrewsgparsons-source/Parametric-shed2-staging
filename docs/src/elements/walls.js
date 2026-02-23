@@ -3332,8 +3332,9 @@ console.log('DEBUG apex panelH AFTER:', wallId, 'panelH=', panelH);
 function buildWallInsulationAndLining(state, scene, materials, dims, height, prof, wallThk, plateY, flags, meshPrefix, sectionId, sectionPos, doorsAll, winsAll, showInsulation = true, showPlywood = true, isPent = false, minH = height, maxH = height) {
   const PIR_THICKNESS = 50; // 50mm PIR insulation
   
-  // Internal lining type: "plywood" (12mm) or "pine-tg" (12.5mm horizontal T&G)
+  // Internal lining type: "none" | "plywood" (12mm) | "pine-tg" (12.5mm horizontal T&G)
   const liningType = state?.walls?.internalLining || "plywood";
+  if (liningType === "none") showPlywood = false; // No internal lining at all
   const PLY_THICKNESS = liningType === "pine-tg" ? 12.5 : 12; // T&G is 12.5mm finished, ply is 12mm
   
   const STUD_SPACING = prof.spacing || 400;
@@ -4159,9 +4160,18 @@ function updateWallInsulationBOM(state, variant, isPent) {
   if (wallPirSummaryEl) wallPirSummaryEl.textContent = pirSummaryText;
   if (wallPirSummaryEl2) wallPirSummaryEl2.textContent = pirSummaryText;
   
-  // Calculate internal lining BOM (plywood sheets OR pine T&G boards)
+  // Calculate internal lining BOM (plywood sheets OR pine T&G boards, or none)
   const liningType = state?.walls?.internalLining || "plywood";
   const isPineTG = liningType === "pine-tg";
+  const isNoLining = liningType === "none";
+  
+  // Hide lining BOM section entirely when "none" selected
+  if (isNoLining) {
+    if (wallPlySectionEl) wallPlySectionEl.style.display = 'none';
+    if (wallPlySectionEl2) wallPlySectionEl2.style.display = 'none';
+    console.log('[WALL_INS_BOM] No internal lining selected - hiding lining BOM sections. PIR sheets:', pirMinSheets);
+    return;
+  }
   
   // Update BOM section titles and descriptions based on lining type
   const wallPlyTitleEl = document.getElementById('wallPlyTitle');
