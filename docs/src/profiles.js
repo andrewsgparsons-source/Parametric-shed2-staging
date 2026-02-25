@@ -1565,6 +1565,7 @@ export var CONTROL_REGISTRY = {
         fieldKey: "door.style",
         label: "Door: Style",
         options: [
+          { value: "none", label: "Open (No Door)" },
           { value: "standard", label: "Standard" },
           { value: "double-standard", label: "Double Standard" },
           { value: "mortise-tenon", label: "Mortise & Tenon" },

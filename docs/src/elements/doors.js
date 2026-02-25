@@ -78,6 +78,10 @@ export function build3D(state, ctx, sectionContext) {
 
     // Build the appropriate door style
     switch (style) {
+      case "none":
+        // Open doorway — no door assembly, just the opening (cut by wall/cladding system)
+        console.log("[Doors] Style 'none': open doorway, no door geometry for", door.id);
+        break;
       case "french":
         buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;

@@ -555,7 +555,8 @@ function applyState(stateObj) {
       for (var i = 0; i < doors.length; i++) {
         var door = doors[i];
         var doorStyle = door.style || "standard";
-        var doorStyleLabel = doorStyle === "standard" ? "Standard" :
+        var doorStyleLabel = doorStyle === "none" ? "Open (No Door)" :
+                            doorStyle === "standard" ? "Standard" :
                             doorStyle === "double-standard" ? "Double Standard" :
                             doorStyle === "mortise-tenon" ? "Mortise & Tenon" :
                             doorStyle === "double-mortise-tenon" ? "Double Mortise & Tenon" :
