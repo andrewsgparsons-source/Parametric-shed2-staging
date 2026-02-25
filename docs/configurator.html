@@ -1156,10 +1156,10 @@
     (function() {
       var isAdmin = new URLSearchParams(window.location.search).get('profile') === 'admin';
       if (!isAdmin) {
-        var dev = document.getElementById('developerSection');
-        if (dev) dev.style.display = 'none';
-        var priceMode = document.getElementById('priceBadgeModeRow');
-        if (priceMode) priceMode.style.display = 'none';
+        // Inject CSS to hide admin-only elements (works even if DOM loads late)
+        var style = document.createElement('style');
+        style.textContent = '#developerSection, #priceBadgeModeRow { display: none !important; }';
+        document.head.appendChild(style);
       }
     })();
   </script>
