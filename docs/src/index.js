@@ -4723,17 +4723,17 @@ if (state && state.overhang) {
               hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
             },
             overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
-            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
-              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
-              basic: { section: { w: 50, h: 75 }, spacing: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 100 }, spacing: 400 },
+              basic: { section: { w: 50, h: 100 }, spacing: null },
               openings: [
                 { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 300, width_mm: 2900, height_mm: 1850, style: "double-mortise-tenon", isOpen: true }
               ],
               invalidDoorIds: [], invalidWindowIds: []
             },
-            frame: { thickness_mm: 50, depth_mm: 75 },
+            frame: { thickness_mm: 50, depth_mm: 100 },
             cladding: { style: "overlap", colour: "natural-wood" },
-            vis: { base: true, baseAll: false, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+            vis: { base: true, baseAll: false, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
           },
           "summerhouse": {
             w: 2340, d: 2900,
