@@ -4677,13 +4677,20 @@ if (state && state.overhang) {
       if (sel && sel.value !== type) sel.value = type;
       // Hide/show sidebar wizard steps based on building type
       var steps = document.querySelectorAll('.sw-step');
+      var visibleNum = 1;
       steps.forEach(function (btn) {
         var label = btn.querySelector('.sw-step-label');
         if (!label) return;
         var text = label.textContent.trim();
-        // Hide these for gazebo: Appearance, Walls & Openings, Attachments
-        if (text === "Appearance" || text === "Walls & Openings" || text === "Attachments") {
+        // Hide these for gazebo: Walls & Openings, Attachments (keep Appearance for covering)
+        if (text === "Walls & Openings" || text === "Attachments") {
           btn.style.display = isGaz ? "none" : "";
+        }
+        // Renumber visible steps
+        if (btn.style.display !== "none") {
+          var numEl = btn.querySelector('.sw-step-num');
+          if (numEl) numEl.textContent = visibleNum;
+          visibleNum++;
         }
       });
       // Hide/show dashboard items

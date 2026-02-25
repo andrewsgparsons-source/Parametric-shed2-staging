@@ -214,13 +214,13 @@
         <div class="sw-title">🏠 Design Your
           <select id="buildingTypeSelect" class="sw-type-select">
             <option value="shed">Shed</option>
-            <option value="gazebo">Gazebo</option>
             <option value="summerhouse">Summer House</option>
             <option value="gardenroom">Garden Room</option>
             <option value="garage">Garage</option>
             <option value="workshop">Workshop</option>
             <option value="leanto">Lean-to</option>
             <option value="fieldshelter">Field Shelter</option>
+            <option value="gazebo">Gazebo</option>
           </select>
         </div>
       </div>
