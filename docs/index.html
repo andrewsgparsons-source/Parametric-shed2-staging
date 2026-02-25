@@ -6,6 +6,7 @@
   <title>Parametric Shed — Views</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./src/ui/design-summary.css">
   <script>
     // Inline cache-bust: append ?v= to theme-loader to prevent stale JS
     (function() {
@@ -35,6 +36,8 @@
   <div id="statusOverlay">status...</div>
 
   <div id="ui-layer" aria-hidden="true"></div>
+  <!-- Conversion flow overlay container — protected from purgeSidebars -->
+  <div id="cf-root"></div>
 
   <!-- Mobile "Design Your Shed" button -->
   <button id="mobileOpenBtn" aria-label="Open design controls">
@@ -990,7 +993,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=26"></script>
+  <script type="module" src="./src/index.js?_v=27"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
@@ -1146,6 +1149,29 @@
     })();
   </script>
   <!-- Sidebar wizard is desktop-only; mobile uses the original UI -->
+
+  <!-- Conversion Flow: Floating "Get a Quote" CTA -->
+  <button id="getQuoteCTA" style="
+    position: fixed; bottom: 20px; right: 20px; z-index: 9000;
+    padding: 14px 24px; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, #4a7c3f, #3d6b34); color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(74,124,63,0.35);
+    transition: transform 0.15s, box-shadow 0.15s;
+    font-family: inherit; letter-spacing: 0.3px;
+  " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(74,124,63,0.45)'"
+     onmouseout="this.style.transform='';this.style.boxShadow='0 4px 14px rgba(74,124,63,0.35)'"
+  >💬 Get a Quote</button>
+  <script type="module">
+    document.getElementById('getQuoteCTA').addEventListener('click', function() {
+      import('./src/ui/design-summary.js').then(function(mod) {
+        mod.showDesignSummary();
+      }).catch(function(err) {
+        console.error('[conversion-flow] Failed to load design summary:', err);
+        alert('Could not load quote form. Please try again.');
+      });
+    });
+  </script>
 </body>
 </html>
 <!-- cache nudge 1769518008 -->

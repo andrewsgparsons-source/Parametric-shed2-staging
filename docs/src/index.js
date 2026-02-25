@@ -70,7 +70,7 @@ import * as Windows from "./elements/windows.js";
 import * as Skylights from "./elements/skylights.js?_v=11";
 import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
-import { initViews } from "./views.js?_v=2";
+import { initViews } from "./views.js?_v=3";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";

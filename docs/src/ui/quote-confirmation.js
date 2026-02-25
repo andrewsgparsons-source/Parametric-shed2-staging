@@ -150,13 +150,16 @@ export function showConfirmation(opts) {
   overlayEl.id = 'cfConfirmOverlay';
   overlayEl.setAttribute('role', 'dialog');
   overlayEl.setAttribute('aria-modal', 'true');
+  overlayEl.setAttribute('data-cf-protected', 'true');
   overlayEl.setAttribute('aria-label', 'Confirmation');
 
   var modal = document.createElement('div');
   modal.className = 'cf-modal';
   modal.innerHTML = html;
   overlayEl.appendChild(modal);
-  document.body.appendChild(overlayEl);
+  // Append to #cf-root (protected from purgeSidebars in views.js)
+  var cfRoot = document.getElementById('cf-root') || document.body;
+  cfRoot.appendChild(overlayEl);
 
   // Animate in
   requestAnimationFrame(function() {

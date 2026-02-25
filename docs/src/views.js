@@ -88,6 +88,9 @@ export function initViews() {
 
   function isProtected(el) {
     if (!el) return false;
+    // Protect conversion flow overlays (id starts with "cf")
+    if (el.id && el.id.startsWith('cf')) return true;
+    if (el.closest && el.closest('[id^="cf"]')) return true;
     if (el === canvas || canvas.contains(el) || el.contains(canvas)) return true;
     if (controls && (el === controls || controls.contains(el) || el.contains(controls))) return true;
     if (controlPanel && (el === controlPanel || controlPanel.contains(el) || el.contains(controlPanel))) return true;
