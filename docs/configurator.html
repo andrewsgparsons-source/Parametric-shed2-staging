@@ -1,0 +1,1156 @@
+<!-- FILE: docs/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Parametric Shed — Views</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./src/ui/design-summary.css">
+  <script>
+    // Inline cache-bust: append ?v= to theme-loader to prevent stale JS
+    (function() {
+      var p = new URLSearchParams(window.location.search);
+      var v = p.get('bust') || Date.now();
+      var s = document.createElement('script');
+      s.src = './src/ui/theme-loader.js?v=' + v;
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
+</head>
+
+<body data-view="3d">
+  <!-- Profile handling: default to admin if no profile specified (shared links work) -->
+  <script>
+    (function() {
+      // No access restriction - all links work
+      // Profile system handles permissions (admin default if not specified)
+      var params = new URLSearchParams(window.location.search);
+      var profile = params.get("profile");
+      if (!profile) {
+        console.log("[access] No profile specified, will use default (admin)");
+      }
+    })();
+  </script>
+  <canvas id="renderCanvas" tabindex="0" aria-hidden="false"></canvas>
+  <div id="statusOverlay">status...</div>
+
+  <div id="ui-layer" aria-hidden="true"></div>
+  <!-- Conversion flow overlay container — protected from purgeSidebars -->
+  <div id="cf-root"></div>
+
+  <!-- Mobile "Design Your Shed" button -->
+  <button id="mobileOpenBtn" aria-label="Open design controls">
+    <span class="btn-icon">🏠</span> Design Your Shed
+  </button>
+
+  <div id="controls" class="resizable" aria-label="Controls">
+    <!-- Mobile close button -->
+    <button id="mobileCloseBtn" aria-label="Close controls">✕</button>
+    
+    <!-- Resize handles -->
+    <div class="resize-handle resize-handle-right" data-resize="right"></div>
+    <div class="resize-handle resize-handle-bottom" data-resize="bottom"></div>
+    <div class="resize-handle resize-handle-corner" data-resize="corner"></div>
+
+    <aside id="controlPanel" aria-label="Controls panel">
+      <details open>
+        <summary>
+          <span>Controls <span style="font-weight:700;font-size:12px;color:#666;">(toggle)</span></span>
+          <div class="panel-controls">
+            <select id="viewSelect" aria-label="Select view" title="Switch view">
+              <option value="3d" selected>3D Scene</option>
+              <option value="walls">Walls List</option>
+              <option value="base">Base List</option>
+              <option value="roof">Roof List</option>
+              <option value="openings">Openings List</option>
+              <option value="shelving">Shelving List</option>
+            </select>
+            <button type="button" class="panel-btn" id="panelMaximizeBtn" title="Maximize panel">⛶</button>
+          </div>
+        </summary>
+        <div class="inner">
+          <div class="boHeader">
+            <div class="boTitle1">Design your shed</div>
+            <div class="boTitle2">Build Options — v1.8</div>
+          </div>
+
+          <form aria-label="Build options">
+            <details open class="boSection">
+              <summary>Size &amp; Shape</summary>
+              <div class="boBox">
+                <div class="row">
+                  <label>
+                    Unit Mode
+                    <div class="unitModeRow" role="group" aria-label="Unit Mode (Metric / Imperial)">
+                      <label class="check"><input id="unitModeMetric" type="radio" name="unitMode" value="metric" checked /> Metric</label>
+                      <label class="check"><input id="unitModeImperial" type="radio" name="unitMode" value="imperial" /> Imperial</label>
+                    </div>
+                  </label>
+                  <div></div>
+                </div>
+
+                <div class="row">
+                  <label>
+                    Dimension Mode
+                    <select id="dimMode" aria-label="Dimension Mode (Base / Frame / Roof)">
+                      <option value="base" selected>Base</option>
+                      <option value="frame">Frame</option>
+                      <option value="roof">Roof</option>
+                    </select>
+                  </label>
+                  <div></div>
+                </div>                           
+                
+            <div class="row">
+                  <label>
+                    Width (mm)
+                    <input id="wInput" type="number" min="1" max="8000" step="10" value="3000" />
+                    <span id="wFtIn" class="ftInHint" style="display:none;"></span>
+                  </label>
+                  <label>
+                    Depth (mm)
+                    <input id="dInput" type="number" min="1" max="8000" step="10" value="4000" />
+                    <span id="dFtIn" class="ftInHint" style="display:none;"></span>
+                  </label>
+                </div>
+                <p class="hint" style="margin:4px 0 0 0;font-size:11px;">Max: 8m × 4m (either orientation)</p>
+
+                <div class="row">
+                  <label>
+                    Roof Type
+                    <select id="roofStyle" aria-label="Roof Type">
+                      <option value="apex" selected>Apex (gabled)</option>
+                      <option value="pent">Pent (single pitch)</option>
+                      <option value="hipped">Hipped (4 slopes)</option>
+                      <option value="hipped">Hipped</option>
+                    </select>
+                  </label>
+                  <label>
+                    Variant
+                    <select id="wallsVariant" aria-label="Variant">
+                      <option value="insulated" selected>Insulated</option>
+                      <option value="basic">Basic</option>
+                    </select>
+                  </label>
+                  <label id="internalLiningLabel" style="display: none;">
+                    Internal Lining
+                    <select id="internalLining" aria-label="Internal Lining">
+                      <option value="none">None</option>
+                      <option value="plywood" selected>Plywood (12mm)</option>
+                      <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="row">
+                  <label>
+                    Frame Gauge/Thickness
+                    <select id="wallSection" aria-label="Stud and plate size">
+                      <option value="50x75">75 x 50</option>
+                      <option value="50x100" selected>100 x 50</option>
+                    </select>
+                  </label>
+                  <div></div>
+                </div>
+
+                <!-- NEW: Scene view snap controls (no existing IDs changed) -->
+                <div class="boSubhead" style="margin-top:10px;">Scene Views</div>
+                <div class="row">
+                  <button id="snapPlanBtn" type="button" title="Snap to plan (top/down) view">Plan</button>
+                  <button id="snapFrontBtn" type="button" title="Snap to front view">Front</button>
+                </div>
+                <div class="row">
+                  <button id="snapBackBtn" type="button" title="Snap to back view">Back</button>
+                  <button id="snapLeftBtn" type="button" title="Snap to left view">Left</button>
+                </div>
+                <div class="row">
+                  <button id="snapRightBtn" type="button" title="Snap to right view">Right</button>
+                  <div></div>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Walls &amp; Openings</summary>
+              <div class="boBox">
+                <div class="boSubhead">Wall Construction</div>
+
+                <details class="openingsGroup" id="doorsGroup">
+                  <summary class="openingsGroupSummary">Doors <span id="doorsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addDoorBtn" type="button">+ Add Door</button>
+                      <button id="removeAllDoorsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="doorsList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="windowsGroup">
+                  <summary class="openingsGroupSummary">Windows <span id="windowsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addWindowBtn" type="button">+ Add Window</button>
+                      <button id="removeAllWindowsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="windowsList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="dividersGroup">
+                  <summary class="openingsGroupSummary">Internal Dividers <span id="dividersCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="internalDividersSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
+                    <div class="row">
+                      <button id="addDividerBtn" type="button">+ Add Divider</button>
+                      <button id="removeAllDividersBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="dividersList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="shelvingGroup">
+                  <summary class="openingsGroupSummary">Shelving <span id="shelvingCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="shelvingSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add shelves to interior walls</div>
+                    <div class="row">
+                      <button id="addShelfBtn" type="button">+ Add Shelf</button>
+                      <button id="removeAllShelvesBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="shelvesList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="skylightsGroupOpenings">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountOpenings" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionOpenings">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnOpenings" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnOpenings" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListOpenings"></div>
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Roof</summary>
+              <div class="boBox">
+
+                <details class="openingsGroup" id="roofHeightsGroup">
+                  <summary class="openingsGroupSummary">Building Height Options</summary>
+                <div class="hint" style="margin:0 0 10px 0;">(Shown after roof type selection)</div>
+
+                <div id="roofHeightOptions">
+                  <div id="roofHeightsApex" class="roofHeightsBlock" aria-hidden="false">
+                    <div class="boRuleTitle">── Apex Roof ──────────────────────────────────────────────</div>
+                    <div class="row">
+                      <label>
+                        Height to Eaves (mm)
+                        <input id="roofApexEaveHeight" type="number" min="800" max="2800" step="10" value="1850" />
+                        <span id="roofApexEaveFtIn" class="ftInHint" style="display:none;"></span>
+                      </label>
+                      <label>
+                        Height to Crest (mm)
+                        <input id="roofApexCrestHeight" type="number" min="1000" max="4500" step="10" value="2200" />
+                        <span id="roofApexCrestFtIn" class="ftInHint" style="display:none;"></span>
+                      </label>
+                    </div>
+                    <p class="hint" style="margin:4px 0 8px 0;">Eaves: 800–2800mm | Crest: 1000–4500mm (must be higher than eaves)</p>
+                    <div class="row">
+                      <label>
+                        Roof Pitch
+                        <input id="roofPitchApex" type="text" value="30°" readonly aria-readonly="true" />
+                      </label>
+                      <div class="hint" style="align-self:end;">(calculated, read-only)</div>
+                    </div>
+
+                    <div class="boSubhead" style="margin-top:10px;">Trusses</div>
+                    <div class="row">
+                      <label>
+                        Trusses (incl. gable ends)
+                        <input id="roofApexTrussCount" type="number" min="2" step="1" value="7" />
+                      </label>
+                      <div class="hint" style="align-self:end;">
+                        Truss centres spacing:
+                        <output id="roofApexTrussSpacing" aria-live="polite">—</output>
+                        mm
+                      </div>
+                    </div>
+                    <div class="row">
+                      <label>
+                        Tie Beam Position
+                        <select id="roofApexTieBeam">
+                          <option value="eaves" selected>At Eaves</option>
+                          <option value="raised">Raised (3/8 up)</option>
+                        </select>
+                      </label>
+                      <div class="hint" style="align-self:end;">
+                        Raised tie gives more headroom
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="roofHeightsPent" class="roofHeightsBlock" aria-hidden="true">
+                    <div class="boRuleTitle">── Pent Roof ──────────────────────────────────────────────</div>
+                    <div class="row">
+                      <label>
+                        Minimum Height (mm)
+                        <input id="roofMinHeight" type="number" min="1000" max="2800" step="10" value="2100" />
+                        <span id="roofMinFtIn" class="ftInHint" style="display:none;"></span>
+                      </label>
+                      <label>
+                        Maximum Height (mm)
+                        <input id="roofMaxHeight" type="number" min="1000" max="2800" step="10" value="2300" />
+                        <span id="roofMaxFtIn" class="ftInHint" style="display:none;"></span>
+                      </label>
+                    </div>
+                    <p class="hint" style="margin:4px 0 8px 0;">Both walls: 1000–2800mm (max must be higher than min)</p>
+                    <div class="row">
+                      <label>
+                        Roof Pitch
+                        <input id="roofPitchPent" type="text" value="7°" readonly aria-readonly="true" />
+                      </label>
+                      <div class="hint" style="align-self:end;">(calculated, read-only)</div>
+                    </div>
+                  </div>
+
+                  <div id="roofHeightsHipped" class="roofHeightsBlock" aria-hidden="true">
+                    <div class="boRuleTitle">── Hipped Roof ────────────────────────────────────────────</div>
+                    <div class="row">
+                      <label>
+                        Height to Eaves (mm)
+                        <!-- TODO: Hipped geometry not yet implemented - constraints ready -->
+                        <input id="roofHippedEaveHeight" type="number" min="800" max="2800" step="10" value="2000" />
+                      </label>
+                      <label>
+                        Height to Crest (mm)
+                        <!-- TODO: Hipped geometry not yet implemented - constraints ready -->
+                        <input id="roofHippedCrestHeight" type="number" min="1000" max="4500" step="10" value="2400" />
+                      </label>
+                    </div>
+                    <div class="row">
+                      <label>
+                        Roof Pitch
+                        <input id="roofPitchHipped" type="text" value="25°" readonly aria-readonly="true" />
+                      </label>
+                      <div class="hint" style="align-self:end;">(calculated, read-only)</div>
+                    </div>
+                    <div class="row">
+                      <button id="hippedDesignOptionsBtn" type="button" disabled aria-disabled="true">Hipped Roof Design Options</button>
+                      <div class="hint" style="align-self:end;">(disabled / coming soon)</div>
+                    </div>
+                  </div>
+                </div>
+
+                </details>
+
+                <details class="openingsGroup" id="roofOverhangsGroup">
+                  <summary class="openingsGroupSummary">Overhangs</summary>
+                <div class="row">
+                  <label>
+                    <span id="overUniformLabel">Uniform (mm)</span>
+                    <input id="roofOverUniform" type="number" min="0" step="1" value="0" />
+                    <span id="overUniformFtIn" class="ftInHint" style="display:none;"></span>
+                  </label>
+                  <div></div>
+                </div>
+                <div class="row">
+                  <label><span id="overFrontLabel">Front</span><input id="roofOverFront" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overFrontFtIn" class="ftInHint" style="display:none;"></span></label>
+                  <label><span id="overBackLabel">Back</span><input id="roofOverBack" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overBackFtIn" class="ftInHint" style="display:none;"></span></label>
+                </div>
+                <div class="row">
+                  <label><span id="overLeftLabel">Left</span><input id="roofOverLeft" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overLeftFtIn" class="ftInHint" style="display:none;"></span></label>
+                  <label><span id="overRightLabel">Right</span><input id="roofOverRight" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overRightFtIn" class="ftInHint" style="display:none;"></span></label>
+                </div>
+                </details>
+
+                <details class="openingsGroup" id="skylightsGroupRoof">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountRoof" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionRoof">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnRoof" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnRoof" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListRoof"></div>
+                  </div>
+                </details>
+
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Appearance</summary>
+              <div class="boBox">
+                <div class="boSubhead">Cladding</div>
+                <div class="row">
+                  <label>
+                    Style
+                    <select id="claddingStyle" aria-label="Cladding style">
+                      <option value="shiplap">Shiplap</option>
+                      <option value="overlap">Overlap (Featheredge)</option>
+                      <option value="composite-panel">Composite (Woodgrain)</option>
+                      <!-- Budget styles: code ready but disabled until #125 resolved
+                      <option value="loglap">Log Lap</option>
+                      <option value="box-profile">Box Profile (Steel)</option>
+                      <option value="corrugated">Corrugated (Steel)</option>
+                      <option value="composite-slatted">Composite Slatted</option>
+                      -->
+                    </select>
+                  </label>
+                </div>
+                <div class="row" id="claddingColourRow">
+                  <label>
+                    Colour — <em style="color:#999; font-weight:normal">coming soon</em>
+                    <!-- Colour picker: code ready but disabled until #125 resolved
+                    <select id="claddingColour" aria-label="Cladding colour">
+                      <option value="natural-wood">Natural Wood</option>
+                      <option value="pale-blue">Pale Blue</option>
+                      <option value="sage-green">Sage Green</option>
+                      <option value="anthracite">Anthracite Grey</option>
+                      <option value="goosewing-grey">Goosewing Grey</option>
+                      <option value="vandyke-brown">Vandyke Brown</option>
+                      <option value="charcoal">Charcoal</option>
+                      <option value="stone-grey">Stone Grey</option>
+                    </select>
+                    -->
+                  </label>
+                </div>
+
+                <div class="boSubhead">Roof Covering</div>
+                <div class="row">
+                  <label>
+                    Style
+                    <select id="roofCoveringStyle" aria-label="Roof covering style">
+                      <option value="felt">Standard Felt</option>
+                      <option value="epdm">EPDM Rubber</option>
+                      <option value="slate">Synthetic Slate Tiles</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Building Attachments</summary>
+              <div class="boBox">
+                <div class="hint" style="margin:0 0 10px 0;">Add secondary buildings attached to the main structure. Each attachment is a complete sub-building with its own base, walls, openings, and roof.</div>
+
+                <div class="boSubhead">Add New Attachment</div>
+                <div class="row">
+                  <label>
+                    Attach to Wall
+                    <select id="attachmentWall" aria-label="Wall to attach to">
+                      <option value="right" selected>Right</option>
+                      <option value="back">Back</option>
+                      <option value="front">Front</option>
+                      <option value="left">Left</option>
+                    </select>
+                  </label>
+                  <button id="addAttachmentBtn" type="button" style="align-self: flex-end;">+ Add Attachment</button>
+                </div>
+
+                <div class="boSubhead" style="margin-top:10px;">Current Attachments</div>
+                <div id="attachmentsList">
+                  <div class="hint">(No attachments added)</div>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                  <button id="removeAllAttachmentsBtn" type="button" style="background:#c44; display:none;">Remove All Attachments</button>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Visibility</summary>
+              <div class="boBox" style="padding: 12px;">
+                
+                <!-- Main Assemblies -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Main Assemblies</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vBaseAll" type="checkbox" checked /> Base</label>
+                    <label class="check"><input id="vWalls" type="checkbox" checked /> Walls</label>
+                    <label class="check"><input id="vRoof" type="checkbox" checked /> Roof</label>
+                    <label class="check"><input id="vCladding" type="checkbox" checked /> Cladding</label>
+                    <label class="check"><input id="vOpenings" type="checkbox" checked /> Doors & Windows</label>
+                  </div>
+                </div>
+
+                <!-- Base Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Base</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vBase" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
+                    <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vDeck" type="checkbox" checked /> Decking (OSB)</label>
+                  </div>
+                </div>
+
+                <!-- Wall Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Walls</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vWallFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vWallBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vWallLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vWallRight" type="checkbox" checked /> Right</label>
+                    <label class="check"><input id="vWallInsulation" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vWallPlywood" type="checkbox" checked /> Interior Plywood</label>
+                  </div>
+                </div>
+
+                <!-- Cladding Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Cladding</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vCladFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vCladBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vCladLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vCladRight" type="checkbox" checked /> Right</label>
+                  </div>
+                </div>
+
+                <!-- Roof Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Roof</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure</label>
+                    <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
+                    <!-- Standard covering toggle (felt/shingles) -->
+                    <label id="vRoofCoveringLabel" class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Slate-specific toggles (hidden by default) -->
+                    <label id="vRoofMembraneBattensLabel" class="check" style="display: none;"><input id="vRoofMembraneBattens" type="checkbox" checked /> Membrane &amp; Battens</label>
+                    <label id="vRoofTilesLabel" class="check" style="display: none;"><input id="vRoofTiles" type="checkbox" checked /> Tiles</label>
+                    <label class="check"><input id="vRoofInsulation" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vRoofPly" type="checkbox" checked /> Interior Plywood</label>
+                  </div>
+                </div>
+
+                <!-- Attached Buildings - only shown when attachments exist -->
+                <div id="vAttachmentsSection" style="margin-bottom: 16px; display: none;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Attached Buildings</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vAttBase" type="checkbox" checked /> Base</label>
+                    <label class="check"><input id="vAttWalls" type="checkbox" checked /> Walls</label>
+                    <label class="check"><input id="vAttRoof" type="checkbox" checked /> Roof</label>
+                    <label class="check"><input id="vAttCladding" type="checkbox" checked /> Cladding</label>
+                  </div>
+                  
+                  <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Base</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vAttBaseGrid" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
+                    <label class="check"><input id="vAttBaseDeck" type="checkbox" checked /> Decking (OSB)</label>
+                  </div>
+                  
+                  <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Walls</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vAttWallFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vAttWallBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vAttWallLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vAttWallRight" type="checkbox" checked /> Right</label>
+                    <label class="check"><input id="vAttWallOuter" type="checkbox" checked /> Outer</label>
+                  </div>
+                  
+                  <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Roof</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vAttRoofStructure" type="checkbox" checked /> Structure</label>
+                    <label class="check"><input id="vAttRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
+                    <label class="check"><input id="vAttRoofCovering" type="checkbox" checked /> Covering</label>
+                    <label class="check"><input id="vAttRoofInsulation" type="checkbox" checked /> Insulation</label>
+                  </div>
+                </div>
+
+              </div>
+            </details>
+
+            <details open class="boSection">
+              <summary>Save / Load Design</summary>
+              <div class="boBox" id="saveLoadBox">
+                <div class="boSubhead">Presets</div>
+                <div class="row">
+                  <label>
+                    <span class="srOnly">Select preset</span>
+                    <select id="instanceSelect" aria-label="Select preset"></select>
+                  </label>
+                  <button id="loadInstanceBtn" type="button">Load Preset</button>
+                </div>
+
+                <div class="boSubhead" style="margin-top:10px;">Your Design</div>
+                <div class="row">
+                  <button id="exportBtn" type="button">Export Design</button>
+                  <button id="importBtn" type="button">Import Design</button>
+                </div>
+                <p id="instancesHint" class="hint"></p>
+
+                <div class="boSubhead" style="margin-top:10px;">Share Links</div>
+                <div class="row" style="display:flex; gap:6px; align-items:center;">
+                  <select id="shareLinkProfileSelect" style="flex:1;">
+                    <option value="viewer">Viewer (read-only)</option>
+                    <!-- Other profiles populated dynamically -->
+                  </select>
+                  <button id="copyShareLinkBtn" type="button">Copy Link</button>
+                </div>
+                <div class="row" style="margin-top:6px;">
+                  <button id="shareWhatsAppBtn" type="button" style="width:100%; background:#25D366; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600;">📱 Create Share Link (WhatsApp)</button>
+                </div>
+                <div class="row" style="margin-top:6px;">
+                  <label>
+                    Pricing Display
+                    <select id="priceBadgeMode" aria-label="Pricing Display">
+                      <option value="none">No Pricing</option>
+                      <option value="range" selected>Price Range</option>
+                      <option value="low">Lower Tier</option>
+                      <option value="mid">Mid Tier</option>
+                      <option value="high">Higher Tier</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="boSubhead" style="margin-top:10px;">Description</div>
+                <div class="row">
+                  <button id="copyShedDescriptionBtn" type="button">Copy Shed Description</button>
+                </div>
+              </div>
+            </details>
+
+            <details class="boSection">
+              <summary>Developer</summary>
+              <div class="boBox" id="developerBox">
+                <div class="row">
+                  <label class="check">
+                    <input id="devModeCheck" type="checkbox" /> Show Dev Tools
+                  </label>
+                </div>
+                <div id="devPanel" style="display:none;">
+                  <div class="row" style="margin-top:10px;">
+                    <button id="copyStateBtn" type="button">Copy State to Clipboard</button>
+                  </div>
+                  <p class="hint">Copy current state JSON for adding to presets file.</p>
+
+                  <details open class="boSection" style="margin-top:12px;">
+                    <summary>Profile Editor</summary>
+                    <div class="boBox" id="profileEditorPanel">
+                      <div class="row" style="margin-bottom:8px;">
+                        <label>
+                          <span style="font-size:12px;">Profile:</span>
+                          <select id="profileEditorSelect" style="min-width:120px;"></select>
+                        </label>
+                        <button id="profileNewBtn" type="button">New</button>
+                        <button id="profileRenameBtn" type="button">Rename</button>
+                        <button id="profileDeleteBtn" type="button">Delete</button>
+                      </div>
+                      <p id="profileActiveHint" class="hint" style="margin:0 0 8px 0;"></p>
+                      <div class="row" style="margin-bottom:12px;">
+                        <button id="profileImportBtn" type="button">Import JSON</button>
+                        <button id="profileExportBtn" type="button">Export JSON</button>
+                        <button id="profileResetBtn" type="button" title="Reset this profile to show all controls (admin state)">Reset Profile</button>
+                      </div>
+                      <div id="profileControlsContainer">
+                        <!-- Populated by profile-editor.js -->
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </details>
+          </form>
+        </div>
+      </details>
+    </aside>
+  </div>
+
+  <!-- View: Base Cutting List -->
+  <div id="bomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Base / Floor Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
+    </div>
+
+    <div id="bomToolbar">
+      <label for="unitsSelect" style="font-size:12px;color:#555;">Units:</label>
+      <select id="unitsSelect">
+        <option value="mm">mm</option>
+        <option value="both">mm + in</option>
+      </select>
+      <button id="exportCsvBtn">Export CSV</button>
+      <button id="printBtn">Print</button>
+    </div>
+
+    <div class="schedule-section">
+      <h4>1. Timber Frame</h4>
+      <table class="sticky-table">
+        <thead><tr><th>Item</th><th>Qty</th><th>Cut Size</th><th>Notes</th></tr></thead>
+        <tbody id="timberTableBody"></tbody>
+        <tfoot><tr class="totals-row"><td colspan="4" id="timberTotals"></td></tr></tfoot>
+      </table>
+    </div>
+
+    <div class="schedule-section">
+      <h4>3. OSB Decking Cutting List (8x4 Sheets)</h4>
+      <p class="subtle">Standard Sheets are full 1220×2440 (oriented per joists). Remainders are staggered as in the 3D layout.</p>
+
+      <table class="sticky-table">
+        <thead><tr><th colspan="4">Standard Sheets</th></tr></thead>
+        <thead><tr><th>Piece</th><th>Qty</th><th>Size (L × W)</th><th>Notes</th></tr></thead>
+        <tbody id="osbStdBody"></tbody>
+        <tfoot><tr class="totals-row"><td colspan="4" id="osbStdTotals"></td></tr></tfoot>
+      </table>
+
+      <table class="sticky-table">
+        <thead><tr><th colspan="4">Rip / Trim Cuts</th></tr></thead>
+        <thead><tr><th>Piece</th><th>Qty</th><th>Size (L × W)</th><th>Notes</th></tr></thead>
+        <tbody id="osbRipBody"></tbody>
+        <tfoot><tr class="totals-row"><td colspan="4" id="osbRipTotals"></td></tr></tfoot>
+      </table>
+
+      <p id="osbSummary" class="subtle"></p>
+    </div>
+
+    <div id="plySection" class="schedule-section">
+      <h4>Plywood Floor Covering (12mm) — Insulated Variant</h4>
+      <p class="subtle">12mm plywood overlay on OSB decking. Uses same 8×4ft sheet layout.</p>
+      <table class="sticky-table">
+        <thead><tr><th>Piece</th><th>Qty</th><th>Size (L × W)</th><th>Notes</th></tr></thead>
+        <tbody id="plyBody"></tbody>
+      </table>
+      <p id="plySummary" class="subtle"></p>
+    </div>
+
+    <div class="schedule-section">
+      <h4>PIR Insulation (Floor) — Rip Cuts Only</h4>
+      <table id="pirRipTable">
+        <thead><tr><th>Piece Ref</th><th>Qty</th><th>Cut Size (L x W)</th><th>Type</th></tr></thead>
+        <tbody id="pirRipBody"></tbody>
+      </table>
+      <p id="pirSummary" class="subtle"></p>
+    </div>
+
+    <div id="wallPirSection" class="schedule-section">
+      <h4>PIR Insulation (Walls) — 50mm Celotex</h4>
+      <p class="subtle">Wall cavity insulation between studs. Insulated variant only.</p>
+      <table>
+        <thead><tr><th>Wall</th><th>Pieces</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
+        <tbody id="wallPirBody"></tbody>
+      </table>
+      <p id="wallPirSummary" class="subtle"></p>
+    </div>
+
+    <div id="wallPlySection" class="schedule-section">
+      <h4 id="wallPlyTitle">Plywood Internal Lining (Walls) — 12mm</h4>
+      <p id="wallPlyDesc" class="subtle">Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <table>
+        <thead id="wallPlyThead"><tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
+        <tbody id="wallPlyBody"></tbody>
+      </table>
+      <p id="wallPlySummary" class="subtle"></p>
+    </div>
+
+    <div class="schedule-section">
+      <h4>3. Plastic Grid Tiles (Modules)</h4>
+      <table id="gridTable">
+        <thead><tr><th>Piece Ref</th><th>Qty</th><th>Cut Size (L x W)</th><th>Type</th></tr></thead>
+        <tbody id="gridBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- View: Walls Cutting List -->
+  <div id="wallsBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Walls Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Walls — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>L (mm)</th>
+            <th>W (mm)</th>
+            <th>D (mm)</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="bomTable"></tbody>
+      </table>
+    </div>
+
+    <div id="wallPirSection2" class="schedule-section">
+      <h4>Wall Insulation — 50mm PIR (Celotex)</h4>
+      <p class="subtle">Cavity insulation between studs. Insulated variant only.</p>
+      <table class="sticky-table">
+        <thead><tr><th>Wall</th><th>Pieces</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
+        <tbody id="wallPirBody2"></tbody>
+      </table>
+      <p id="wallPirSummary2" class="subtle"></p>
+    </div>
+
+    <div id="wallPlySection2" class="schedule-section">
+      <h4 id="wallPlyTitle2">Internal Plywood Lining — 12mm</h4>
+      <p id="wallPlyDesc2" class="subtle">Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <table class="sticky-table">
+        <thead id="wallPlyThead2"><tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr></thead>
+        <tbody id="wallPlyBody2"></tbody>
+      </table>
+      <p id="wallPlySummary2" class="subtle"></p>
+    </div>
+  </div>
+
+  <div id="roofBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Roof Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Roof — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>L (mm)</th><th>W (mm)</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="roofBomTable">
+          <tr><td colspan="5">Roof cutting list not yet generated.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- View: Openings (Doors & Windows) Cutting List -->
+  <div id="openingsBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Doors &amp; Windows Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Doors — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>L (mm)</th><th>W (mm)</th><th>D (mm)</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="doorsBomTable">
+          <tr><td colspan="6">No doors configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="schedule-section" style="margin-top: 20px;">
+      <h4>Windows — Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>L (mm)</th><th>W (mm)</th><th>D (mm)</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="windowsBomTable">
+          <tr><td colspan="6">No windows configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- View: Shelving Cutting List -->
+  <div id="shelvingBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Shelving Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">&larr; Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Shelving &mdash; Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>Section (mm)</th><th>Length (mm)</th><th>Material</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="shelvingBomTable">
+          <tr><td colspan="6">No shelves configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script type="module">
+    (function () {
+      var qs = new URLSearchParams(window.location.search || "");
+      var v = qs.get("v");
+      var clean = (qs.get("clean") === "1");
+
+      window.__boot = window.__boot || {};
+      window.__boot.v = (v != null && v !== "") ? String(v) : null;
+      window.__boot.clean = clean;
+
+      var buildSha = null;
+
+      function ensureDebugBootLabel() {
+        var txt = "BUILD: " + (buildSha != null && buildSha !== "" ? buildSha : "(unavailable)") + (clean ? " clean=1" : "");
+        var el = document.getElementById("dbgBootLabel");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "dbgBootLabel";
+          el.setAttribute("aria-hidden", "true");
+          el.style.position = "fixed";
+          el.style.top = "6px";
+          el.style.left = "6px";
+          el.style.zIndex = "2147483647";
+          el.style.pointerEvents = "none";
+          el.style.userSelect = "none";
+          el.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+          el.style.fontSize = "12px";
+          el.style.lineHeight = "1.2";
+          el.style.padding = "2px 6px";
+          el.style.borderRadius = "4px";
+          el.style.background = "rgba(0,0,0,0.55)";
+          el.style.color = "#fff";
+          document.body.appendChild(el);
+        }
+        el.textContent = txt;
+      }
+
+      function fetchBuildTxtOnce() {
+        try {
+          if (!("fetch" in window)) return;
+          fetch("build.txt", { cache: "no-store" }).then(function (r) {
+            if (!r || !r.ok) throw new Error("build.txt fetch failed");
+            return r.text();
+          }).then(function (t) {
+            var s = (t || "").trim();
+            buildSha = s ? String(s).split(/\s+/)[0] : null;
+            try { ensureDebugBootLabel(); } catch (e9) {}
+          }).catch(function () {
+            buildSha = null;
+            try { ensureDebugBootLabel(); } catch (e10) {}
+          });
+        } catch (e11) {}
+      }
+
+      if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", function () {
+          ensureDebugBootLabel();
+          fetchBuildTxtOnce();
+        }, { once: true });
+      } else {
+        try { ensureDebugBootLabel(); } catch (e0) {}
+        try { fetchBuildTxtOnce(); } catch (e12) {}
+      }
+
+      if (!clean) return;
+
+      try {
+        var shim = {
+          getItem: function () { return null; },
+          setItem: function () {},
+          removeItem: function () {},
+          clear: function () {},
+          key: function () { return null; },
+          get length() { return 0; }
+        };
+        try { Object.defineProperty(window, "localStorage", { configurable: true, get: function () { return shim; } }); } catch (e1) {}
+        try { Object.defineProperty(window, "sessionStorage", { configurable: true, get: function () { return shim; } }); } catch (e2) {}
+        try {
+          var sp = window.Storage && window.Storage.prototype;
+          if (sp && !sp.__cleanBootPatched) {
+            Object.defineProperty(sp, "__cleanBootPatched", { value: true, configurable: true });
+            sp.getItem = function () { return null; };
+            sp.setItem = function () {};
+            sp.removeItem = function () {};
+            sp.clear = function () {};
+            sp.key = function () { return null; };
+          }
+        } catch (e3) {}
+      } catch (e4) {}
+
+      try {
+        if ("serviceWorker" in navigator && navigator.serviceWorker) {
+          var sw = navigator.serviceWorker;
+          if (typeof sw.register === "function" && !sw.__cleanBootRegisterPatched) {
+            try { Object.defineProperty(sw, "__cleanBootRegisterPatched", { value: true, configurable: true }); } catch (e5) { sw.__cleanBootRegisterPatched = true; }
+            window.__boot._swRegister = window.__boot._swRegister || sw.register;
+            sw.register = function () { return Promise.resolve(null); };
+          }
+
+          (async function () {
+            try {
+              var regs = await navigator.serviceWorker.getRegistrations();
+              for (var i = 0; i < regs.length; i++) {
+                try { await regs[i].unregister(); } catch (e6) {}
+              }
+            } catch (e7) {}
+          })();
+        }
+      } catch (e8) {}
+    })();
+  </script>
+  <script type="importmap">
+    { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
+  </script>
+  <script type="module" src="./src/index.js?_v=28"></script>
+  <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
+
+  <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
+
+  <!-- Price Estimate Module -->
+  <script type="module">
+    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=2';
+    loadPriceTable().then(ok => {
+      if (ok) {
+        window.__pricingReady = true;
+        window.__updatePriceCard = function(state) {
+          // Badge visibility: show by default unless explicitly disabled
+          var qs = new URLSearchParams(window.location.search || '');
+          var isAdmin = qs.get('profile') === 'admin';
+          // Backwards compat: convert old showPriceBadge to priceBadgeMode
+          if (state && !state.priceBadgeMode && state.showPriceBadge === false) {
+            state.priceBadgeMode = 'none';
+          }
+          var badgeMode = (state && state.priceBadgeMode) || 'range';
+          if (badgeMode !== 'none') {
+            renderPriceBadge(state);
+          } else {
+            hidePriceBadge();
+          }
+          // Update breakdown if visible
+          var breakdownDiv = document.getElementById('bomPricingBreakdown');
+          if (breakdownDiv && breakdownDiv.style.display !== 'none' && breakdownDiv.innerHTML) {
+            renderPricingBreakdown(state, 'bomPricingBreakdown');
+          }
+        };
+        window.__renderPricingBreakdown = function(state, containerId) {
+          renderPricingBreakdown(state, containerId);
+        };
+        // Seed __lastState from store if the initial render already happened before pricing loaded
+        if (!window.__lastState && window.__dbg && window.__dbg.store && typeof window.__dbg.store.getState === 'function') {
+          window.__lastState = window.__dbg.store.getState();
+          console.log('[PRICING] Seeded __lastState from store (initial render already ran)');
+          // Show price badge immediately on load (respects showPriceBadge + admin check)
+          window.__updatePriceCard(window.__lastState);
+        }
+        // Listen for breakdown render requests from sidebar
+        window.addEventListener('renderPricingBreakdown', function(e) {
+          var containerId = e.detail && e.detail.containerId;
+          // Fall back to store state if __lastState hasn't been set yet
+          var state = window.__lastState || (window.__dbg && window.__dbg.store && window.__dbg.store.getState());
+          if (containerId && state) {
+            window.__lastState = state; // cache it
+            renderPricingBreakdown(state, containerId);
+          }
+        });
+        // Wire price badge mode dropdown — writes to store so it persists in shared links
+        var priceBadgeModeEl = document.getElementById('priceBadgeMode');
+        if (priceBadgeModeEl) {
+          // Init dropdown from store state — default to 'range'
+          var initState = window.__dbg && window.__dbg.store && window.__dbg.store.getState();
+          if (initState && initState.priceBadgeMode) {
+            priceBadgeModeEl.value = initState.priceBadgeMode;
+          }
+          // Backwards compat: if old showPriceBadge === false, set to 'none'
+          if (initState && initState.showPriceBadge === false && !initState.priceBadgeMode) {
+            priceBadgeModeEl.value = 'none';
+          }
+          priceBadgeModeEl.addEventListener('change', function() {
+            var store = window.__dbg && window.__dbg.store;
+            if (store && typeof store.setState === 'function') {
+              store.setState({ priceBadgeMode: priceBadgeModeEl.value });
+            }
+            var state = window.__lastState || (store && store.getState());
+            if (state) {
+              state.priceBadgeMode = priceBadgeModeEl.value;
+              window.__lastState = state;
+              if (priceBadgeModeEl.value !== 'none') {
+                renderPriceBadge(state);
+              } else {
+                hidePriceBadge();
+              }
+            }
+          });
+        }
+        console.log('[PRICING] Module ready');
+      }
+    });
+  </script>
+
+  <!-- Mobile UX initialization -->
+  <script>
+    (function() {
+      // Check if mobile
+      function isMobile() {
+        return window.innerWidth <= 1024;
+      }
+      
+      function initMobileUI() {
+        var openBtn = document.getElementById('mobileOpenBtn');
+        var closeBtn = document.getElementById('mobileCloseBtn');
+        var body = document.body;
+        
+        if (!openBtn || !closeBtn) return;
+        
+        // Auto-collapse on mobile
+        if (isMobile()) {
+          body.classList.add('mobile-panel-collapsed');
+        }
+        
+        // Open panel
+        openBtn.addEventListener('click', function() {
+          body.classList.remove('mobile-panel-collapsed');
+        });
+        
+        // Close panel
+        closeBtn.addEventListener('click', function() {
+          body.classList.add('mobile-panel-collapsed');
+        });
+        
+        // Handle orientation/resize changes
+        window.addEventListener('resize', function() {
+          if (!isMobile()) {
+            body.classList.remove('mobile-panel-collapsed');
+          }
+        });
+        
+        // Close panel when clicking on canvas (mobile only)
+        var canvas = document.getElementById('renderCanvas');
+        if (canvas) {
+          canvas.addEventListener('touchstart', function(e) {
+            if (isMobile() && !body.classList.contains('mobile-panel-collapsed')) {
+              // Only close if it's a simple tap, not a gesture
+              if (e.touches.length === 1) {
+                // Delay to allow for pinch gesture detection
+                var startTime = Date.now();
+                var startTouches = e.touches.length;
+                
+                canvas.addEventListener('touchend', function onEnd(te) {
+                  canvas.removeEventListener('touchend', onEnd);
+                  var duration = Date.now() - startTime;
+                  // If it was a quick tap (not a drag/pinch), close panel
+                  if (duration < 200 && te.changedTouches.length === 1) {
+                    body.classList.add('mobile-panel-collapsed');
+                  }
+                }, { once: true });
+              }
+            }
+          }, { passive: true });
+        }
+      }
+      
+      // Run when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMobileUI);
+      } else {
+        initMobileUI();
+      }
+    })();
+  </script>
+  <!-- Sidebar wizard is desktop-only; mobile uses the original UI -->
+
+  <!-- Get a Quote CTA is now integrated into the price badge (pricing.js) -->
+</body>
+</html>
+<!-- cache nudge 1769518008 -->
