@@ -24,13 +24,14 @@
   var ALL_STEPS = [
     { num: 1, label: 'Size & Shape',       section: 'Size & Shape' },
     { num: 2, label: 'Roof',               section: 'Roof' },
-    { num: 3, label: 'Appearance',         section: 'Appearance' },
-    { num: 4, label: 'Walls & Openings',   section: 'Walls & Openings' },
-    { num: 5, label: 'Attachments',        section: 'Building Attachments' },
-    { num: 6, label: 'Visibility',         section: 'Visibility' },
-    { num: 7, label: 'Bill of Materials',  section: '__bom__' },
-    { num: 8, label: 'Save & Share',       section: 'Save / Load Design' },
-    { num: 9, label: 'Developer',          section: 'Developer', adminOnly: true }
+    { num: 3, label: 'Base',               section: 'Base' },
+    { num: 4, label: 'Appearance',         section: 'Appearance' },
+    { num: 5, label: 'Walls & Openings',   section: 'Walls & Openings' },
+    { num: 6, label: 'Attachments',        section: 'Building Attachments' },
+    { num: 7, label: 'Visibility',         section: 'Visibility' },
+    { num: 8, label: 'Bill of Materials',  section: '__bom__' },
+    { num: 9, label: 'Save & Share',       section: 'Save / Load Design' },
+    { num: 10, label: 'Developer',         section: 'Developer', adminOnly: true }
   ];
 
   // Filter out admin-only steps for public visitors
