@@ -9,7 +9,7 @@ let priceTable = null;
 /** Load the price table JSON (called once at startup) */
 export async function loadPriceTable() {
   try {
-    const resp = await fetch('./data/price-table.json');
+    const resp = await fetch('./data/price-table.json?_v=2');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     priceTable = await resp.json();
     console.log('[PRICING] Price table loaded:', priceTable.version);
