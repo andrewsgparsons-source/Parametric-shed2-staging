@@ -100,13 +100,20 @@ function updateRoofCoveringToggles(coveringType) {
   var tilesLabel = $("vRoofTilesLabel");
   var membraneBattensLabel = $("vRoofMembraneBattensLabel");
   
-  if (coveringType === "slate") {
-    // Slate selected: hide standard covering, show breakdown toggles
+  // Hide skylights when slate is selected (not compatible)
+  var skylightsGroupOpenings = $("skylightsGroupOpenings");
+  var skylightsGroupRoof = $("skylightsGroupRoof");
+  var isSlate = (coveringType === "slate");
+  if (skylightsGroupOpenings) skylightsGroupOpenings.style.display = isSlate ? "none" : "";
+  if (skylightsGroupRoof) skylightsGroupRoof.style.display = isSlate ? "none" : "";
+
+  if (isSlate) {
+    // Slate selected: hide standard covering, show breakdown toggles, hide skylights
     if (coveringLabel) coveringLabel.style.display = "none";
     if (tilesLabel) tilesLabel.style.display = "";
     if (membraneBattensLabel) membraneBattensLabel.style.display = "";
   } else {
-    // Felt/shingles: show standard covering, hide breakdown toggles
+    // Felt/EPDM: show standard covering, hide breakdown toggles
     if (coveringLabel) coveringLabel.style.display = "";
     if (tilesLabel) tilesLabel.style.display = "none";
     if (membraneBattensLabel) membraneBattensLabel.style.display = "none";
