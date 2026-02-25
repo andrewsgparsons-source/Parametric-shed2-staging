@@ -4643,25 +4643,24 @@ if (state && state.overhang) {
         console.log("[BuildingType] Changed to:", newType);
         var patch = { buildingType: newType };
 
-        // Gazebo: force hipped roof + minimum dimensions
+        // Gazebo: Andrew's preferred default config
         if (newType === "gazebo") {
-          var HIPPED_MIN_W = 2500;
-          var HIPPED_MIN_D = 3000;
-          var curState = store.getState();
-          var curW = (curState && curState.dim && curState.dim.frameW_mm) ? curState.dim.frameW_mm : 1800;
-          var curD = (curState && curState.dim && curState.dim.frameD_mm) ? curState.dim.frameD_mm : 2400;
-          if (curW < HIPPED_MIN_W || curD < HIPPED_MIN_D) {
-            patch.dim = { frameW_mm: Math.max(curW, HIPPED_MIN_W), frameD_mm: Math.max(curD, HIPPED_MIN_D) };
-            patch.w = Math.max(curW, HIPPED_MIN_W);
-            patch.d = Math.max(curD, HIPPED_MIN_D);
-          }
+          patch.w = 2500;
+          patch.d = 3000;
+          patch.dim = { frameW_mm: 2500, frameD_mm: 3000 };
+          patch.dimMode = "frame";
           patch.roof = {
             style: "hipped",
+            covering: "slate",
             hipped: {
               heightToEaves_mm: 2400,
               heightToCrest_mm: 3000
             }
           };
+          patch.overhang = { uniform_mm: 75 };
+          patch.walls = { variant: "basic", height_mm: 2400 };
+          patch.frame = { thickness_mm: 50, depth_mm: 75 };
+          patch.vis = { baseAll: false };
         }
 
         store.setState(patch);
