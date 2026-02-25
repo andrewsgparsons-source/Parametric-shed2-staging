@@ -3685,7 +3685,8 @@ var styleLabel = document.createElement("label");
           styleLabel.textContent = "Style";
 var styleSel = document.createElement("select");
           var doorWidthMm = Math.floor(Number(door.width_mm || 900));
-          var styleOptions = '<option value="standard">Standard</option>';
+          var styleOptions = '<option value="none">Open (No Door)</option>';
+          styleOptions += '<option value="standard">Standard</option>';
           if (doorWidthMm >= 1200) {
             styleOptions += '<option value="double-standard">Double Standard</option>';
           }
