@@ -4688,8 +4688,8 @@ if (state && state.overhang) {
         var label = btn.querySelector('.sw-step-label');
         if (!label) return;
         var text = label.textContent.trim();
-        // Hide these for gazebo: Walls & Openings, Attachments (keep Appearance for covering)
-        if (text === "Walls & Openings" || text === "Attachments") {
+        // Hide these for gazebo: Walls & Openings, Attachments, Bill of Materials
+        if (text === "Walls & Openings" || text === "Attachments" || text === "Bill of Materials") {
           btn.style.display = isGaz ? "none" : "";
         }
         // Renumber visible steps
