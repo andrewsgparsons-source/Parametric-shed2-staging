@@ -4711,6 +4711,38 @@ if (state && state.overhang) {
             cladding: { style: "shiplap", colour: "natural-wood" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
+          "leanto": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 1000, frameD_mm: 3500 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 950, baseD_mm: 3450, frameW_mm: 1000, frameD_mm: 3500, roofW_mm: 1150, roofD_mm: 3650 },
+            roof: { style: "pent", covering: "felt",
+              apex: { trussCount: 3, heightToEaves_mm: 1850, heightToCrest_mm: 2200, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 1800, width_mm: 1450, height_mm: 1850, style: "double-standard", isOpen: true }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [
+              { wall: "left", side: "inside", x_mm: 200, y_mm: 900, length_mm: 1500, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "front", side: "inside", x_mm: 200, y_mm: 900, length_mm: 800, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "left", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 1500, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "front", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 800, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true }
+            ],
+            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
+              walls: { front: true, back: true, left: true, right: false },
+              roofParts: { ply: true, insulation: true, membraneBattens: false } }
+          },
           "workshop": {
             w: 2500, d: 3000,
             dim: { frameW_mm: 3500, frameD_mm: 7001 },
