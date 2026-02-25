@@ -4671,9 +4671,9 @@ if (state && state.overhang) {
             var ds = defaultPreset.state;
             Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
           }
-          // Ensure roof covering resets to felt (default preset may not specify it)
-          if (!patch.roof) patch.roof = {};
-          patch.roof.covering = "felt";
+          // Ensure roof covering resets (default preset now includes covering: "felt")
+          // but force it in case deep merge leaves stale values
+          if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
         }
 
         store.setState(patch);
