@@ -4711,6 +4711,34 @@ if (state && state.overhang) {
             cladding: { style: "shiplap", colour: "natural-wood" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
+          "workshop": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 3500, frameD_mm: 7001 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 6951, frameW_mm: 3500, frameD_mm: 7001, roofW_mm: 3900, roofD_mm: 7401 },
+            roof: { style: "apex", covering: "epdm",
+              apex: { trussCount: 3, heightToEaves_mm: 1900, heightToCrest_mm: 2400, tieBeam: "raised" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 100 }, spacing: 400 },
+              basic: { section: { w: 50, h: 100 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 900, width_mm: 1700, height_mm: 1750, style: "double-mortise-tenon", isOpen: true },
+                { id: "win1", wall: "right", type: "window", enabled: true, x_mm: 1025, y_mm: 900, width_mm: 900, height_mm: 600 },
+                { id: "win2", wall: "right", type: "window", enabled: true, x_mm: 4875, y_mm: 900, width_mm: 900, height_mm: 600 },
+                { id: "win3", wall: "right", type: "window", enabled: true, x_mm: 2950, y_mm: 900, width_mm: 900, height_mm: 600 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 100 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
+              roofParts: { ply: true, insulation: true, membraneBattens: false } }
+          },
           "garage": {
             w: 2500, d: 3000,
             dim: { frameW_mm: 3500, frameD_mm: 5000 },
