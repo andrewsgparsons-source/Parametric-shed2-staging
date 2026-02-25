@@ -4655,6 +4655,62 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 75 },
             vis: { base: true, baseAll: false }
           },
+          "gardenroom-pent": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 2000, frameD_mm: 2601 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 1950, baseD_mm: 2551, frameW_mm: 2000, frameD_mm: 2601, roofW_mm: 2315, roofD_mm: 2751 },
+            roof: { style: "pent", covering: "felt",
+              apex: { trussCount: 3, heightToEaves_mm: 2100, heightToCrest_mm: 2500, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2200, maxHeight_mm: 2400 },
+              skylights: [
+                { id: "sky1", enabled: true, face: "pent", x_mm: 580, y_mm: 300, width_mm: 500, height_mm: 1010 },
+                { id: "sky2", enabled: true, face: "pent", x_mm: 1800, y_mm: 300, width_mm: 500, height_mm: 1000 }
+              ]
+            },
+            overhang: { uniform_mm: 75, front_mm: 75, back_mm: null, left_mm: 500, right_mm: 240 },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 100, width_mm: 800, height_mm: 1800, handleSide: "right", isOpen: false, style: "mortise-tenon" },
+                { id: "win1", wall: "right", type: "window", enabled: true, x_mm: 100, y_mm: 410, width_mm: 350, height_mm: 1500 },
+                { id: "door3", wall: "right", type: "door", enabled: true, x_mm: 523, width_mm: 1400, height_mm: 1860, style: "french", isOpen: false },
+                { id: "win2", wall: "right", type: "window", enabled: true, x_mm: 2059, y_mm: 410, width_mm: 292, height_mm: 1500 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [{ wall: "left", side: "outside", x_mm: 1050, y_mm: 1350, length_mm: 1350, depth_mm: 500, thickness_mm: 25, bracket_size_mm: 250, enabled: true }],
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+          },
+          "gardenroom-apex": {
+            w: 2340, d: 2900,
+            dim: { frameW_mm: 2340, frameD_mm: 2891 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 2290, baseD_mm: 2841, frameW_mm: 2340, frameD_mm: 2891, roofW_mm: 2490, roofD_mm: 3041 },
+            roof: { style: "apex", covering: "felt",
+              apex: { trussCount: 4, heightToEaves_mm: 2080, heightToCrest_mm: 2400, tieBeam: "raised" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2400 },
+              skylights: []
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 730, width_mm: 880, height_mm: 1900, style: "mortise-tenon", isOpen: false },
+                { id: "win1", wall: "front", type: "window", enabled: true, x_mm: 250, y_mm: 750, width_mm: 350, height_mm: 1080 },
+                { id: "win2", wall: "front", type: "window", enabled: true, x_mm: 1740, y_mm: 750, width_mm: 350, height_mm: 1080 },
+                { id: "win3", wall: "left", type: "window", enabled: true, x_mm: 890, y_mm: 860, width_mm: 1120, height_mm: 1000 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+          },
           "summerhouse": {
             w: 2340, d: 2900,
             dim: { frameW_mm: 3001, frameD_mm: 2571 },

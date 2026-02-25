@@ -215,7 +215,8 @@
           <select id="buildingTypeSelect" class="sw-type-select">
             <option value="shed">Shed</option>
             <option value="summerhouse">Summer House</option>
-            <option value="gardenroom">Garden Room</option>
+            <option value="gardenroom-pent">Garden Room (Pent)</option>
+            <option value="gardenroom-apex">Garden Room (Apex)</option>
             <option value="garage">Garage</option>
             <option value="workshop">Workshop</option>
             <option value="leanto">Lean-to</option>
