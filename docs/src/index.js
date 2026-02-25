@@ -4711,6 +4711,30 @@ if (state && state.overhang) {
             cladding: { style: "shiplap", colour: "natural-wood" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
+          "garage": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 3500, frameD_mm: 5000 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 4950, frameW_mm: 3500, frameD_mm: 5000, roofW_mm: 3900, roofD_mm: 5400 },
+            roof: { style: "hipped", covering: "slate",
+              apex: { trussCount: 3, heightToEaves_mm: 1850, heightToCrest_mm: 2200, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 300, width_mm: 2900, height_mm: 1850, style: "double-mortise-tenon", isOpen: true }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "overlap", colour: "natural-wood" },
+            vis: { base: true, baseAll: false, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+          },
           "summerhouse": {
             w: 2340, d: 2900,
             dim: { frameW_mm: 3001, frameD_mm: 2571 },
