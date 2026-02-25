@@ -4660,7 +4660,7 @@ if (state && state.overhang) {
           patch.overhang = { uniform_mm: 75 };
           patch.walls = { variant: "basic", height_mm: 2400 };
           patch.frame = { thickness_mm: 50, depth_mm: 75 };
-          patch.vis = { baseAll: false };
+          patch.vis = { base: true, baseAll: false };
         }
 
         // Non-gazebo: load the default shed preset to reset cleanly
@@ -4674,6 +4674,9 @@ if (state && state.overhang) {
           // Ensure roof covering resets (default preset now includes covering: "felt")
           // but force it in case deep merge leaves stale values
           if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
+          // Reset baseAll (gazebo sets it to false)
+          if (!patch.vis) patch.vis = {};
+          patch.vis.baseAll = true;
         }
 
         store.setState(patch);
