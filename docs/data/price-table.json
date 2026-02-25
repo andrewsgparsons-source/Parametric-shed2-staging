@@ -58,7 +58,8 @@
   "roofing": {
     "felt_per_m2": 8.00,
     "epdm_per_m2": 55.00,
-    "notes": "Estimated. Felt = standard mineral. EPDM = rubber membrane."
+    "slate_per_m2": 35.00,
+    "notes": "Estimated. Felt = standard mineral. EPDM = rubber membrane. Slate = synthetic slate tiles inc. battens/membrane."
   },
   "sundries": {
     "fixings_pct": 0.06,

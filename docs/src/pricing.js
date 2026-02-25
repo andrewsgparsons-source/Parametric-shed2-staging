@@ -162,6 +162,8 @@ export function estimatePrice(state) {
     breakdown.roofCovering = 0;
   } else if (roofCovering === 'epdm') {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.epdm_per_m2;
+  } else if (roofCovering === 'slate') {
+    breakdown.roofCovering = roofArea_m2 * (pt.roofing.slate_per_m2 || 35);
   } else {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.felt_per_m2;
   }
@@ -262,6 +264,8 @@ export function estimatePrice(state) {
       breakdown.attachments += attRoofOsbSheets * pt.sheets.osb_18mm_per_sheet;
       if (roofCovering === 'epdm') {
         breakdown.attachments += attRoofArea_m2 * pt.roofing.epdm_per_m2;
+      } else if (roofCovering === 'slate') {
+        breakdown.attachments += attRoofArea_m2 * (pt.roofing.slate_per_m2 || 35);
       } else {
         breakdown.attachments += attRoofArea_m2 * pt.roofing.felt_per_m2;
       }
