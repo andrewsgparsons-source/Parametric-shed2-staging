@@ -303,7 +303,12 @@ export function estimatePrice(state) {
   }
   const baseDays = isInsulated ? pt.labour.base_days_insulated : pt.labour.base_days_basic;
   const ratePerM2 = isInsulated ? pt.labour.rate_per_m2_insulated : pt.labour.rate_per_m2_basic;
-  const labourDays = Math.max(pt.labour.min_days, Math.round(baseDays + totalFootprint_m2 * ratePerM2));
+  let labourDays = Math.max(pt.labour.min_days, Math.round(baseDays + totalFootprint_m2 * ratePerM2));
+  // Slate roofing takes ~5x longer than felt — add extra days based on roof area
+  if (roofCovering === 'slate' && visRoof) {
+    const slatExtraDays = Math.ceil(roofArea_m2 * (pt.labour.slate_extra_days_per_m2 || 0.15));
+    labourDays += slatExtraDays;
+  }
   const labourCost = labourDays * pt.labour.day_rate;
 
   // ─── TOTAL COST ───
