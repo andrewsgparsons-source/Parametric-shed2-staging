@@ -21,7 +21,7 @@
 (function() {
   'use strict';
 
-  const STEPS = [
+  var ALL_STEPS = [
     { num: 1, label: 'Size & Shape',       section: 'Size & Shape' },
     { num: 2, label: 'Roof',               section: 'Roof' },
     { num: 3, label: 'Appearance',         section: 'Appearance' },
@@ -36,9 +36,7 @@
   // Filter out admin-only steps for public visitors
   var urlParams = new URLSearchParams(window.location.search);
   var isAdmin = urlParams.get('profile') === 'admin';
-  if (!isAdmin) {
-    STEPS = STEPS.filter(function(s) { return !s.adminOnly; });
-  }
+  var STEPS = isAdmin ? ALL_STEPS : ALL_STEPS.filter(function(s) { return !s.adminOnly; });
 
   let activeStep = -1; // -1 = none open
   let sections = [];
