@@ -598,7 +598,7 @@
                 <div class="row" style="margin-top:6px;">
                   <button id="shareWhatsAppBtn" type="button" style="width:100%; background:#25D366; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600;">📱 Create Share Link (WhatsApp)</button>
                 </div>
-                <div class="row" style="margin-top:6px;">
+                <div class="row" id="priceBadgeModeRow" style="margin-top:6px;">
                   <label>
                     Pricing Display
                     <select id="priceBadgeMode" aria-label="Pricing Display">
@@ -1152,12 +1152,14 @@
 
   <!-- Get a Quote CTA is now integrated into the price badge (pricing.js) -->
   <script>
-    // Hide developer section for non-admin visitors
+    // Hide admin-only sections for public visitors
     (function() {
       var isAdmin = new URLSearchParams(window.location.search).get('profile') === 'admin';
       if (!isAdmin) {
         var dev = document.getElementById('developerSection');
         if (dev) dev.style.display = 'none';
+        var priceMode = document.getElementById('priceBadgeModeRow');
+        if (priceMode) priceMode.style.display = 'none';
       }
     })();
   </script>
