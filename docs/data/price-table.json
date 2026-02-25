@@ -61,6 +61,11 @@
     "slate_per_m2": 85.00,
     "notes": "Estimated. Felt = standard mineral. EPDM = rubber membrane. Slate = synthetic slate tiles + battens + breathable membrane."
   },
+  "base_upgrades": {
+    "concrete_per_m2": 75.00,
+    "skids_per_m2": 86.00,
+    "notes": "Concrete: supply + lay + labour ~£75/m². Skids: scaled from £1500 for 17.5m² garage (~£86/m²)."
+  },
   "sundries": {
     "fixings_pct": 0.06,
     "dpc_membrane_per_m2": 2.50,

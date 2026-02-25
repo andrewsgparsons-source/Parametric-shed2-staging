@@ -5759,6 +5759,25 @@ function parseOverhangInput(val) {
       // Toggle visibility toggles based on covering type
       updateRoofCoveringToggles(roofCoveringStyleEl.value);
     });
+
+    // ── Base Type ──
+    var baseTypeEl = $("baseType");
+    if (baseTypeEl) {
+      baseTypeEl.addEventListener("change", function () {
+        var bt = baseTypeEl.value;
+        var patch = { base: { type: bt } };
+        // Concrete-only: hide timber base in 3D
+        if (bt === "concrete-only") {
+          patch.vis = { base: false, baseAll: false };
+        } else {
+          patch.vis = { base: true, baseAll: true };
+        }
+        store.setState(patch);
+      });
+      // Sync on load
+      var s0 = store.getState();
+      if (s0 && s0.base && s0.base.type) baseTypeEl.value = s0.base.type;
+    }
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });

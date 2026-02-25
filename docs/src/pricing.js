@@ -91,6 +91,21 @@ export function estimatePrice(state) {
   const gridCostPerM2 = pt.base_grids?.cost_per_m2 || 0;
   breakdown.baseGrids = visBaseGrid ? footprint_m2 * gridCostPerM2 : 0;
 
+  // ─── 1c. BASE UPGRADE (concrete / skids) ───
+  const baseType = state.base?.type || 'ecodeck';
+  breakdown.baseUpgrade = 0;
+  if (baseType === 'concrete-timber' || baseType === 'concrete-only') {
+    // Concrete slab: ~£75/m² (supply + lay + labour)
+    breakdown.baseUpgrade = footprint_m2 * (pt.base_upgrades?.concrete_per_m2 || 75);
+    if (baseType === 'concrete-only') {
+      // No timber floor needed — remove base grids and reduce timber
+      breakdown.baseGrids = 0;
+    }
+  } else if (baseType === 'skids') {
+    // Steel galvanised skids: ~£86/m² (scaled from £1500 for 17.5m² garage)
+    breakdown.baseUpgrade = footprint_m2 * (pt.base_upgrades?.skids_per_m2 || 86);
+  }
+
   // ─── 2. CLADDING ───
   // Per-wall cladding: only price walls that are visible
   const claddingProfile = state.cladding?.style || state.cladding?.profile || 'shiplap';
@@ -341,6 +356,9 @@ export function estimatePrice(state) {
     attachmentCount: attachments.filter(a => a && a.enabled !== false).length,
     totalFootprint_m2: Math.round(totalFootprint_m2 * 100) / 100,
     dividerCount: (state.dividers?.items || []).filter(d => d && d.enabled !== false).length,
+    baseTypeLabel: baseType === 'concrete-timber' ? 'Concrete + Timber Floor' :
+                   baseType === 'concrete-only' ? 'Concrete Only' :
+                   baseType === 'skids' ? 'Steel Galvanised Skids' : '',
     breakdown: Object.fromEntries(
       Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
     )
@@ -726,6 +744,7 @@ export function renderPricingBreakdown(state, containerId) {
           ${b.skylights ? `<tr><td>Skylights</td><td class="pb-val">£${b.skylights.toLocaleString()}</td></tr>` : ''}
           ${b.shelving ? `<tr><td>Shelving (${est.shelvingArea_m2}m²)</td><td class="pb-val">£${b.shelving.toLocaleString()}</td></tr>` : ''}
           ${b.dividers ? `<tr><td>Internal dividers (${est.dividerCount})</td><td class="pb-val">£${b.dividers.toLocaleString()}</td></tr>` : ''}
+          ${b.baseUpgrade ? `<tr><td>Base upgrade (${est.baseTypeLabel || ''})</td><td class="pb-val">£${b.baseUpgrade.toLocaleString()}</td></tr>` : ''}
           <tr><td>DPC membrane</td><td class="pb-val">£${b.dpc.toLocaleString()}</td></tr>
           <tr><td>Fixings (6%)</td><td class="pb-val">£${b.fixings.toLocaleString()}</td></tr>
           <tr><td>Delivery</td><td class="pb-val">£${b.delivery.toLocaleString()}</td></tr>
