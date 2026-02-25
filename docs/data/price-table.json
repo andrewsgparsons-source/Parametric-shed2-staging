@@ -58,7 +58,7 @@
   "roofing": {
     "felt_per_m2": 8.00,
     "epdm_per_m2": 55.00,
-    "slate_per_m2": 45.00,
+    "slate_per_m2": 85.00,
     "notes": "Estimated. Felt = standard mineral. EPDM = rubber membrane. Slate = synthetic slate tiles + battens + breathable membrane."
   },
   "sundries": {
@@ -75,7 +75,7 @@
     "base_days_insulated": 3.2,
     "rate_per_m2_insulated": 0.35,
     "min_days": 3,
-    "slate_extra_days_per_m2": 0.15,
+    "slate_extra_days_per_m2": 0.30,
     "notes": "Base+rate formula calibrated 19 Feb 2026 from Andrew's gut-feel estimates: 4m²=4d, 9m²=5d, 24m²=8d (basic). Base=3.2d fixed overhead (mobilisation/setup/first-fix), rate=0.2d/m² size-dependent. Insulated rate estimated ~1.75× basic rate. Day rate confirmed 16 Feb 2026. Slate: ~5x felt labour, adds ~0.15 extra days per m² of roof."
   },
   "margin": {
