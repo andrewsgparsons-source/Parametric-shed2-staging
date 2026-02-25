@@ -4700,6 +4700,14 @@ if (state && state.overhang) {
       if (dashCladding) dashCladding.style.display = isGaz ? "none" : "";
       if (dashDoors) dashDoors.style.display = isGaz ? "none" : "";
       if (dashWindows) dashWindows.style.display = isGaz ? "none" : "";
+
+      // Hide cladding controls in Appearance section for gazebo (only show roof covering)
+      var claddingSubhead = document.getElementById("claddingSubhead");
+      var claddingStyleRow = document.getElementById("claddingStyleRow");
+      var claddingColourRow = document.getElementById("claddingColourRow");
+      if (claddingSubhead) claddingSubhead.style.display = isGaz ? "none" : "";
+      if (claddingStyleRow) claddingStyleRow.style.display = isGaz ? "none" : "";
+      if (claddingColourRow) claddingColourRow.style.display = isGaz ? "none" : "";
     }
 
      if (roofStyleEl) {
