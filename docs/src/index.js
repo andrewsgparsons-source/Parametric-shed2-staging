@@ -4643,38 +4643,53 @@ if (state && state.overhang) {
         console.log("[BuildingType] Changed to:", newType);
         var patch = { buildingType: newType };
 
-        // Gazebo: Andrew's preferred default config
-        if (newType === "gazebo") {
-          patch.w = 2500;
-          patch.d = 3000;
-          patch.dim = { frameW_mm: 2500, frameD_mm: 3000 };
-          patch.dimMode = "frame";
-          patch.roof = {
-            style: "hipped",
-            covering: "slate",
-            hipped: {
-              heightToEaves_mm: 2400,
-              heightToCrest_mm: 3000
-            }
-          };
-          patch.overhang = { uniform_mm: 75 };
-          patch.walls = { variant: "basic", height_mm: 2400 };
-          patch.frame = { thickness_mm: 50, depth_mm: 75 };
-          patch.vis = { base: true, baseAll: false };
-        }
+        // ---- Building type default configs ----
+        var buildingTypeDefaults = {
+          "gazebo": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 2500, frameD_mm: 3000 },
+            dimMode: "frame",
+            roof: { style: "hipped", covering: "slate", hipped: { heightToEaves_mm: 2400, heightToCrest_mm: 3000 } },
+            overhang: { uniform_mm: 75 },
+            walls: { variant: "basic", height_mm: 2400 },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            vis: { base: true, baseAll: false }
+          },
+          "summerhouse": {
+            w: 2340, d: 2900,
+            dim: { frameW_mm: 3001, frameD_mm: 2571 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 2951, baseD_mm: 2521, frameW_mm: 3001, frameD_mm: 2571, roofW_mm: 3151, roofD_mm: 2721 },
+            roof: { style: "apex", covering: "felt", apex: { trussCount: 4, heightToEaves_mm: 1950, heightToCrest_mm: 2400, tieBeam: "raised" }, pent: { minHeight_mm: 2400, maxHeight_mm: 2400 }, skylights: [] },
+            overhang: { uniform_mm: 75, front_mm: 300, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 800, width_mm: 1400, height_mm: 1850, style: "french", isOpen: false },
+                { id: "win1", wall: "front", type: "window", enabled: true, x_mm: 225, y_mm: 700, width_mm: 350, height_mm: 1080 },
+                { id: "win2", wall: "front", type: "window", enabled: true, x_mm: 2425, y_mm: 700, width_mm: 350, height_mm: 1080 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true }
+          }
+        };
 
-        // Non-gazebo: load the default shed preset to reset cleanly
-        if (newType !== "gazebo") {
+        var typeDefault = buildingTypeDefaults[newType];
+        if (typeDefault) {
+          // Apply building-type-specific defaults
+          Object.keys(typeDefault).forEach(function(k) { patch[k] = typeDefault[k]; });
+        } else {
+          // All other types: reset to default shed preset
           var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
           if (defaultPreset && defaultPreset.state) {
-            // Merge default state into patch (buildingType stays as newType)
             var ds = defaultPreset.state;
             Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
           }
-          // Ensure roof covering resets (default preset now includes covering: "felt")
-          // but force it in case deep merge leaves stale values
           if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
-          // Reset baseAll (gazebo sets it to false)
           if (!patch.vis) patch.vis = {};
           patch.vis.baseAll = true;
         }
