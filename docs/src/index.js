@@ -4712,6 +4712,30 @@ if (state && state.overhang) {
             cladding: { style: "shiplap", colour: "natural-wood" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
+          "fieldshelter": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 3500, frameD_mm: 6000 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 5950, frameW_mm: 3500, frameD_mm: 6000, roofW_mm: 3650, roofD_mm: 6150 },
+            roof: { style: "apex", covering: "felt",
+              apex: { trussCount: 6, heightToEaves_mm: 2000, heightToCrest_mm: 2350, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2400 },
+              skylights: []
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: 700, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 750, width_mm: 4000, height_mm: 1900, style: "none" }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            base: { type: "skids" },
+            vis: { base: false, baseAll: false, deck: false, frame: true, ins: false, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true }
+          },
           "leanto": {
             w: 1800, d: 2400,
             dim: { frameW_mm: 1000, frameD_mm: 3500 },
@@ -5767,11 +5791,11 @@ function parseOverhangInput(val) {
       baseTypeEl.addEventListener("change", function () {
         var bt = baseTypeEl.value;
         var patch = { base: { type: bt } };
-        // Concrete-only: hide timber base in 3D
-        if (bt === "concrete-only") {
-          patch.vis = { base: false, baseAll: false };
+        // Concrete-only and skids: hide timber base in 3D (no graphics yet for skids)
+        if (bt === "concrete-only" || bt === "skids") {
+          patch.vis = { base: false, baseAll: false, deck: false };
         } else {
-          patch.vis = { base: true, baseAll: true };
+          patch.vis = { base: true, baseAll: true, deck: true };
         }
         store.setState(patch);
       });
