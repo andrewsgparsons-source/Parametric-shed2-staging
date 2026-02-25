@@ -639,10 +639,34 @@ export function renderPriceBadge(state) {
       break;
   }
   
+  badge.style.pointerEvents = 'auto';
+  badge.style.cursor = 'pointer';
   badge.innerHTML = `
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:2px;">${label}</div>
     <div style="font-size:18px;font-weight:700;color:#4a3728;">${valueHtml}</div>
+    <div id="priceBadgeCTA" style="margin-top:6px;padding:6px 0 0;border-top:1px solid rgba(0,0,0,0.08);text-align:center;font-size:13px;font-weight:600;color:#4a7c3f;cursor:pointer;">💬 Get a Quote</div>
   `;
+  
+  // Wire up CTA click
+  var cta = badge.querySelector('#priceBadgeCTA');
+  if (cta) {
+    cta.addEventListener('click', function(e) {
+      e.stopPropagation();
+      import('./ui/design-summary.js').then(function(mod) {
+        mod.showDesignSummary();
+      }).catch(function(err) {
+        console.error('[pricing] Failed to load design summary:', err);
+      });
+    });
+  }
+  // Also allow clicking the whole badge
+  badge.onclick = function() {
+    import('./ui/design-summary.js').then(function(mod) {
+      mod.showDesignSummary();
+    }).catch(function(err) {
+      console.error('[pricing] Failed to load design summary:', err);
+    });
+  };
 }
 
 /** Hide the price badge */
