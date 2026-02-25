@@ -1,0 +1,632 @@
+/* ==========================================================================
+   design-summary.css — Styling for Conversion Flow Screens 4-6
+   (Design Summary, Quote Form, Confirmation)
+   
+   Earth-tone palette to match the configurator:
+     Primary dark:  #4a3728
+     Secondary:     #6b4c2a
+     Warm bg:       #f5f0e8
+     Accent green:  #4a7c3f
+     Light border:  #d4c9b8
+   ========================================================================== */
+
+/* ---------- OVERLAY BACKDROP ---------- */
+.cf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 22, 16, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.cf-overlay.cf-visible {
+  opacity: 1;
+}
+
+/* ---------- MODAL CONTAINER ---------- */
+.cf-modal {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(30, 22, 16, 0.35);
+  transform: translateY(20px) scale(0.97);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #333;
+  line-height: 1.5;
+}
+
+.cf-overlay.cf-visible .cf-modal {
+  transform: translateY(0) scale(1);
+}
+
+/* Custom scrollbar for modal */
+.cf-modal::-webkit-scrollbar {
+  width: 6px;
+}
+.cf-modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cf-modal::-webkit-scrollbar-thumb {
+  background: #d4c9b8;
+  border-radius: 3px;
+}
+
+/* ---------- CLOSE BUTTON ---------- */
+.cf-close-btn {
+  position: sticky;
+  top: 0;
+  float: right;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  margin: 12px 12px 0 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(245, 240, 232, 0.9);
+  color: #4a3728;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.cf-close-btn:hover {
+  background: #e8e0d4;
+  transform: scale(1.08);
+}
+
+/* ---------- SCREEN 4: DESIGN SUMMARY ---------- */
+.cf-summary-screenshot {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 16px 16px 0 0;
+  background: #e8e0d4;
+  display: block;
+}
+
+.cf-summary-body {
+  padding: 24px;
+}
+
+.cf-summary-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #4a3728;
+  margin: 0 0 6px;
+}
+
+.cf-summary-subtitle {
+  font-size: 14px;
+  color: #8a7560;
+  margin: 0 0 20px;
+}
+
+/* Specs grid */
+.cf-specs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin-bottom: 24px;
+}
+
+.cf-spec-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-spec-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.cf-spec-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #4a3728;
+}
+
+/* Price range card */
+.cf-price-card {
+  background: linear-gradient(135deg, #f5f0e8, #efe8db);
+  border: 1px solid #d4c9b8;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.cf-price-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #8a7560;
+  margin-bottom: 4px;
+}
+
+.cf-price-range {
+  font-size: 26px;
+  font-weight: 700;
+  color: #4a3728;
+}
+
+.cf-price-range .cf-price-dash {
+  color: #bba98c;
+  font-weight: 400;
+  margin: 0 4px;
+}
+
+.cf-price-note {
+  font-size: 12px;
+  color: #999;
+  margin-top: 6px;
+}
+
+/* CTA buttons */
+.cf-cta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cf-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  text-align: center;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.cf-btn:active {
+  transform: scale(0.98);
+}
+
+.cf-btn-primary {
+  background: #4a7c3f;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(74, 124, 63, 0.35);
+}
+
+.cf-btn-primary:hover {
+  background: #3d6a34;
+  box-shadow: 0 6px 18px rgba(74, 124, 63, 0.45);
+}
+
+.cf-btn-secondary {
+  background: #f5f0e8;
+  color: #4a3728;
+  border: 1px solid #d4c9b8;
+}
+
+.cf-btn-secondary:hover {
+  background: #efe8db;
+}
+
+.cf-btn-tertiary {
+  background: transparent;
+  color: #6b4c2a;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.cf-btn-tertiary:hover {
+  background: rgba(107, 76, 42, 0.06);
+}
+
+/* ---------- SCREEN 5: QUOTE FORM ---------- */
+.cf-form-header {
+  padding: 24px 24px 0;
+}
+
+.cf-form-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #4a3728;
+  margin: 0 0 4px;
+}
+
+.cf-form-subtitle {
+  font-size: 14px;
+  color: #8a7560;
+  margin: 0 0 20px;
+}
+
+.cf-form-body {
+  padding: 0 24px 24px;
+}
+
+.cf-form-group {
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.cf-form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a3728;
+  margin-bottom: 5px;
+}
+
+.cf-form-label .cf-optional {
+  font-weight: 400;
+  color: #aaa;
+  font-size: 12px;
+}
+
+.cf-form-input,
+.cf-form-select {
+  width: 100%;
+  padding: 11px 36px 11px 14px;
+  border: 1.5px solid #d4c9b8;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cf-form-select {
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.cf-form-input:focus,
+.cf-form-select:focus {
+  outline: none;
+  border-color: #4a7c3f;
+  box-shadow: 0 0 0 3px rgba(74, 124, 63, 0.15);
+}
+
+/* Validation tick */
+.cf-form-input.cf-valid,
+.cf-form-select.cf-valid {
+  border-color: #4a7c3f;
+  padding-right: 36px;
+}
+
+.cf-form-group .cf-tick {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4a7c3f;
+  color: #fff;
+  font-size: 12px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cf-form-group .cf-tick.cf-show {
+  display: flex;
+}
+
+/* Consent checkbox */
+.cf-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.cf-consent-row input[type="checkbox"] {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  accent-color: #4a7c3f;
+  flex-shrink: 0;
+}
+
+.cf-consent-text {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.cf-consent-text a {
+  color: #6b4c2a;
+  text-decoration: underline;
+}
+
+/* Honeypot (hidden from real users) */
+.cf-hp-field {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+  tab-index: -1;
+}
+
+/* Form error/status */
+.cf-form-status {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.cf-form-status.cf-error {
+  display: block;
+  background: #fff0f0;
+  color: #c0392b;
+  border: 1px solid #f5c6cb;
+}
+
+.cf-form-status.cf-submitting {
+  display: block;
+  background: #f5f0e8;
+  color: #6b4c2a;
+  border: 1px solid #d4c9b8;
+}
+
+/* Submit button loading state */
+.cf-btn-primary.cf-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.cf-btn-primary.cf-loading::after {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: cf-spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes cf-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Two-column row for form fields */
+.cf-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ---------- SCREEN 6: CONFIRMATION ---------- */
+.cf-confirm-body {
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.cf-confirm-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+.cf-confirm-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #4a3728;
+  margin: 0 0 8px;
+}
+
+.cf-confirm-message {
+  font-size: 15px;
+  color: #666;
+  margin: 0 0 24px;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cf-confirm-screenshot {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 10px;
+  margin: 0 auto 20px;
+  display: block;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+/* Reference number */
+.cf-ref-number {
+  display: inline-block;
+  background: #f5f0e8;
+  border: 1px solid #d4c9b8;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a3728;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+}
+
+/* Share link */
+.cf-share-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.cf-share-input {
+  flex: 1;
+  max-width: 280px;
+  padding: 8px 12px;
+  border: 1px solid #d4c9b8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #666;
+  background: #faf8f5;
+  text-overflow: ellipsis;
+  font-family: inherit;
+}
+
+.cf-share-copy-btn {
+  padding: 8px 14px;
+  border: 1px solid #d4c9b8;
+  border-radius: 8px;
+  background: #f5f0e8;
+  color: #4a3728;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.cf-share-copy-btn:hover {
+  background: #efe8db;
+}
+
+/* What happens next */
+.cf-next-steps {
+  text-align: left;
+  background: #faf8f5;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.cf-next-steps-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #4a3728;
+  margin: 0 0 14px;
+}
+
+.cf-next-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cf-next-step-item:last-child {
+  margin-bottom: 0;
+}
+
+.cf-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #4a7c3f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cf-step-text {
+  font-size: 14px;
+  color: #555;
+  padding-top: 3px;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 600px) {
+  .cf-overlay {
+    padding: 8px;
+    align-items: flex-start;
+  }
+
+  .cf-modal {
+    max-height: 95vh;
+    border-radius: 12px;
+  }
+
+  .cf-summary-body,
+  .cf-form-header,
+  .cf-form-body,
+  .cf-confirm-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .cf-summary-title,
+  .cf-confirm-title {
+    font-size: 19px;
+  }
+
+  .cf-price-range {
+    font-size: 22px;
+  }
+
+  .cf-specs {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+  }
+
+  .cf-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cf-share-link-row {
+    flex-direction: column;
+  }
+
+  .cf-share-input {
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* ---------- PRINT HIDE ---------- */
+@media print {
+  .cf-overlay {
+    display: none !important;
+  }
+}
