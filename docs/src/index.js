@@ -4663,6 +4663,16 @@ if (state && state.overhang) {
           patch.vis = { baseAll: false };
         }
 
+        // Non-gazebo: load the default shed preset to reset cleanly
+        if (newType !== "gazebo") {
+          var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
+          if (defaultPreset && defaultPreset.state) {
+            // Merge default state into patch (buildingType stays as newType)
+            var ds = defaultPreset.state;
+            Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
+          }
+        }
+
         store.setState(patch);
         updateBuildingTypeUI(newType);
       });
