@@ -30,8 +30,15 @@
     { num: 6, label: 'Visibility',         section: 'Visibility' },
     { num: 7, label: 'Bill of Materials',  section: '__bom__' },
     { num: 8, label: 'Save & Share',       section: 'Save / Load Design' },
-    { num: 9, label: 'Developer',          section: 'Developer' }
+    { num: 9, label: 'Developer',          section: 'Developer', adminOnly: true }
   ];
+
+  // Filter out admin-only steps for public visitors
+  var urlParams = new URLSearchParams(window.location.search);
+  var isAdmin = urlParams.get('profile') === 'admin';
+  if (!isAdmin) {
+    STEPS = STEPS.filter(function(s) { return !s.adminOnly; });
+  }
 
   let activeStep = -1; // -1 = none open
   let sections = [];
