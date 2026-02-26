@@ -7773,6 +7773,7 @@ function parseOverhangInput(val) {
       var currentOpeningSig = openings.map(function(o) { return o.id + ':' + o.wall + ':' + o.width_mm + ':' + (o.height_mm || ''); }).join(',');
       var dimsChanged = (newW !== __prevDimW || newD !== __prevDimD);
       var openingsChanged = (__prevOpeningIds !== null && currentOpeningSig !== __prevOpeningIds);
+      console.log("[repositionOpenings] CHECK: dimsChanged=", dimsChanged, "openingsChanged=", openingsChanged, "prevSig=", __prevOpeningIds, "curSig=", currentOpeningSig);
       if (dimsChanged && openingsChanged) {
         console.log("[repositionOpenings] Both dims AND openings changed (preset) — skipping scale");
         __prevDimW = newW;
