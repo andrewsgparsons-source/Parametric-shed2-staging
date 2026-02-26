@@ -4859,7 +4859,6 @@ if (state && state.overhang) {
           patch.vis.baseAll = true;
         }
 
-        window.__skipNextReposition = true; // Preset openings are pre-positioned, don't scale
         store.setState(patch);
         updateBuildingTypeUI(newType);
       });
@@ -7759,23 +7758,28 @@ function parseOverhangInput(val) {
     // Track previous dimensions to detect changes and reposition openings proportionally
     var __prevDimW = null;
     var __prevDimD = null;
+    var __prevOpeningIds = null; // Track opening IDs to detect preset changes
     var __repositioningInProgress = false;
-    window.__skipNextReposition = window.__skipNextReposition || false; // Set when building type changes (openings are already correct)
 
     function repositionOpeningsOnDimensionChange(s) {
       if (__repositioningInProgress) return; // Prevent infinite loop
-      if (window.__skipNextReposition) {
-        // Building type just changed — preset openings are already positioned correctly.
-        // Just update tracked dimensions without scaling.
-        window.__skipNextReposition = false;
-        __prevDimW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : __prevDimW;
-        __prevDimD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : __prevDimD;
-        return;
-      }
       
       var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
       var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
       
+      // Detect if openings themselves changed (e.g. building type switch loaded a preset).
+      // If openings are different, they're already positioned correctly — don't scale them.
+      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
+      var currentOpeningIds = openings.map(function(o) { return o.id + ':' + o.wall; }).join(',');
+      if (__prevOpeningIds !== null && currentOpeningIds !== __prevOpeningIds) {
+        console.log("[repositionOpenings] Openings changed (preset loaded) — skipping scale, updating dims");
+        __prevDimW = newW;
+        __prevDimD = newD;
+        __prevOpeningIds = currentOpeningIds;
+        return;
+      }
+      __prevOpeningIds = currentOpeningIds;
+
       // Initialize previous dimensions on first run
       if (__prevDimW === null) { __prevDimW = newW; }
       if (__prevDimD === null) { __prevDimD = newD; }
@@ -7788,7 +7792,6 @@ function parseOverhangInput(val) {
         return;
       }
       
-      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
       if (openings.length === 0) {
         __prevDimW = newW;
         __prevDimD = newD;
