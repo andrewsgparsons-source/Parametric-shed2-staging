@@ -53,6 +53,14 @@ export function initProfileEditor(options) {
       wireEditorEvents();
     });
   }
+
+  // Expose global hook so mobile-configurator can trigger a re-render
+  // when it recreates the profile editor DOM elements
+  window._mcRerenderProfiles = function() {
+    renderProfileEditorUI();
+    wireEditorEvents();
+    console.log("[profile-editor] Re-rendered for mobile");
+  };
 }
 
 /**

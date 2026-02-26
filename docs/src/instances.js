@@ -10,6 +10,7 @@
 import { DEFAULTS } from "./params.js";
 import { getBuiltInPresets, getDefaultBuiltInPresetId, findBuiltInPresetById } from "../instances.js?_v=9";
 import { copyViewerUrlToClipboard, isViewerMode, getProfileFromUrl } from "./profiles.js";
+import { createShareLink } from "./share-link.js";
 
 export function initInstancesUI({ store, ids, dbg }) {
   function $(id) { return document.getElementById(id); }
@@ -453,6 +454,15 @@ function applyState(stateObj) {
         });
       });
     }
+
+    // WhatsApp share link button
+    var shareWhatsAppBtnEl = $("shareWhatsAppBtn");
+    if (shareWhatsAppBtnEl) {
+      shareWhatsAppBtnEl.addEventListener("click", function() {
+        var canvas = document.getElementById("renderCanvas");
+        createShareLink(store, canvas, setHint);
+      });
+    }
   }
 
   /**
@@ -545,7 +555,8 @@ function applyState(stateObj) {
       for (var i = 0; i < doors.length; i++) {
         var door = doors[i];
         var doorStyle = door.style || "standard";
-        var doorStyleLabel = doorStyle === "standard" ? "Standard" :
+        var doorStyleLabel = doorStyle === "none" ? "Open (No Door)" :
+                            doorStyle === "standard" ? "Standard" :
                             doorStyle === "double-standard" ? "Double Standard" :
                             doorStyle === "mortise-tenon" ? "Mortise & Tenon" :
                             doorStyle === "double-mortise-tenon" ? "Double Mortise & Tenon" :

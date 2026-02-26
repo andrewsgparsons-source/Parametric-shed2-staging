@@ -16,7 +16,7 @@ export function disposeAll(scene) {
 }
 
 export function boot(canvas) {
-  const engine = new BABYLON.Engine(canvas, true);
+  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true });
   const scene = new BABYLON.Scene(engine);
   scene.clearColor = new BABYLON.Color4(0.96, 0.97, 0.98, 1);
 

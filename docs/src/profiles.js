@@ -305,6 +305,10 @@ export function parseUrlState() {
     state.walls = state.walls || {};
     state.walls.variant = params.get("wallsVariant");
   }
+  if (params.has("internalLining")) {
+    state.walls = state.walls || {};
+    state.walls.internalLining = params.get("internalLining");
+  }
   if (params.has("wallSection")) {
     var section = params.get("wallSection");
     var parts = section.split("x");
@@ -429,6 +433,9 @@ export function generateViewerUrl(state) {
     if (state.walls.height_mm != null) {
       compact.walls.height_mm = state.walls.height_mm;
     }
+    if (state.walls.internalLining && state.walls.internalLining !== "plywood") {
+      compact.walls.internalLining = state.walls.internalLining;
+    }
   }
 
 
@@ -532,6 +539,19 @@ export function generateViewerUrl(state) {
     if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
     if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
 
+    // Per-wall cladding visibility
+    if (state.vis.cladParts && typeof state.vis.cladParts === 'object') {
+      var cp = state.vis.cladParts;
+      if (cp.front === false || cp.back === false || cp.left === false || cp.right === false) {
+        compactVis.cladParts = {};
+        if (cp.front === false) compactVis.cladParts.front = false;
+        if (cp.back === false) compactVis.cladParts.back = false;
+        if (cp.left === false) compactVis.cladParts.left = false;
+        if (cp.right === false) compactVis.cladParts.right = false;
+        hasVisChanges = true;
+      }
+    }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -601,6 +621,34 @@ export function generateViewerUrl(state) {
     }
   }
 
+  // Shelving
+  if (Array.isArray(state.shelving) && state.shelving.length > 0) {
+    compact.shelving = state.shelving.filter(function(s) { return s && s.enabled !== false; }).map(function(s) {
+      var shelf = {
+        wall: s.wall,
+        x_mm: s.x_mm,
+        y_mm: s.y_mm,
+        length_mm: s.length_mm,
+        depth_mm: s.depth_mm
+      };
+      if (s.thickness_mm != null) shelf.thickness_mm = s.thickness_mm;
+      if (s.bracket_size_mm != null) shelf.bracket_size_mm = s.bracket_size_mm;
+      if (s.side && s.side !== 'inside') shelf.side = s.side;
+      if (s.id != null) shelf.id = s.id;
+      shelf.enabled = true;
+      return shelf;
+    });
+  }
+
+  // Price badge display mode
+  if (state.priceBadgeMode && state.priceBadgeMode !== "range") {
+    compact.priceBadgeMode = state.priceBadgeMode;
+  }
+  // Backwards compat: convert old showPriceBadge=false to priceBadgeMode=none
+  if (state.showPriceBadge === false && !state.priceBadgeMode) {
+    compact.priceBadgeMode = "none";
+  }
+
   // Encode as Base64 with UTF-8 support
   // Use unescape(encodeURIComponent()) to convert UTF-8 to ASCII-safe for btoa
   var json = JSON.stringify(compact);
@@ -636,6 +684,7 @@ export function applyViewerProfile() {
     "dInput",
     "roofStyle",
     "wallsVariant",
+    "internalLining",
     "wallSection",
 
     // Walls & Openings - hide add/remove buttons (keep lists for door open toggle)
@@ -1152,6 +1201,9 @@ export function generateProfileUrl(profileName, state) {
     if (state.walls.height_mm != null) {
       compact.walls.height_mm = state.walls.height_mm;
     }
+    if (state.walls.internalLining && state.walls.internalLining !== "plywood") {
+      compact.walls.internalLining = state.walls.internalLining;
+    }
   }
 
 
@@ -1255,6 +1307,19 @@ export function generateProfileUrl(profileName, state) {
     if (state.vis.wallIns === false) { compactVis.wallIns = false; hasVisChanges = true; }
     if (state.vis.wallPly === false) { compactVis.wallPly = false; hasVisChanges = true; }
 
+    // Per-wall cladding visibility
+    if (state.vis.cladParts && typeof state.vis.cladParts === 'object') {
+      var cp = state.vis.cladParts;
+      if (cp.front === false || cp.back === false || cp.left === false || cp.right === false) {
+        compactVis.cladParts = {};
+        if (cp.front === false) compactVis.cladParts.front = false;
+        if (cp.back === false) compactVis.cladParts.back = false;
+        if (cp.left === false) compactVis.cladParts.left = false;
+        if (cp.right === false) compactVis.cladParts.right = false;
+        hasVisChanges = true;
+      }
+    }
+
     // Wall sub-components (per-wall visibility)
     if (state.vis.walls && typeof state.vis.walls === 'object') {
       var wallVis = state.vis.walls;
@@ -1313,6 +1378,32 @@ export function generateProfileUrl(profileName, state) {
     if (hasVisChanges) {
       compact.vis = compactVis;
     }
+  }
+
+  // Shelving
+  if (Array.isArray(state.shelving) && state.shelving.length > 0) {
+    compact.shelving = state.shelving.filter(function(s) { return s && s.enabled !== false; }).map(function(s) {
+      var shelf = {
+        wall: s.wall,
+        x_mm: s.x_mm,
+        y_mm: s.y_mm,
+        length_mm: s.length_mm,
+        depth_mm: s.depth_mm
+      };
+      if (s.thickness_mm != null) shelf.thickness_mm = s.thickness_mm;
+      if (s.bracket_size_mm != null) shelf.bracket_size_mm = s.bracket_size_mm;
+      if (s.side && s.side !== 'inside') shelf.side = s.side;
+      if (s.id != null) shelf.id = s.id;
+      shelf.enabled = true;
+      return shelf;
+    });
+  }
+  // Price badge display mode
+  if (state.priceBadgeMode && state.priceBadgeMode !== "range") {
+    compact.priceBadgeMode = state.priceBadgeMode;
+  }
+  if (state.showPriceBadge === false && !state.priceBadgeMode) {
+    compact.priceBadgeMode = "none";
   }
 
   // Encode as Base64
@@ -1423,6 +1514,16 @@ export var CONTROL_REGISTRY = {
           { value: "basic", label: "Basic" }
         ]
       },
+      internalLining: {
+        type: "select",
+        elementIds: ["internalLining"],
+        label: "Internal Lining",
+        options: [
+          { value: "none", label: "None" },
+          { value: "plywood", label: "Plywood (12mm)" },
+          { value: "pine-tg", label: "Pine T&G (Horizontal)" }
+        ]
+      },
       wallSection: {
         type: "select",
         elementIds: ["wallSection"],
@@ -1464,6 +1565,7 @@ export var CONTROL_REGISTRY = {
         fieldKey: "door.style",
         label: "Door: Style",
         options: [
+          { value: "none", label: "Open (No Door)" },
           { value: "standard", label: "Standard" },
           { value: "double-standard", label: "Double Standard" },
           { value: "mortise-tenon", label: "Mortise & Tenon" },
@@ -1592,6 +1694,7 @@ export var CONTROL_REGISTRY = {
         options: [
           { value: "shiplap", label: "Shiplap" },
           { value: "overlap", label: "Overlap (Featheredge)" },
+          { value: "composite-panel", label: "Composite (Woodgrain)" },
           { value: "loglap", label: "Log Lap" }
         ]
       }
@@ -1649,7 +1752,7 @@ export var CONTROL_REGISTRY = {
   },
 
   display: {
-    label: "Display",
+    label: "BOM",
     controls: {
       viewSelect: { type: "select", elementIds: ["viewSelect"], label: "View Selector (3D/Cutting Lists)" }
     }
@@ -1878,6 +1981,7 @@ export function applyProfile(profileName, store) {
   if (profileName === "viewer") {
     _currentProfileName = "viewer";
     applyViewerProfile();
+    try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
     return;
   }
 
@@ -1893,6 +1997,7 @@ export function applyProfile(profileName, store) {
     } catch (err) {
       console.error("[profiles] Error applying admin profile:", err);
     }
+    try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
     return;
   }
 
@@ -1981,6 +2086,9 @@ export function applyProfile(profileName, store) {
       }
     }
   }
+
+  // Notify mobile-configurator (and others) that profile has been applied
+  try { document.dispatchEvent(new CustomEvent('profile-applied', { detail: { profile: profileName } })); } catch(e) {}
 }
 
 /**
@@ -2393,6 +2501,7 @@ function applyControlDefault(controlKey, value, store) {
     dInput: { path: "dim.frameD_mm" },
     roofStyle: { path: "roof.style" },
     wallsVariant: { path: "walls.variant" },
+    internalLining: { path: "walls.internalLining" },
     wallSection: { path: null, custom: true }, // Needs custom handling
     roofApexEaveHeight: { path: "roof.apex.heightToEaves_mm" },
     roofApexCrestHeight: { path: "roof.apex.heightToCrest_mm" },

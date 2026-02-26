@@ -148,12 +148,12 @@ body.mobile-configurator #controls {
 
 .mc-step-pill {
   flex: 0 0 auto;
-  padding: 10px 18px;
-  border: 1.5px solid var(--mc-border);
-  border-radius: 20px;
+  padding: 6px 12px;
+  border: 1px solid var(--mc-border);
+  border-radius: 16px;
   background: var(--mc-bg-panel);
   color: var(--mc-text-secondary);
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--mc-transition);
@@ -218,6 +218,28 @@ body.mobile-configurator #mcControls .boSection .boBox {
   align-items: end !important;
 }
 
+/* Preset & share link rows: select + button side by side, select constrained */
+#mobileConfigurator #saveLoadBox .row {
+  grid-template-columns: 1fr auto !important;
+}
+#mobileConfigurator #saveLoadBox select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+#mobileConfigurator #saveLoadBox label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+/* Share Link row uses inline flex — constrain its select too */
+#mobileConfigurator #saveLoadBox #shareLinkProfileSelect {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 100px) !important;
+}
+
 #mobileConfigurator .row3 {
   display: grid !important;
   grid-template-columns: 1fr 1fr 1fr !important;
@@ -240,7 +262,7 @@ body.mobile-configurator #mcControls .boSection .boBox {
 
 /* ===== STEP FOOTER (NEXT/PREV) ===== */
 #mcStepFooter {
-  padding: 12px 16px;
+  padding: 8px 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -251,10 +273,10 @@ body.mobile-configurator #mcControls .boSection .boBox {
 
 .mc-footer-btn {
   flex: 1;
-  padding: 16px 22px !important;
+  padding: 10px 14px !important;
   border: none !important;
-  border-radius: 24px !important;
-  font-size: 18px !important;
+  border-radius: 18px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   cursor: pointer;
   transition: all var(--mc-transition);
@@ -284,10 +306,10 @@ body.mobile-configurator #mcControls .boSection .boBox {
 /* ===== SUMMARY BAR ===== */
 #mcSummary {
   display: none; /* Shown via JS when useful */
-  padding: 8px 16px;
+  padding: 4px 12px;
   background: var(--mc-primary);
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   text-align: center;
   letter-spacing: 0.02em;
@@ -301,9 +323,9 @@ body.mobile-configurator #mcControls .boSection .boBox {
   transform: translate(-50%, -50%);
   background: rgba(0,0,0,0.6);
   color: #fff;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 500;
   text-align: center;
   pointer-events: none;

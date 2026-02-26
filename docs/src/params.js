@@ -64,6 +64,7 @@ export const DEFAULTS = {
   },
   walls: {
     variant: "basic",
+    internalLining: "plywood",   // "plywood" | "pine-tg" — only used when variant=insulated
     height_mm: 2400,
     insulated: {
       section: { w: 50, h: 75 },

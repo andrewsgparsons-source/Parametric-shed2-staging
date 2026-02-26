@@ -13,6 +13,7 @@
  */
 
 import { CONFIG, resolveDims } from "../params.js";
+import { getSkylightOpenings } from "./skylights.js?_v=11";
 
 // ============================================================================
 // CONSTANTS
@@ -678,88 +679,190 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   }
 
   const membraneMat = getMembraneMaterial(scene);
+  const slopeLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
 
   // ------------------------------------------------------------------
-  // LEFT SLOPE — one trapezoidal membrane piece
+  // SKYLIGHT OPENINGS for L/R slopes (used by membrane, battens, tiles)
   // ------------------------------------------------------------------
-  // Perpendicular offset from rafter top surface to membrane centre:
-  //   OSB (18mm) + clear gap (2mm) + half membrane (0.5mm) = 20.5mm
-  //   The extra gap ensures the membrane is clearly visible above the OSB boxes.
+  let skyOpeningsL = [], skyOpeningsR = [];
+  try { skyOpeningsL = getSkylightOpenings(state, "L") || []; } catch(e) { /* safe */ }
+  try { skyOpeningsR = getSkylightOpenings(state, "R") || []; } catch(e) { /* safe */ }
+  console.log(`[ROOF-TILES] Skylight openings: L=${skyOpeningsL.length}, R=${skyOpeningsR.length}`);
+
+  // ------------------------------------------------------------------
+  // HELPER: Build a slope mesh (trapezoid) with rectangular holes
+  // ------------------------------------------------------------------
+  // Works for both membrane and tiles on L/R saddle slopes.
+  //
+  // Parameters:
+  //   side: "L" or "R"
+  //   perpOff_mm: perpendicular offset from rafter surface
+  //   holes: array of { sMin, sMax, zMin, zMax } in slope/absolute coords
+  //   meshName: name for the mesh
+  //   material: Babylon material
+  //   layer: metadata layer name
+  //   uvFn: optional (s, z) => {u, v} for textured meshes
+  //
+  // Slope parameterisation for LEFT:
+  //   s = slope distance from ridge (0 at ridge, slopeLen at eaves)
+  //   z = absolute Z position (0 to B_mm)
+  //   At slope distance s: run = s*cosT, xPlan = halfSpan - run
+  //   Hip boundary (front): z_min = xPlan = halfSpan - s*cosT
+  //   Hip boundary (back):  z_max = B_mm - xPlan = B_mm - halfSpan + s*cosT
+  //   Position: X = xPlan + offX, Y = memberD + rise - s*sinT + offY, Z = z
+  //
+  // For RIGHT: X = A_mm - xPlan + offX (mirror)
+  function _buildSlopeMeshWithHoles(side, perpOff_mm, holes, meshName, material, layer, uvFn) {
+    const nx = (side === "L") ? -sinT : sinT;
+    const oX = nx * perpOff_mm;
+    const oY = cosT * perpOff_mm;
+
+    // Convert (s, z) to 3D position
+    function pos(s, z) {
+      const run = s * cosT;
+      const xPlan = halfSpan_mm - run;
+      const x = (side === "L") ? (xPlan + oX) : (A_mm - xPlan + oX);
+      const y = memberD_mm + rise_mm - s * sinT + oY;
+      return { x: x / 1000, y: y / 1000, z: z / 1000 };
+    }
+
+    // Hip boundaries at slope distance s
+    function zMin(s) { return Math.max(0, halfSpan_mm - s * cosT); }
+    function zMax(s) { return Math.min(B_mm, B_mm - halfSpan_mm + s * cosT); }
+
+    // Collect all Z and s breakpoints from holes, sorted and unique
+    const zBreaks = [0, B_mm];
+    const sBreaks = [0, slopeLen_mm];
+    for (const h of holes) {
+      zBreaks.push(h.zMin, h.zMax);
+      sBreaks.push(h.sMin, h.sMax);
+    }
+    const uniq = arr => [...new Set(arr)].sort((a, b) => a - b);
+    const zList = uniq(zBreaks);
+    const sList = uniq(sBreaks);
+
+    // Build quads for each grid cell that isn't inside a hole
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+    let vi = 0;
+
+    const normalVec = { x: nx, y: cosT, z: 0 };
+
+    for (let si = 0; si < sList.length - 1; si++) {
+      const s0 = sList[si], s1 = sList[si + 1];
+      if (s1 - s0 < 1) continue; // skip degenerate cells
+
+      for (let zi = 0; zi < zList.length - 1; zi++) {
+        const z0 = zList[zi], z1 = zList[zi + 1];
+        if (z1 - z0 < 1) continue;
+
+        // Check if this cell is inside any hole
+        const sMid = (s0 + s1) / 2;
+        const zMid = (z0 + z1) / 2;
+        const inHole = holes.some(h =>
+          sMid > h.sMin && sMid < h.sMax && zMid > h.zMin && zMid < h.zMax
+        );
+        if (inHole) continue;
+
+        // Check if cell is within the trapezoidal boundary (hip edges)
+        // Use midpoint s to check Z bounds
+        const zLo = zMin(sMid);
+        const zHi = zMax(sMid);
+        if (zMid < zLo || zMid > zHi) continue;
+
+        // Clamp z0/z1 to hip boundaries at s0 and s1
+        const z0_s0 = Math.max(z0, zMin(s0));
+        const z1_s0 = Math.min(z1, zMax(s0));
+        const z0_s1 = Math.max(z0, zMin(s1));
+        const z1_s1 = Math.min(z1, zMax(s1));
+
+        if (z1_s0 - z0_s0 < 1 || z1_s1 - z0_s1 < 1) continue;
+
+        // 4 corners of this cell (clamped to hip edges)
+        const p00 = pos(s0, z0_s0); // ridge-side, front
+        const p01 = pos(s0, z1_s0); // ridge-side, back
+        const p10 = pos(s1, z0_s1); // eaves-side, front
+        const p11 = pos(s1, z1_s1); // eaves-side, back
+
+        // UVs
+        let uv00, uv01, uv10, uv11;
+        if (uvFn) {
+          uv00 = uvFn(s0, z0_s0); uv01 = uvFn(s0, z1_s0);
+          uv10 = uvFn(s1, z0_s1); uv11 = uvFn(s1, z1_s1);
+        } else {
+          uv00 = { u: 0, v: 0 }; uv01 = { u: 0, v: 1 };
+          uv10 = { u: 1, v: 0 }; uv11 = { u: 1, v: 1 };
+        }
+
+        // Add 4 vertices
+        positions.push(p00.x, p00.y, p00.z);
+        positions.push(p01.x, p01.y, p01.z);
+        positions.push(p10.x, p10.y, p10.z);
+        positions.push(p11.x, p11.y, p11.z);
+        normals.push(normalVec.x, normalVec.y, normalVec.z);
+        normals.push(normalVec.x, normalVec.y, normalVec.z);
+        normals.push(normalVec.x, normalVec.y, normalVec.z);
+        normals.push(normalVec.x, normalVec.y, normalVec.z);
+        uvs.push(uv00.u, uv00.v, uv01.u, uv01.v, uv10.u, uv10.v, uv11.u, uv11.v);
+
+        // Two triangles per quad — winding must match normal direction
+        if (side === "L") {
+          indices.push(vi, vi + 2, vi + 1);  // 00→10→01
+          indices.push(vi + 1, vi + 2, vi + 3); // 01→10→11
+        } else {
+          indices.push(vi, vi + 1, vi + 2);  // 00→01→10
+          indices.push(vi + 1, vi + 3, vi + 2); // 01→11→10
+        }
+        vi += 4;
+      }
+    }
+
+    if (positions.length === 0) return null;
+
+    const vd = new BABYLON.VertexData();
+    vd.positions = positions;
+    vd.indices = indices;
+    vd.normals = normals;
+    vd.uvs = uvs;
+
+    const mesh = new BABYLON.Mesh(meshName, scene);
+    vd.applyToMesh(mesh);
+    mesh.material = material;
+    mesh.metadata = { dynamic: true, roofTiles: true, layer, slope: side };
+    mesh.parent = roofRoot;
+    return mesh;
+  }
+
+  // ------------------------------------------------------------------
+  // LEFT SLOPE MEMBRANE
+  // ------------------------------------------------------------------
   const CLEAR_GAP_MM = 2;
   const perpOffset_mm = OSB_THK_MM + CLEAR_GAP_MM + MEMBRANE_SPECS.thickness_mm / 2;
-
-  // Left slope outward normal: (-sinT, cosT, 0)
-  const offX = (-sinT) * perpOffset_mm;
-  const offY = cosT * perpOffset_mm;
-
-  // 4 corners of the trapezoid (in roof-root local coords, mm)
-  // Eaves level (rafter top Y = memberD_mm), ridge level (rafter top Y = memberD_mm + rise)
-  // Then offset perpendicular to slope surface to sit on top of OSB.
 
   const eavesY = memberD_mm;
   const ridgeY = memberD_mm + rise_mm;
 
-  const v0x = 0           + offX;   // front eaves
-  const v0y = eavesY      + offY;
-  const v0z = 0;
+  {
+    const skyHolesL = skyOpeningsL.map(op => ({
+      sMin: op.a0_mm,
+      sMax: op.a0_mm + op.aLen_mm,
+      zMin: ridgeStartZ_mm + op.b0_mm,
+      zMax: ridgeStartZ_mm + op.b0_mm + op.bLen_mm,
+    }));
 
-  const v1x = 0           + offX;   // back eaves
-  const v1y = eavesY      + offY;
-  const v1z = B_mm;
-
-  const v2x = halfSpan_mm + offX;   // ridge back
-  const v2y = ridgeY      + offY;
-  const v2z = ridgeEndZ_mm;
-
-  const v3x = halfSpan_mm + offX;   // ridge front
-  const v3y = ridgeY      + offY;
-  const v3z = ridgeStartZ_mm;
-
-  // Vertex positions (metres)
-  const positions = [
-    v0x / 1000, v0y / 1000, v0z / 1000,   // 0: front eaves
-    v1x / 1000, v1y / 1000, v1z / 1000,   // 1: back eaves
-    v2x / 1000, v2y / 1000, v2z / 1000,   // 2: ridge back
-    v3x / 1000, v3y / 1000, v3z / 1000,   // 3: ridge front
-  ];
-
-  // Two triangles — winding gives outward normal (-sinT, cosT, 0)
-  const indices = [
-    0, 1, 2,   // front-eaves → back-eaves → ridge-back
-    0, 2, 3,   // front-eaves → ridge-back → ridge-front
-  ];
-
-  // Slope outward normal (same for all vertices — single flat plane)
-  const nx = -sinT, ny = cosT, nz = 0;
-  const normals = [
-    nx, ny, nz,
-    nx, ny, nz,
-    nx, ny, nz,
-    nx, ny, nz,
-  ];
-
-  // Simple UVs (not textured yet — just for completeness)
-  const uvs = [0, 0,  1, 0,  1, 1,  0, 1];
-
-  const vertexData = new BABYLON.VertexData();
-  vertexData.positions = positions;
-  vertexData.indices   = indices;
-  vertexData.normals   = normals;
-  vertexData.uvs       = uvs;
-
-  const mesh = new BABYLON.Mesh(`${prefix}membrane-L`, scene);
-  vertexData.applyToMesh(mesh);
-  mesh.material = membraneMat;
-  mesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "L" };
-  mesh.parent   = roofRoot;
-
-  if (mesh.enableEdgesRendering) {
-    mesh.enableEdgesRendering();
-    mesh.edgesWidth = 2;
-    mesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+    const mL = _buildSlopeMeshWithHoles("L", perpOffset_mm, skyHolesL,
+      `${prefix}membrane-L`, membraneMat, "membrane", null);
+    if (mL) {
+      if (mL.enableEdgesRendering) {
+        mL.enableEdgesRendering();
+        mL.edgesWidth = 2;
+        mL.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+      }
+      result.membrane.push(mL);
+    }
   }
-
-  result.membrane.push(mesh);
 
   // ------------------------------------------------------------------
   // FRONT FACE — one triangular membrane piece
@@ -822,62 +925,26 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   }
 
   // ------------------------------------------------------------------
-  // RIGHT SLOPE — mirror of left slope trapezoid
+  // RIGHT SLOPE MEMBRANE — uses same helper as left
   // ------------------------------------------------------------------
-  // Right slope outward normal: (+sinT, cosT, 0)
   {
-    const rOffX = sinT * perpOffset_mm;
-    const rOffY = cosT * perpOffset_mm;
+    const skyHolesR = skyOpeningsR.map(op => ({
+      sMin: op.a0_mm,
+      sMax: op.a0_mm + op.aLen_mm,
+      zMin: ridgeStartZ_mm + op.b0_mm,
+      zMax: ridgeStartZ_mm + op.b0_mm + op.bLen_mm,
+    }));
 
-    const rv0x = A_mm        + rOffX;   // front eaves (right side)
-    const rv0y = eavesY      + rOffY;
-    const rv0z = 0;
-
-    const rv1x = A_mm        + rOffX;   // back eaves
-    const rv1y = eavesY      + rOffY;
-    const rv1z = B_mm;
-
-    const rv2x = halfSpan_mm + rOffX;   // ridge back
-    const rv2y = ridgeY      + rOffY;
-    const rv2z = ridgeEndZ_mm;
-
-    const rv3x = halfSpan_mm + rOffX;   // ridge front
-    const rv3y = ridgeY      + rOffY;
-    const rv3z = ridgeStartZ_mm;
-
-    const rPositions = [
-      rv0x / 1000, rv0y / 1000, rv0z / 1000,
-      rv1x / 1000, rv1y / 1000, rv1z / 1000,
-      rv2x / 1000, rv2y / 1000, rv2z / 1000,
-      rv3x / 1000, rv3y / 1000, rv3z / 1000,
-    ];
-
-    // Winding for outward normal (+sinT, cosT, 0) — reversed from left
-    const rIndices = [0, 2, 1, 0, 3, 2];
-
-    const rnx = sinT, rny = cosT, rnz = 0;
-    const rNormals = [rnx, rny, rnz, rnx, rny, rnz, rnx, rny, rnz, rnx, rny, rnz];
-    const rUvs = [0, 0, 1, 0, 1, 1, 0, 1];
-
-    const rVertexData = new BABYLON.VertexData();
-    rVertexData.positions = rPositions;
-    rVertexData.indices   = rIndices;
-    rVertexData.normals   = rNormals;
-    rVertexData.uvs       = rUvs;
-
-    const rMesh = new BABYLON.Mesh(`${prefix}membrane-R`, scene);
-    rVertexData.applyToMesh(rMesh);
-    rMesh.material = membraneMat;
-    rMesh.metadata = { dynamic: true, roofTiles: true, layer: "membrane", slope: "R" };
-    rMesh.parent   = roofRoot;
-
-    if (rMesh.enableEdgesRendering) {
-      rMesh.enableEdgesRendering();
-      rMesh.edgesWidth = 2;
-      rMesh.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+    const mR = _buildSlopeMeshWithHoles("R", perpOffset_mm, skyHolesR,
+      `${prefix}membrane-R`, membraneMat, "membrane", null);
+    if (mR) {
+      if (mR.enableEdgesRendering) {
+        mR.enableEdgesRendering();
+        mR.edgesWidth = 2;
+        mR.edgesColor = new BABYLON.Color4(0.3, 0.5, 0.7, 1);
+      }
+      result.membrane.push(mR);
     }
-
-    result.membrane.push(rMesh);
   }
 
   // ------------------------------------------------------------------
@@ -944,7 +1011,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   //   membrane centre offset + half membrane + half batten height
   const battenPerpOffset_mm = perpOffset_mm + MEMBRANE_SPECS.thickness_mm / 2 + BATTEN_SPECS.height_mm / 2;
 
-  const slopeLen_mm = Math.sqrt(halfSpan_mm * halfSpan_mm + rise_mm * rise_mm);
+  // slopeLen_mm declared earlier (needed by _buildSlopeMeshWithHoles)
   const RIDGE_MARGIN_MM = 25;
   const EAVES_MARGIN_MM = 25;
   const MIN_BATTEN_LEN  = 40;   // skip anything shorter
@@ -957,9 +1024,37 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   //   Z_back  = B_mm - xPlan
   //   battenLen = Z_back - Z_front = ridgeLen + 2*run
   //   centre Z = B_mm / 2  (always centred)
+
+  // Skylight openings already fetched above: skyOpeningsL, skyOpeningsR
+
+  // Helper: create a single batten box at given position and Z-extent
+  function _makeBattenLR(name, cx, cy, cz, battenLen, rotZ, side) {
+    const mesh = BABYLON.MeshBuilder.CreateBox(name, {
+      width:  BATTEN_SPECS.width_mm  / 1000,
+      height: BATTEN_SPECS.height_mm / 1000,
+      depth:  battenLen / 1000,
+    }, scene);
+    mesh.parent   = roofRoot;
+    mesh.position  = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
+    mesh.rotation  = new BABYLON.Vector3(0, 0, rotZ);
+    mesh.material  = battenMat;
+    mesh.metadata  = { dynamic: true, roofTiles: true, layer: "battens", slope: side };
+    return mesh;
+  }
+
   for (const side of ["L", "R"]) {
     const normalX  = (side === "L") ? -sinT : sinT;
     const rotZ     = (side === "L") ? slopeAng : -slopeAng;
+    const skyOpenings = (side === "L") ? skyOpeningsL : skyOpeningsR;
+
+    // Convert skylight openings to absolute Z ranges and slope-distance ranges
+    // Opening: a0_mm = distance from ridge down slope, b0_mm = offset along saddle from ridgeStartZ
+    const skyHoles = skyOpenings.map(op => ({
+      sMin: op.a0_mm,                                  // slope distance: start (from ridge)
+      sMax: op.a0_mm + op.aLen_mm,                     // slope distance: end
+      zMin: ridgeStartZ_mm + op.b0_mm,                 // absolute Z: start
+      zMax: ridgeStartZ_mm + op.b0_mm + op.bLen_mm,    // absolute Z: end
+    }));
 
     // Collect slope positions (ridge batten + regular + eaves)
     const sPositions = [RIDGE_MARGIN_MM];
@@ -978,28 +1073,60 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
 
       const zFront    = Math.max(0, xPlan);
       const zBack     = Math.min(B_mm, B_mm - xPlan);
-      const battenLen = zBack - zFront;
-      if (battenLen < MIN_BATTEN_LEN) continue;
+      if (zBack - zFront < MIN_BATTEN_LEN) continue;
 
       const ySurf = memberD_mm + (rise_mm - drop);
       const xSurf = (side === "L") ? xPlan : (A_mm - xPlan);
-
       const cx = xSurf + normalX * battenPerpOffset_mm;
       const cy = ySurf + cosT   * battenPerpOffset_mm;
-      const cz = (zFront + zBack) / 2;
 
       const tag = (idx === 0) ? "ridge" : (idx === sPositions.length - 1) ? "eaves" : `${idx}`;
-      const mesh = BABYLON.MeshBuilder.CreateBox(`${prefix}batten-${side}-${tag}`, {
-        width:  BATTEN_SPECS.width_mm  / 1000,
-        height: BATTEN_SPECS.height_mm / 1000,
-        depth:  battenLen / 1000,
-      }, scene);
-      mesh.parent   = roofRoot;
-      mesh.position  = new BABYLON.Vector3(cx / 1000, cy / 1000, cz / 1000);
-      mesh.rotation  = new BABYLON.Vector3(0, 0, rotZ);
-      mesh.material  = battenMat;
-      mesh.metadata  = { dynamic: true, roofTiles: true, layer: "battens", slope: side };
-      result.battens.push(mesh);
+
+      // Check if this batten's slope distance overlaps any skylight hole
+      // Batten has negligible slope-extent (it's a thin bar), so check if s_mm falls within [sMin, sMax]
+      const halfBattenSlope = BATTEN_SPECS.width_mm / 2; // batten width in slope direction
+      const overlappingHoles = skyHoles.filter(h =>
+        (s_mm + halfBattenSlope) > h.sMin && (s_mm - halfBattenSlope) < h.sMax
+      );
+
+      if (overlappingHoles.length === 0) {
+        // No overlap — build full batten as before
+        const battenLen = zBack - zFront;
+        const cz = (zFront + zBack) / 2;
+        result.battens.push(_makeBattenLR(
+          `${prefix}batten-${side}-${tag}`, cx, cy, cz, battenLen, rotZ, side
+        ));
+      } else {
+        // Split batten around holes — collect gap-free segments along Z
+        // Merge all hole Z ranges that overlap this batten
+        const gaps = overlappingHoles.map(h => ({ z0: h.zMin, z1: h.zMax }));
+        gaps.sort((a, b) => a.z0 - b.z0);
+
+        // Build segments: before first gap, between gaps, after last gap
+        let segStart = zFront;
+        let segIdx = 0;
+        for (const gap of gaps) {
+          const gapStart = Math.max(zFront, gap.z0);
+          const gapEnd   = Math.min(zBack, gap.z1);
+          if (gapStart > segStart && (gapStart - segStart) >= MIN_BATTEN_LEN) {
+            const segLen = gapStart - segStart;
+            const segCz  = (segStart + gapStart) / 2;
+            result.battens.push(_makeBattenLR(
+              `${prefix}batten-${side}-${tag}-s${segIdx}`, cx, cy, segCz, segLen, rotZ, side
+            ));
+            segIdx++;
+          }
+          segStart = Math.max(segStart, gapEnd);
+        }
+        // Final segment after last gap
+        if (segStart < zBack && (zBack - segStart) >= MIN_BATTEN_LEN) {
+          const segLen = zBack - segStart;
+          const segCz  = (segStart + zBack) / 2;
+          result.battens.push(_makeBattenLR(
+            `${prefix}batten-${side}-${tag}-s${segIdx}`, cx, cy, segCz, segLen, rotZ, side
+          ));
+        }
+      }
     }
   }
 
@@ -1057,7 +1184,7 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
   // ==================================================================
   const tilePerpOffset_mm = battenPerpOffset_mm + BATTEN_SPECS.height_mm / 2 + TILE_THK_MM / 2;
 
-  // slopeLen_mm already declared above (battens section)
+  // slopeLen_mm declared at top of buildHippedTileLayers
 
   // UV repeat units (must match apex texture layout)
   const repeatU_mm = TILE_EXPOSURE_MM * 2;   // 286mm — 2 tile rows along slope
@@ -1101,27 +1228,55 @@ function buildHippedTileLayers(state, ctx, scene, prefix) {
     return mesh;
   }
 
-  // ---- LEFT SLOPE tile (trapezoid) ----
+  // ---- LEFT SLOPE tile (trapezoid with skylight holes) ----
   {
-    const tOff = { x: (-sinT) * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
-    // UVs: U = slope distance / repeat (eaves=max, ridge=0), V = Z position / repeat
-    result.tiles.push(buildTileMesh(`${prefix}tiles-L`, [
-      { x: 0           + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
-      { x: 0           + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
-    ], [0, 1, 2, 0, 2, 3], { x: -sinT, y: cosT, z: 0 }, "L"));
+    const skyHolesL = skyOpeningsL.map(op => ({
+      sMin: op.a0_mm,
+      sMax: op.a0_mm + op.aLen_mm,
+      zMin: ridgeStartZ_mm + op.b0_mm,
+      zMax: ridgeStartZ_mm + op.b0_mm + op.bLen_mm,
+    }));
+    const tileUvFn = (s, z) => ({ u: s / repeatU_mm, v: z / repeatV_mm });
+
+    if (skyHolesL.length > 0) {
+      const tL = _buildSlopeMeshWithHoles("L", tilePerpOffset_mm, skyHolesL,
+        `${prefix}tiles-L`, slateMat, "tiles", tileUvFn);
+      if (tL) result.tiles.push(tL);
+    } else {
+      // No holes — original trapezoid
+      const tOff = { x: (-sinT) * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
+      result.tiles.push(buildTileMesh(`${prefix}tiles-L`, [
+        { x: 0           + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
+        { x: 0           + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
+        { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
+        { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
+      ], [0, 1, 2, 0, 2, 3], { x: -sinT, y: cosT, z: 0 }, "L"));
+    }
   }
 
-  // ---- RIGHT SLOPE tile (trapezoid) ----
+  // ---- RIGHT SLOPE tile (trapezoid with skylight holes) ----
   {
-    const tOff = { x: sinT * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
-    result.tiles.push(buildTileMesh(`${prefix}tiles-R`, [
-      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
-      { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
-      { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
-    ], [0, 2, 1, 0, 3, 2], { x: sinT, y: cosT, z: 0 }, "R"));
+    const skyHolesR = skyOpeningsR.map(op => ({
+      sMin: op.a0_mm,
+      sMax: op.a0_mm + op.aLen_mm,
+      zMin: ridgeStartZ_mm + op.b0_mm,
+      zMax: ridgeStartZ_mm + op.b0_mm + op.bLen_mm,
+    }));
+    const tileUvFn = (s, z) => ({ u: s / repeatU_mm, v: z / repeatV_mm });
+
+    if (skyHolesR.length > 0) {
+      const tR = _buildSlopeMeshWithHoles("R", tilePerpOffset_mm, skyHolesR,
+        `${prefix}tiles-R`, slateMat, "tiles", tileUvFn);
+      if (tR) result.tiles.push(tR);
+    } else {
+      const tOff = { x: sinT * tilePerpOffset_mm, y: cosT * tilePerpOffset_mm };
+      result.tiles.push(buildTileMesh(`${prefix}tiles-R`, [
+        { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: 0,              u: slopeLen_mm / repeatU_mm, v: 0 },
+        { x: A_mm        + tOff.x, y: eavesY + tOff.y, z: B_mm,           u: slopeLen_mm / repeatU_mm, v: B_mm / repeatV_mm },
+        { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeEndZ_mm,   u: 0, v: ridgeEndZ_mm / repeatV_mm },
+        { x: halfSpan_mm + tOff.x, y: ridgeY + tOff.y, z: ridgeStartZ_mm, u: 0, v: ridgeStartZ_mm / repeatV_mm },
+      ], [0, 2, 1, 0, 3, 2], { x: sinT, y: cosT, z: 0 }, "R"));
+    }
   }
 
   // ---- FRONT FACE tile (triangle) ----

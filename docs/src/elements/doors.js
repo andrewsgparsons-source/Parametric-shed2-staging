@@ -2,10 +2,11 @@
  * doors.js - Door geometry builder for parametric shed
  * 
  * Builds actual door geometry to fill wall openings.
- * Supports three styles:
+ * Supports door styles:
  *   - standard: Vertical T&G boards with Z-pattern ledges/braces
  *   - french: Double doors with glass panels and kickboard
  *   - mortise-tenon: Traditional joinery with back frame
+ *   - double-half: Half-height double doors (e.g. bin stores)
  * 
  * All dimensions in millimeters.
  */
@@ -77,6 +78,10 @@ export function build3D(state, ctx, sectionContext) {
 
     // Build the appropriate door style
     switch (style) {
+      case "none":
+        // Open doorway — no door assembly, just the opening (cut by wall/cladding system)
+        console.log("[Doors] Style 'none': open doorway, no door geometry for", door.id);
+        break;
       case "french":
         buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;
@@ -98,6 +103,20 @@ export function build3D(state, ctx, sectionContext) {
           buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         }
         break;
+      case "double-half": {
+        // Half-height double doors (e.g. bin stores) — ~half the wall height
+        const halfHeight = Math.max(600, Math.floor(doorHeight * 0.5));
+        // Correct Y position: pos was calculated with full doorHeight centered,
+        // but we need the shorter door to sit at the bottom of the opening.
+        // Original yCenter used doorHeight/2; we need halfHeight/2 instead.
+        const halfPos = { ...pos, y: pos.y - (doorHeight / 2) + (halfHeight / 2) };
+        if (doorWidth >= 1200) {
+          buildDoubleStandardDoor(scene, door, halfPos, doorWidth, halfHeight, index, materials, meshPrefix);
+        } else {
+          buildStandardDoor(scene, door, halfPos, doorWidth, halfHeight, index, materials, meshPrefix);
+        }
+        break;
+      }
       case "mortise-tenon":
         buildMortiseTenon(scene, door, pos, doorWidth, doorHeight, index, materials, meshPrefix);
         break;

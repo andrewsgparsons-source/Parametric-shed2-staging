@@ -21,17 +21,23 @@
 (function() {
   'use strict';
 
-  const STEPS = [
+  var ALL_STEPS = [
     { num: 1, label: 'Size & Shape',       section: 'Size & Shape' },
     { num: 2, label: 'Roof',               section: 'Roof' },
-    { num: 3, label: 'Appearance',         section: 'Appearance' },
-    { num: 4, label: 'Walls & Openings',   section: 'Walls & Openings' },
-    { num: 5, label: 'Attachments',        section: 'Building Attachments' },
-    { num: 6, label: 'Visibility',         section: 'Visibility' },
-    { num: 7, label: 'Bill of Materials',  section: '__bom__' },
-    { num: 8, label: 'Save & Share',       section: 'Save / Load Design' },
-    { num: 9, label: 'Developer',          section: 'Developer' }
+    { num: 3, label: 'Base',               section: 'Base' },
+    { num: 4, label: 'Appearance',         section: 'Appearance' },
+    { num: 5, label: 'Walls & Openings',   section: 'Walls & Openings' },
+    { num: 6, label: 'Attachments',        section: 'Building Attachments' },
+    { num: 7, label: 'Visibility',         section: 'Visibility', adminOnly: true },
+    { num: 8, label: 'Bill of Materials',  section: '__bom__', adminOnly: true },
+    { num: 9, label: 'Save & Share',       section: 'Save / Load Design' },
+    { num: 10, label: 'Developer',         section: 'Developer', adminOnly: true }
   ];
+
+  // Filter out admin-only steps for public visitors
+  var urlParams = new URLSearchParams(window.location.search);
+  var isAdmin = urlParams.get('profile') === 'admin';
+  var STEPS = isAdmin ? ALL_STEPS : ALL_STEPS.filter(function(s) { return !s.adminOnly; });
 
   let activeStep = -1; // -1 = none open
   let sections = [];
@@ -55,8 +61,12 @@
   }
 
   function buildSidebar(panel) {
-    // Find sections by summary text
-    const allSections = panel.querySelectorAll('details.boSection');
+    // Find only TOP-LEVEL boSection elements (direct children of the form),
+    // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
+    const form = panel.querySelector('form[aria-label="Build options"]');
+    const allSections = form
+      ? form.querySelectorAll(':scope > details.boSection')
+      : panel.querySelectorAll('details.boSection');
     const byName = {};
     allSections.forEach(s => {
       const name = s.querySelector('summary')?.textContent?.trim();
@@ -205,13 +215,14 @@
         <div class="sw-title">🏠 Design Your
           <select id="buildingTypeSelect" class="sw-type-select">
             <option value="shed">Shed</option>
-            <option value="gazebo">Gazebo</option>
             <option value="summerhouse">Summer House</option>
-            <option value="gardenroom">Garden Room</option>
+            <option value="gardenroom-pent">Garden Room (Pent)</option>
+            <option value="gardenroom-apex">Garden Room (Apex)</option>
             <option value="garage">Garage</option>
             <option value="workshop">Workshop</option>
             <option value="leanto">Lean-to</option>
             <option value="fieldshelter">Field Shelter</option>
+            <option value="gazebo">Gazebo</option>
           </select>
         </div>
       </div>
@@ -252,6 +263,8 @@
           </button>
         `).join('')}
       </div>
+
+      <div id="priceCard" style="display:none; padding: 0 12px 12px;"></div>
 
     `;
   }
@@ -299,6 +312,8 @@
           <button class="sw-bom-btn" data-view="walls">🧱 Walls</button>
           <button class="sw-bom-btn" data-view="roof">🏚️ Roof</button>
           <button class="sw-bom-btn" data-view="openings">🚪 Openings</button>
+          <button class="sw-bom-btn" data-view="shelving">📐 Shelving</button>
+          <button class="sw-bom-btn sw-bom-pricing" data-view="pricing">💰 Pricing</button>
         </div>
       `;
       document.getElementById('swFlyoutBody').appendChild(bomDiv);
@@ -306,6 +321,25 @@
       // Wire BOM buttons
       bomDiv.querySelectorAll('.sw-bom-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (btn.dataset.view === 'pricing') {
+            // Show pricing breakdown in flyout
+            var pricingDiv = document.getElementById('bomPricingBreakdown');
+            if (!pricingDiv) {
+              pricingDiv = document.createElement('div');
+              pricingDiv.id = 'bomPricingBreakdown';
+              pricingDiv.style.cssText = 'padding:12px 0;';
+              bomDiv.appendChild(pricingDiv);
+            }
+            // Toggle visibility
+            if (pricingDiv.style.display === 'none' || !pricingDiv.innerHTML) {
+              pricingDiv.style.display = '';
+              // Fire custom event for index.js to handle
+              window.dispatchEvent(new CustomEvent('renderPricingBreakdown', { detail: { containerId: 'bomPricingBreakdown' } }));
+            } else {
+              pricingDiv.style.display = 'none';
+            }
+            return;
+          }
           var viewSelect = document.getElementById('viewSelect');
           if (viewSelect) {
             viewSelect.value = btn.dataset.view;

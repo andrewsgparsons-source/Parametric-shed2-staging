@@ -18,6 +18,7 @@ export function getBuiltInPresets() {
       category: "Default",
       description: "Default starting configuration with door and window.",
       state: {
+        "buildingType": "shed",
         "w": 1800,
         "d": 2400,
         "vis": {
@@ -32,6 +33,8 @@ export function getBuiltInPresets() {
             "left": true,
             "right": true
           },
+          "wallIns": true,
+          "wallPly": true,
           "cladding": true,
           "roof": true
         },
@@ -58,18 +61,22 @@ export function getBuiltInPresets() {
         },
         "roof": {
           "style": "apex",
+          "covering": "felt",
           "apex": {
             "trussCount": 3,
             "heightToEaves_mm": 1850,
-            "heightToCrest_mm": 2200
+            "heightToCrest_mm": 2200,
+            "tieBeam": "eaves"
           },
           "pent": {
             "minHeight_mm": 2400,
-            "maxHeight_mm": 2400
-          }
+            "maxHeight_mm": 2500
+          },
+          "skylights": []
         },
         "walls": {
           "variant": "basic",
+          "internalLining": "plywood",
           "height_mm": 2400,
           "insulated": {
             "section": {
@@ -112,6 +119,25 @@ export function getBuiltInPresets() {
         "frame": {
           "thickness_mm": 50,
           "depth_mm": 75
+        },
+        "cladding": {
+          "style": "shiplap",
+          "colour": "natural-wood"
+        },
+        "sections": {
+          "enabled": false,
+          "main": {
+            "id": "main",
+            "type": "rectangular",
+            "dimensions": null,
+            "roof": null,
+            "walls": null
+          },
+          "attachments": []
+        },
+        "shelving": [],
+        "dividers": {
+          "items": []
         }
       }
     },

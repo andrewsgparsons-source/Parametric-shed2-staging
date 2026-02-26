@@ -60,16 +60,17 @@ import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js?_v=2";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js?_v=8";
+import * as Roof from "./elements/roof.js?_v=11";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
-import { initInstancesUI } from "./instances.js?_v=10";
+import { updateAttachmentBOM } from "./bom/attachments.js";
+import { initInstancesUI } from "./instances.js?_v=11";
 import * as Doors from "./elements/doors.js";
 import * as Windows from "./elements/windows.js";
-import * as Skylights from "./elements/skylights.js?_v=9";
+import * as Skylights from "./elements/skylights.js?_v=11";
 import * as Shelving from "./elements/shelving.js";
 import { findBuiltInPresetById, getDefaultBuiltInPresetId } from "../instances.js?_v=9";
-import { initViews } from "./views.js?_v=2";
+import { initViews } from "./views.js?_v=3";
 import * as Sections from "./sections.js";
 import { isViewerMode, parseUrlState, applyViewerProfile, copyViewerUrlToClipboard, loadProfiles, applyProfile, getProfileFromUrl, isFieldVisible, isFieldDisabled, getFieldDefault, getFieldOptionRestrictions, getCurrentProfile, hideDisabledVisibilityControls } from "./profiles.js";
 import { initProfileEditor } from "./profile-editor.js";
@@ -83,18 +84,36 @@ function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", Stri
  * Toggle roof covering visibility checkboxes based on covering type
  * Shows standard "Covering" for felt/shingles, or "Tiles" + "Membrane & Battens" for slate
  */
+/**
+ * Show/hide internal lining dropdown based on variant
+ * Only visible when variant is "insulated"
+ */
+function updateInternalLiningVisibility(variant) {
+  var label = $("internalLiningLabel");
+  if (label) {
+    label.style.display = (variant === "insulated") ? "" : "none";
+  }
+}
+
 function updateRoofCoveringToggles(coveringType) {
   var coveringLabel = $("vRoofCoveringLabel");
   var tilesLabel = $("vRoofTilesLabel");
   var membraneBattensLabel = $("vRoofMembraneBattensLabel");
   
-  if (coveringType === "slate") {
-    // Slate selected: hide standard covering, show breakdown toggles
+  // Hide skylights when slate is selected (not compatible)
+  var skylightsGroupOpenings = $("skylightsGroupOpenings");
+  var skylightsGroupRoof = $("skylightsGroupRoof");
+  var isSlate = (coveringType === "slate");
+  if (skylightsGroupOpenings) skylightsGroupOpenings.style.display = isSlate ? "none" : "";
+  if (skylightsGroupRoof) skylightsGroupRoof.style.display = isSlate ? "none" : "";
+
+  if (isSlate) {
+    // Slate selected: hide standard covering, show breakdown toggles, hide skylights
     if (coveringLabel) coveringLabel.style.display = "none";
     if (tilesLabel) tilesLabel.style.display = "";
     if (membraneBattensLabel) membraneBattensLabel.style.display = "";
   } else {
-    // Felt/shingles: show standard covering, hide breakdown toggles
+    // Felt/EPDM: show standard covering, hide breakdown toggles
     if (coveringLabel) coveringLabel.style.display = "";
     if (tilesLabel) tilesLabel.style.display = "none";
     if (membraneBattensLabel) membraneBattensLabel.style.display = "none";
@@ -510,6 +529,10 @@ function initApp() {
     var vInsEl = $("vIns");
     var vDeckEl = $("vDeck");
     var vCladdingEl = $("vCladding");
+    var vCladFrontEl = $("vCladFront");
+    var vCladBackEl = $("vCladBack");
+    var vCladLeftEl = $("vCladLeft");
+    var vCladRightEl = $("vCladRight");
     var vOpeningsEl = $("vOpenings");
 
 var unitModeMetricEl = $("unitModeMetric");
@@ -608,6 +631,8 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
 
     var wallSectionEl = $("wallSection"); // NEW
     var wallsVariantEl = $("wallsVariant");
+    var internalLiningEl = $("internalLining");
+    var internalLiningLabel = $("internalLiningLabel");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
     var claddingColourEl = $("claddingColour");
@@ -915,6 +940,24 @@ function formatDimension(mm, unitMode) {
                      (m.metadata && m.metadata.cladding === true);
         if (!isClad) continue;
 
+        try { m.isVisible = visible; } catch (e0) {}
+        try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
+      }
+    }
+
+    // Per-wall cladding visibility — hides/shows cladding on a specific wall
+    function applyPerWallCladdingVisibility(scene, wall, on) {
+      if (!scene || !scene.meshes) return;
+      var visible = (on !== false);
+      var wallTag = "clad-" + wall;
+      for (var i = 0; i < scene.meshes.length; i++) {
+        var m = scene.meshes[i];
+        if (!m) continue;
+        var nm = String(m.name || "");
+        // Match main building cladding for this wall (e.g. "clad-front-panel-0", "section-main-clad-left-...")
+        // But NOT attachment cladding (starts with "att-")
+        if (nm.indexOf(wallTag) < 0) continue;
+        if (nm.indexOf("att-") === 0) continue;
         try { m.isVisible = visible; } catch (e0) {}
         try { if (typeof m.setEnabled === "function") m.setEnabled(visible); } catch (e1) {}
       }
@@ -2492,6 +2535,12 @@ if (getWallsEnabled(state)) {
         if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
         updateOpeningsBOM(state);
         updateShelvingBOM(state);
+        try { updateAttachmentBOM(state); } catch(ae) { console.warn('[BOM] Attachment BOM error:', ae); }
+
+        // Update price estimate
+        if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
+          try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+        }
 
        // Apply all visibility settings
         try {
@@ -2528,6 +2577,13 @@ if (getWallsEnabled(state)) {
             applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
           }
           applyCladdingVisibility(ctx.scene, _cladOn);
+          // Per-wall cladding visibility (apply after master toggle)
+          var _cp = (state && state.vis && state.vis.cladParts) ? state.vis.cladParts : {};
+          if (_cladOn) {
+            ["front", "back", "left", "right"].forEach(function (w) {
+              if (_cp[w] === false) applyPerWallCladdingVisibility(ctx.scene, w, false);
+            });
+          }
           applyOpeningsVisibility(ctx.scene, _openOn);
           applyAllAttachmentVisibility(ctx.scene, state);
 
@@ -2546,6 +2602,12 @@ if (getWallsEnabled(state)) {
               try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
             }
             try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+            // Per-wall cladding (re-apply after master in rAF too)
+            if (_cladOn) {
+              ["front", "back", "left", "right"].forEach(function (w) {
+                if (_cp[w] === false) try { applyPerWallCladdingVisibility(ctx.scene, w, false); } catch (e0) {}
+              });
+            }
             try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
             try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
           });
@@ -2641,6 +2703,12 @@ if (getWallsEnabled(state)) {
       if (Base && typeof Base.updateBOM === "function") Base.updateBOM(baseState);
       updateOpeningsBOM(state);
       updateShelvingBOM(state);
+      try { updateAttachmentBOM(state); } catch(ae) { console.warn('[BOM] Attachment BOM error:', ae); }
+
+      // Update price estimate
+      if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
+        try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+      }
 
       // Apply all visibility settings to main building AND attachments
       try {
@@ -2677,6 +2745,13 @@ if (getWallsEnabled(state)) {
           applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn);
         }
         applyCladdingVisibility(ctx.scene, _cladOn);
+        // Per-wall cladding visibility
+        var _cp2 = (state && state.vis && state.vis.cladParts) ? state.vis.cladParts : {};
+        if (_cladOn) {
+          ["front", "back", "left", "right"].forEach(function (w) {
+            if (_cp2[w] === false) applyPerWallCladdingVisibility(ctx.scene, w, false);
+          });
+        }
         applyOpeningsVisibility(ctx.scene, _openOn);
         applyAllAttachmentVisibility(ctx.scene, state);
 
@@ -2695,6 +2770,12 @@ if (getWallsEnabled(state)) {
             try { applyRoofMembraneBattensVisibility(ctx.scene, _roofOn && _roofMembraneBattensOn); } catch (e0) {}
           }
           try { applyCladdingVisibility(ctx.scene, _cladOn); } catch (e0) {}
+          // Per-wall cladding (re-apply after master in rAF too)
+          if (_cladOn) {
+            ["front", "back", "left", "right"].forEach(function (w) {
+              if (_cp2[w] === false) try { applyPerWallCladdingVisibility(ctx.scene, w, false); } catch (e0) {}
+            });
+          }
           try { applyOpeningsVisibility(ctx.scene, _openOn); } catch (e0) {}
           try { applyAllAttachmentVisibility(ctx.scene, state); } catch (e0) {}
         });
@@ -3604,7 +3685,8 @@ var styleLabel = document.createElement("label");
           styleLabel.textContent = "Style";
 var styleSel = document.createElement("select");
           var doorWidthMm = Math.floor(Number(door.width_mm || 900));
-          var styleOptions = '<option value="standard">Standard</option>';
+          var styleOptions = '<option value="none">Open (No Door)</option>';
+          styleOptions += '<option value="standard">Standard</option>';
           if (doorWidthMm >= 1200) {
             styleOptions += '<option value="double-standard">Double Standard</option>';
           }
@@ -3615,13 +3697,16 @@ var styleSel = document.createElement("select");
           if (doorWidthMm > 1200) {
             styleOptions += '<option value="french">French Doors</option>';
           }
+          if (doorWidthMm >= 1200) {
+            styleOptions += '<option value="double-half">Double Half (Bin Store)</option>';
+          }
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
           if (currentStyle === "french" && doorWidthMm <= 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
-          if ((currentStyle === "double-standard" || currentStyle === "double-mortise-tenon") && doorWidthMm < 1200) {
+          if ((currentStyle === "double-standard" || currentStyle === "double-mortise-tenon" || currentStyle === "double-half") && doorWidthMm < 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
@@ -4394,6 +4479,12 @@ if (state && state.overhang) {
         if (vWallsEl) vWallsEl.checked = getWallsEnabled(state);
         if (vRoofEl) vRoofEl.checked = getRoofEnabled(state);
         if (vCladdingEl) vCladdingEl.checked = getCladdingEnabled(state);
+        // Per-wall cladding checkboxes
+        var cp = (state && state.vis && state.vis.cladParts && typeof state.vis.cladParts === "object") ? state.vis.cladParts : null;
+        if (vCladFrontEl) vCladFrontEl.checked = cp ? (cp.front !== false) : getCladdingEnabled(state);
+        if (vCladBackEl) vCladBackEl.checked = cp ? (cp.back !== false) : getCladdingEnabled(state);
+        if (vCladLeftEl) vCladLeftEl.checked = cp ? (cp.left !== false) : getCladdingEnabled(state);
+        if (vCladRightEl) vCladRightEl.checked = cp ? (cp.right !== false) : getCladdingEnabled(state);
         if (vOpeningsEl) vOpeningsEl.checked = (state && state.vis && typeof state.vis.openings === "boolean") ? state.vis.openings : true;
 
         var rp = (state && state.vis && state.vis.roofParts && typeof state.vis.roofParts === "object") ? state.vis.roofParts : null;
@@ -4419,6 +4510,9 @@ if (state && state.overhang) {
         if (vWallPlywoodEl) vWallPlywoodEl.checked = state?.vis?.wallPly !== false;
 
         if (wallsVariantEl && state && state.walls && state.walls.variant) wallsVariantEl.value = state.walls.variant;
+        // Sync internal lining dropdown
+        updateInternalLiningVisibility(state?.walls?.variant || "insulated");
+        if (internalLiningEl && state && state.walls && state.walls.internalLining) internalLiningEl.value = state.walls.internalLining;
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
         if (claddingColourEl && state && state.cladding && state.cladding.colour) claddingColourEl.value = state.cladding.colour;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
@@ -4550,25 +4644,226 @@ if (state && state.overhang) {
         console.log("[BuildingType] Changed to:", newType);
         var patch = { buildingType: newType };
 
-        // Gazebo: force hipped roof + minimum dimensions
-        if (newType === "gazebo") {
-          var HIPPED_MIN_W = 2500;
-          var HIPPED_MIN_D = 3000;
-          var curState = store.getState();
-          var curW = (curState && curState.dim && curState.dim.frameW_mm) ? curState.dim.frameW_mm : 1800;
-          var curD = (curState && curState.dim && curState.dim.frameD_mm) ? curState.dim.frameD_mm : 2400;
-          if (curW < HIPPED_MIN_W || curD < HIPPED_MIN_D) {
-            patch.dim = { frameW_mm: Math.max(curW, HIPPED_MIN_W), frameD_mm: Math.max(curD, HIPPED_MIN_D) };
-            patch.w = Math.max(curW, HIPPED_MIN_W);
-            patch.d = Math.max(curD, HIPPED_MIN_D);
+        // ---- Building type default configs ----
+        var buildingTypeDefaults = {
+          "gazebo": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 2500, frameD_mm: 3000 },
+            dimMode: "frame",
+            roof: { style: "hipped", covering: "slate", hipped: { heightToEaves_mm: 2400, heightToCrest_mm: 3000 } },
+            overhang: { uniform_mm: 75 },
+            walls: { variant: "basic", height_mm: 2400 },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            shelving: [],
+            vis: { base: true, baseAll: false }
+          },
+          "gardenroom-pent": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 2000, frameD_mm: 2601 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 1950, baseD_mm: 2551, frameW_mm: 2000, frameD_mm: 2601, roofW_mm: 2315, roofD_mm: 2751 },
+            roof: { style: "pent", covering: "felt",
+              apex: { trussCount: 3, heightToEaves_mm: 2100, heightToCrest_mm: 2500, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2200, maxHeight_mm: 2400 },
+              skylights: [
+                { id: "sky1", enabled: true, face: "pent", x_mm: 580, y_mm: 300, width_mm: 500, height_mm: 1010 },
+                { id: "sky2", enabled: true, face: "pent", x_mm: 1800, y_mm: 300, width_mm: 500, height_mm: 1000 }
+              ]
+            },
+            overhang: { uniform_mm: 75, front_mm: 75, back_mm: null, left_mm: 500, right_mm: 240 },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 100, width_mm: 800, height_mm: 1800, handleSide: "right", isOpen: false, style: "mortise-tenon" },
+                { id: "win1", wall: "right", type: "window", enabled: true, x_mm: 100, y_mm: 410, width_mm: 350, height_mm: 1500 },
+                { id: "door3", wall: "right", type: "door", enabled: true, x_mm: 523, width_mm: 1400, height_mm: 1860, style: "french", isOpen: false },
+                { id: "win2", wall: "right", type: "window", enabled: true, x_mm: 2059, y_mm: 410, width_mm: 292, height_mm: 1500 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [{ wall: "left", side: "outside", x_mm: 1050, y_mm: 1350, length_mm: 1350, depth_mm: 500, thickness_mm: 25, bracket_size_mm: 250, enabled: true }],
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+          },
+          "gardenroom-apex": {
+            w: 2340, d: 2900,
+            dim: { frameW_mm: 2340, frameD_mm: 2891 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 2290, baseD_mm: 2841, frameW_mm: 2340, frameD_mm: 2891, roofW_mm: 2490, roofD_mm: 3041 },
+            roof: { style: "apex", covering: "felt",
+              apex: { trussCount: 4, heightToEaves_mm: 2080, heightToCrest_mm: 2400, tieBeam: "raised" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2400 },
+              skylights: []
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 730, width_mm: 880, height_mm: 1900, style: "mortise-tenon", isOpen: false },
+                { id: "win1", wall: "front", type: "window", enabled: true, x_mm: 250, y_mm: 750, width_mm: 350, height_mm: 1080 },
+                { id: "win2", wall: "front", type: "window", enabled: true, x_mm: 1740, y_mm: 750, width_mm: 350, height_mm: 1080 },
+                { id: "win3", wall: "left", type: "window", enabled: true, x_mm: 890, y_mm: 860, width_mm: 1120, height_mm: 1000 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
+          },
+          "fieldshelter": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 3500, frameD_mm: 6000 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 5950, frameW_mm: 3500, frameD_mm: 6000, roofW_mm: 3650, roofD_mm: 6150 },
+            roof: { style: "apex", covering: "felt",
+              apex: { trussCount: 6, heightToEaves_mm: 2000, heightToCrest_mm: 2350, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2400 },
+              skylights: []
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: 700, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 750, width_mm: 4000, height_mm: 1900, style: "none" }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
+            base: { type: "skids" },
+            vis: { base: false, baseAll: false, deck: false, frame: true, ins: false, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true }
+          },
+          "leanto": {
+            w: 1800, d: 2400,
+            dim: { frameW_mm: 1000, frameD_mm: 3500 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 950, baseD_mm: 3450, frameW_mm: 1000, frameD_mm: 3500, roofW_mm: 1150, roofD_mm: 3650 },
+            roof: { style: "pent", covering: "felt",
+              apex: { trussCount: 3, heightToEaves_mm: 1850, heightToCrest_mm: 2200, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 75, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "left", type: "door", enabled: true, x_mm: 1800, width_mm: 1450, height_mm: 1850, style: "double-standard", isOpen: true }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [
+              { wall: "left", side: "inside", x_mm: 200, y_mm: 900, length_mm: 1500, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "front", side: "inside", x_mm: 200, y_mm: 900, length_mm: 800, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "left", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 1500, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
+              { wall: "front", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 800, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true }
+            ],
+            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
+              walls: { front: true, back: true, left: true, right: false },
+              roofParts: { ply: true, insulation: true, membraneBattens: false } }
+          },
+          "workshop": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 3500, frameD_mm: 7001 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 6951, frameW_mm: 3500, frameD_mm: 7001, roofW_mm: 3900, roofD_mm: 7401 },
+            roof: { style: "apex", covering: "epdm",
+              apex: { trussCount: 3, heightToEaves_mm: 1900, heightToCrest_mm: 2400, tieBeam: "raised" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 100 }, spacing: 400 },
+              basic: { section: { w: 50, h: 100 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 900, width_mm: 1700, height_mm: 1750, style: "double-mortise-tenon", isOpen: true },
+                { id: "win1", wall: "right", type: "window", enabled: true, x_mm: 1025, y_mm: 900, width_mm: 900, height_mm: 600 },
+                { id: "win2", wall: "right", type: "window", enabled: true, x_mm: 4875, y_mm: 900, width_mm: 900, height_mm: 600 },
+                { id: "win3", wall: "right", type: "window", enabled: true, x_mm: 2950, y_mm: 900, width_mm: 900, height_mm: 600 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 100 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
+            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
+              roofParts: { ply: true, insulation: true, membraneBattens: false } }
+          },
+          "garage": {
+            w: 2500, d: 3000,
+            dim: { frameW_mm: 3500, frameD_mm: 5000 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 3450, baseD_mm: 4950, frameW_mm: 3500, frameD_mm: 5000, roofW_mm: 3900, roofD_mm: 5400 },
+            roof: { style: "hipped", covering: "slate",
+              apex: { trussCount: 3, heightToEaves_mm: 1850, heightToCrest_mm: 2200, tieBeam: "eaves" },
+              pent: { minHeight_mm: 2400, maxHeight_mm: 2500 },
+              skylights: [],
+              hipped: { heightToEaves_mm: 2200, heightToCrest_mm: 3300 }
+            },
+            overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 100 }, spacing: 400 },
+              basic: { section: { w: 50, h: 100 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 300, width_mm: 2900, height_mm: 1850, style: "double-mortise-tenon", isOpen: true }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 100 },
+            cladding: { style: "overlap", colour: "natural-wood" },
+            shelving: [],
+            vis: { base: true, baseAll: false, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
+          },
+          "summerhouse": {
+            w: 2340, d: 2900,
+            dim: { frameW_mm: 3001, frameD_mm: 2571 },
+            dimMode: "frame", dimGap_mm: 50,
+            dimInputs: { baseW_mm: 2951, baseD_mm: 2521, frameW_mm: 3001, frameD_mm: 2571, roofW_mm: 3151, roofD_mm: 2721 },
+            roof: { style: "apex", covering: "felt", apex: { trussCount: 4, heightToEaves_mm: 1950, heightToCrest_mm: 2400, tieBeam: "raised" }, pent: { minHeight_mm: 2400, maxHeight_mm: 2400 }, skylights: [] },
+            overhang: { uniform_mm: 75, front_mm: 300, back_mm: null, left_mm: null, right_mm: null },
+            walls: { variant: "basic", internalLining: "plywood", height_mm: 2400,
+              insulated: { section: { w: 50, h: 75 }, spacing: 400 },
+              basic: { section: { w: 50, h: 75 }, spacing: null },
+              openings: [
+                { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 800, width_mm: 1400, height_mm: 1850, style: "french", isOpen: false },
+                { id: "win1", wall: "front", type: "window", enabled: true, x_mm: 225, y_mm: 700, width_mm: 350, height_mm: 1080 },
+                { id: "win2", wall: "front", type: "window", enabled: true, x_mm: 2425, y_mm: 700, width_mm: 350, height_mm: 1080 }
+              ],
+              invalidDoorIds: [], invalidWindowIds: []
+            },
+            frame: { thickness_mm: 50, depth_mm: 75 },
+            cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
+            vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true }
           }
-          patch.roof = {
-            style: "hipped",
-            hipped: {
-              heightToEaves_mm: 2400,
-              heightToCrest_mm: 3000
-            }
-          };
+        };
+
+        var typeDefault = buildingTypeDefaults[newType];
+        if (typeDefault) {
+          // Apply building-type-specific defaults
+          Object.keys(typeDefault).forEach(function(k) { patch[k] = typeDefault[k]; });
+        } else {
+          // All other types: reset to default shed preset
+          var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
+          if (defaultPreset && defaultPreset.state) {
+            var ds = defaultPreset.state;
+            Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
+          }
+          if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
+          if (!patch.vis) patch.vis = {};
+          patch.vis.baseAll = true;
+          if (!patch.shelving) patch.shelving = [];
         }
 
         store.setState(patch);
@@ -4591,13 +4886,20 @@ if (state && state.overhang) {
       if (sel && sel.value !== type) sel.value = type;
       // Hide/show sidebar wizard steps based on building type
       var steps = document.querySelectorAll('.sw-step');
+      var visibleNum = 1;
       steps.forEach(function (btn) {
         var label = btn.querySelector('.sw-step-label');
         if (!label) return;
         var text = label.textContent.trim();
-        // Hide these for gazebo: Appearance, Walls & Openings, Attachments
-        if (text === "Appearance" || text === "Walls & Openings" || text === "Attachments") {
+        // Hide these for gazebo: Walls & Openings, Attachments, Bill of Materials
+        if (text === "Walls & Openings" || text === "Attachments" || text === "Bill of Materials") {
           btn.style.display = isGaz ? "none" : "";
+        }
+        // Renumber visible steps
+        if (btn.style.display !== "none") {
+          var numEl = btn.querySelector('.sw-step-num');
+          if (numEl) numEl.textContent = visibleNum;
+          visibleNum++;
         }
       });
       // Hide/show dashboard items
@@ -4607,6 +4909,14 @@ if (state && state.overhang) {
       if (dashCladding) dashCladding.style.display = isGaz ? "none" : "";
       if (dashDoors) dashDoors.style.display = isGaz ? "none" : "";
       if (dashWindows) dashWindows.style.display = isGaz ? "none" : "";
+
+      // Hide cladding controls in Appearance section for gazebo (only show roof covering)
+      var claddingSubhead = document.getElementById("claddingSubhead");
+      var claddingStyleRow = document.getElementById("claddingStyleRow");
+      var claddingColourRow = document.getElementById("claddingColourRow");
+      if (claddingSubhead) claddingSubhead.style.display = isGaz ? "none" : "";
+      if (claddingStyleRow) claddingStyleRow.style.display = isGaz ? "none" : "";
+      if (claddingColourRow) claddingColourRow.style.display = isGaz ? "none" : "";
     }
 
      if (roofStyleEl) {
@@ -4640,6 +4950,16 @@ if (state && state.overhang) {
           if (curD < HIPPED_MIN_D) {
             curD = HIPPED_MIN_D;
             dimChanged = true;
+          }
+          
+          // Hipped roof: depth must be >= width (ridge runs along depth)
+          if (curW > curD) {
+            // Swap so depth is always the longer dimension
+            var tmpDim = curW;
+            curW = curD;
+            curD = tmpDim;
+            dimChanged = true;
+            console.log("[ROOF_STYLE_CHANGE] Hipped roof: swapped W/D so depth >= width:", curW, "x", curD);
           }
           
           // Hipped roof minimum overhang: 200mm
@@ -4688,6 +5008,7 @@ if (state && state.overhang) {
         applyWallHeightUiLock(store.getState());
         updateRoofHeightBlocks(v);
         updateRoofCoveringOptions(v);
+        applyHippedDimConstraints();
       });
     }
 
@@ -4919,7 +5240,34 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
       var on = !!(e && e.target && e.target.checked);
       try { applyCladdingVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, on); } catch (e0) {}
       store.setState({ vis: { cladding: on } });
+      // Sync per-wall toggles with master
+      if (vCladFrontEl) vCladFrontEl.checked = on;
+      if (vCladBackEl) vCladBackEl.checked = on;
+      if (vCladLeftEl) vCladLeftEl.checked = on;
+      if (vCladRightEl) vCladRightEl.checked = on;
+      store.setState({ vis: { cladParts: { front: on, back: on, left: on, right: on } } });
       console.log("[vis] cladding=", on ? "ON" : "OFF");
+    });
+
+    // Per-wall cladding visibility
+    ["front", "back", "left", "right"].forEach(function (wall) {
+      var el = $("vClad" + wall.charAt(0).toUpperCase() + wall.slice(1));
+      if (!el) return;
+      el.addEventListener("change", function (e) {
+        var on = !!(e && e.target && e.target.checked);
+        try { applyPerWallCladdingVisibility(window.__dbg && window.__dbg.scene ? window.__dbg.scene : null, wall, on); } catch (e0) {}
+        var update = {};
+        update[wall] = on;
+        store.setState({ vis: { cladParts: update } });
+        // If all per-wall toggles are off, uncheck master; if all on, check master
+        var allOn = (!vCladFrontEl || vCladFrontEl.checked) && (!vCladBackEl || vCladBackEl.checked) &&
+                    (!vCladLeftEl || vCladLeftEl.checked) && (!vCladRightEl || vCladRightEl.checked);
+        var anyOn = (vCladFrontEl && vCladFrontEl.checked) || (vCladBackEl && vCladBackEl.checked) ||
+                    (vCladLeftEl && vCladLeftEl.checked) || (vCladRightEl && vCladRightEl.checked);
+        if (vCladdingEl) vCladdingEl.checked = anyOn;
+        store.setState({ vis: { cladding: anyOn } });
+        console.log("[vis] cladding." + wall + "=", on ? "ON" : "OFF");
+      });
     });
 
     if (unitModeMetricEl) unitModeMetricEl.addEventListener("change", function () {
@@ -5236,12 +5584,58 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
         }
       }
 
+      // Hipped roof constraint: depth must be >= width
+      // (ridge runs along depth; if width > depth, hip geometry collapses)
+      var curState = store.getState();
+      var roofStyle = (curState && curState.roof && curState.roof.style) ? String(curState.roof.style) : "apex";
+      if (roofStyle === "hipped" && w > d) {
+        // Cap width to depth value
+        w = d;
+        console.log("[clampBuildingDimensions] Hipped roof: capped width to depth (" + d + "mm)");
+      }
+
       var didClamp = (w !== origW || d !== origD);
       if (didClamp) {
         console.log("[clampBuildingDimensions] CLAMPED:", origW, "x", origD, "->", w, "x", d);
       }
 
       return { w: w, d: d, clamped: didClamp };
+    }
+
+    /**
+     * For hipped roofs: set HTML max on width input (≤ depth) and min on depth input (≥ width).
+     * For other roof styles: remove those constraints.
+     */
+    function applyHippedDimConstraints() {
+      var curState = store.getState();
+      var roofStyle = (curState && curState.roof && curState.roof.style) ? String(curState.roof.style) : "apex";
+      var unitMode = getUnitMode(curState);
+
+      if (roofStyle === "hipped") {
+        var curW = curState.w || 2500;
+        var curD = curState.d || 3000;
+
+        if (wInputEl) {
+          // Width can't exceed current depth
+          wInputEl.max = formatDimension(curD, unitMode);
+          wInputEl.title = "Hipped roof: width must be ≤ depth (" + formatDimension(curD, unitMode) + (unitMode === "imperial" ? "\"" : "mm") + ")";
+        }
+        if (dInputEl) {
+          // Depth can't go below current width
+          dInputEl.min = formatDimension(curW, unitMode);
+          dInputEl.title = "Hipped roof: depth must be ≥ width (" + formatDimension(curW, unitMode) + (unitMode === "imperial" ? "\"" : "mm") + ")";
+        }
+      } else {
+        // Remove hipped constraints
+        if (wInputEl) {
+          wInputEl.removeAttribute("max");
+          wInputEl.title = "";
+        }
+        if (dInputEl) {
+          dInputEl.min = "1";
+          dInputEl.title = "";
+        }
+      }
     }
 
 function writeActiveDims() {
@@ -5277,8 +5671,11 @@ if (unitMode === "imperial") {
       if (clamped.clamped) {
         if (wInputEl) wInputEl.value = formatDimension(w, unitMode);
         if (dInputEl) dInputEl.value = formatDimension(d, unitMode);
-        console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm (max 8m x 4m)");
+        console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm");
       }
+
+      // Update hipped constraints (max/min on inputs) after every dimension change
+      applyHippedDimConstraints();
 
       var mode = (s && s.dimMode) ? String(s.dimMode) : "base";
 
@@ -5382,7 +5779,11 @@ function parseOverhangInput(val) {
       });
     }
 
-    if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { store.setState({ walls: { variant: wallsVariantEl.value } }); });
+    if (wallsVariantEl) wallsVariantEl.addEventListener("change", function () { 
+      store.setState({ walls: { variant: wallsVariantEl.value } }); 
+      updateInternalLiningVisibility(wallsVariantEl.value);
+    });
+    if (internalLiningEl) internalLiningEl.addEventListener("change", function () { store.setState({ walls: { internalLining: internalLiningEl.value } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value, colour: (claddingColourEl ? claddingColourEl.value : "natural-wood") } }); });
     if (claddingColourEl) claddingColourEl.addEventListener("change", function () { store.setState({ cladding: { style: (claddingStyleEl ? claddingStyleEl.value : "shiplap"), colour: claddingColourEl.value } }); });
     if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
@@ -5390,6 +5791,25 @@ function parseOverhangInput(val) {
       // Toggle visibility toggles based on covering type
       updateRoofCoveringToggles(roofCoveringStyleEl.value);
     });
+
+    // ── Base Type ──
+    var baseTypeEl = $("baseType");
+    if (baseTypeEl) {
+      baseTypeEl.addEventListener("change", function () {
+        var bt = baseTypeEl.value;
+        var patch = { base: { type: bt } };
+        // Concrete-only and skids: hide timber base in 3D (no graphics yet for skids)
+        if (bt === "concrete-only" || bt === "skids") {
+          patch.vis = { base: false, baseAll: false, deck: false };
+        } else {
+          patch.vis = { base: true, baseAll: true, deck: true };
+        }
+        store.setState(patch);
+      });
+      // Sync on load
+      var s0 = store.getState();
+      if (s0 && s0.base && s0.base.type) baseTypeEl.value = s0.base.type;
+    }
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
       store.setState({ walls: { height_mm: asPosInt(wallHeightEl.value, 2400) } });
@@ -6053,6 +6473,9 @@ function parseOverhangInput(val) {
                   }
                   if (doorWidth > 1200) {
                     styleHtml += '<option value="french">French Doors</option>';
+                  }
+                  if (doorWidth >= 1200) {
+                    styleHtml += '<option value="double-half">Double Half (Bin Store)</option>';
                   }
                   styleSel.innerHTML = styleHtml;
                   styleSel.value = String(opening.style || "standard");
@@ -7291,11 +7714,28 @@ function parseOverhangInput(val) {
       var sl = getSlopeLength(s);
       var defaultY = 300;
       var defaultH = Math.min(800, Math.max(100, sl - defaultY - 30));
+      // Default X position varies by roof style:
+      // - Hipped: must land within the saddle region (past the hip triangle zone).
+      //   Saddle starts at roofW/2 from roof edge, which is (frameW/2 + ovh) from wall.
+      //   Compute a safe default that lands in the middle of the saddle.
+      var defaultX = 500;
+      if (style === "hipped") {
+        var _dims = typeof resolveDims === "function" ? resolveDims(s) : null;
+        var _roofW = _dims ? (_dims.roof ? _dims.roof.w_mm : 2900) : 2900;
+        var _roofD = _dims ? (_dims.roof ? _dims.roof.d_mm : 3400) : 3400;
+        var _f = _dims ? (_dims.overhang ? _dims.overhang.f_mm : 200) : 200;
+        var _halfSpan = _roofW / 2;
+        var _ridgeStart = _halfSpan;
+        var _ridgeEnd = _roofD - _halfSpan;
+        var _ridgeMid = (_ridgeStart + _ridgeEnd) / 2;
+        // Convert from roof-local Z to wall-relative x_mm
+        defaultX = Math.max(500, Math.round(_ridgeMid - _f));
+      }
       arr.push({
         id: "sky" + (__skylightSeq++),
         enabled: true,
         face: defaultFace,
-        x_mm: 500,
+        x_mm: defaultX,
         y_mm: defaultY,
         width_mm: 600,
         height_mm: defaultH
@@ -7325,6 +7765,7 @@ function parseOverhangInput(val) {
     // Track previous dimensions to detect changes and reposition openings proportionally
     var __prevDimW = null;
     var __prevDimD = null;
+    var __prevOpeningIds = null; // Track opening IDs to detect preset changes
     var __repositioningInProgress = false;
 
     function repositionOpeningsOnDimensionChange(s) {
@@ -7333,6 +7774,22 @@ function parseOverhangInput(val) {
       var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
       var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
       
+      // Detect if both dims AND openings changed simultaneously (building type switch).
+      // When both change at once, the preset openings are already correctly positioned.
+      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
+      var currentOpeningSig = openings.map(function(o) { return o.id + ':' + o.wall + ':' + o.width_mm + ':' + (o.height_mm || ''); }).join(',');
+      var dimsChanged = (newW !== __prevDimW || newD !== __prevDimD);
+      var openingsChanged = (__prevOpeningIds !== null && currentOpeningSig !== __prevOpeningIds);
+      console.log("[repositionOpenings] CHECK: dimsChanged=", dimsChanged, "openingsChanged=", openingsChanged, "prevSig=", __prevOpeningIds, "curSig=", currentOpeningSig);
+      if (dimsChanged && openingsChanged) {
+        console.log("[repositionOpenings] Both dims AND openings changed (preset) — skipping scale");
+        __prevDimW = newW;
+        __prevDimD = newD;
+        __prevOpeningIds = currentOpeningSig;
+        return;
+      }
+      __prevOpeningIds = currentOpeningSig;
+
       // Initialize previous dimensions on first run
       if (__prevDimW === null) { __prevDimW = newW; }
       if (__prevDimD === null) { __prevDimD = newD; }
@@ -7345,7 +7802,6 @@ function parseOverhangInput(val) {
         return;
       }
       
-      var openings = s.walls && s.walls.openings ? s.walls.openings : [];
       if (openings.length === 0) {
         __prevDimW = newW;
         __prevDimD = newD;
@@ -7540,6 +7996,7 @@ function parseOverhangInput(val) {
       try {
         applyWallHeightUiLock(store.getState());
         updateInsulationControlsForVariant(store.getState());
+        applyHippedDimConstraints();
       } catch (eWallLock) {
         console.error("[INIT] ERROR in applyWallHeightUiLock:", eWallLock);
       }

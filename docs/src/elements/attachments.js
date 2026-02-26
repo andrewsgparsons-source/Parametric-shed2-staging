@@ -253,12 +253,18 @@ export function build3D(mainState, attachment, ctx) {
   // So we need to account for the roof stack: RAFTER_D_MM (50) + ROOF_OSB_MM (18) + COVERING_MM (2) = 70mm
   const roofStackHeight = RAFTER_D_MM + ROOF_OSB_MM + COVERING_MM;
 
-  // Maximum wall height at inner edge = fascia bottom - floor stack - roof stack
+  // Account for ground level offset — when the attachment is raised, the max
+  // allowed heights (relative to the attachment's own base) must shrink so the
+  // roof never exceeds the main building's eaves in absolute world space.
+  const levelOffset = attachment.base?.levelOffset_mm || 0;
+
+  // Maximum wall height at inner edge = fascia bottom - roof stack - level offset
   const floorStackHeight = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
-  const maxInnerHeight = mainFasciaBottom - roofStackHeight;
+  const maxInnerHeight = mainFasciaBottom - roofStackHeight - levelOffset;
 
   console.log("[attachments] Height constraint - mainFasciaBottom:", mainFasciaBottom,
-              "roofStackHeight:", roofStackHeight, "maxInnerHeight:", maxInnerHeight);
+              "roofStackHeight:", roofStackHeight, "levelOffset:", levelOffset,
+              "maxInnerHeight:", maxInnerHeight);
 
   // Calculate wall heights based on roof type
   let wallHeightInner, wallHeightOuter;
@@ -287,9 +293,9 @@ export function build3D(mainState, attachment, ctx) {
     if (roofRidgesParallel) {
       // Ridges run parallel - cap at 5cm below primary's diamond bottom
       const mainDiamondBottom = getMainBuildingDiamondBottom(mainState);
-      defaultCrest = mainDiamondBottom - 50;  // 5cm below diamond bottom
+      defaultCrest = mainDiamondBottom - 50 - levelOffset;  // 5cm below diamond bottom, adjusted for ground level
     } else {
-      defaultCrest = mainFasciaBottom - 200;
+      defaultCrest = mainFasciaBottom - 200 - levelOffset;
     }
     
     // Default eaves: crest - 400mm rise (reasonable pitch)
@@ -303,9 +309,10 @@ export function build3D(mainState, attachment, ctx) {
     // Calculate max crest height based on roof configuration
     // For parallel ridges (front/back on apex primary): 5cm below primary's diamond bottom
     // Otherwise: 200mm below fascia bottom
+    // Subtract levelOffset so raised attachments stay under the main roof
     const maxCrestHeight = roofRidgesParallel
-      ? getMainBuildingDiamondBottom(mainState) - 50
-      : mainFasciaBottom - 200;
+      ? getMainBuildingDiamondBottom(mainState) - 50 - levelOffset
+      : mainFasciaBottom - 200 - levelOffset;
     
     console.log("[attachments] Apex UI values - userEaves:", userEaves, "userCrest:", userCrest,
                 "defaults - eaves:", defaultEaves, "crest:", defaultCrest,

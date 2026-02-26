@@ -20,19 +20,20 @@
   'use strict';
 
   var STEPS = [
-    { label: 'Size',       section: 'Size & Shape' },
-    { label: 'Roof',       section: 'Roof' },
-    { label: 'Walls',      section: 'Walls & Openings' },
-    { label: 'Appearance', section: 'Appearance' },
-    { label: 'Attachments',section: 'Building Attachments' },
-    { label: 'Visibility', section: 'Visibility' },
-    { label: 'BOM',        section: '__bom__' },
-    { label: 'Save',       section: 'Save / Load Design' }
-    // Developer section hidden on mobile
+    { label: 'Size',       section: 'Size & Shape',        profileKey: 'sizeShape' },
+    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
+    { label: 'Walls',      section: 'Walls & Openings',    profileKey: 'wallsOpenings' },
+    { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
+    { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
+    { label: 'Visibility', section: 'Visibility',           profileKey: 'visibility' },
+    { label: 'BOM',        section: '__bom__',              profileKey: 'display' },
+    { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
+    { label: 'Dev',        section: 'Developer',            profileKey: 'developer' }
   ];
 
   var activeStep = 0;
   var sections = [];
+  var hiddenSteps = []; // indices of steps hidden by profile
   var attempts = 0;
   var previewHeight = 40; // vh
 
@@ -51,12 +52,18 @@
     }
 
     console.log('[mobile-configurator] Inputs ready after ' + attempts + ' attempts. Building layout...');
+    console.log('[mobile-configurator] PRE-BUILD devPanel exists:', !!document.getElementById('devPanel'), 'developerBox children:', document.getElementById('developerBox')?.children.length);
     buildLayout(panel);
+    console.log('[mobile-configurator] POST-BUILD devPanel exists:', !!document.getElementById('devPanel'), 'developerBox children:', document.getElementById('developerBox')?.children.length);
   }
 
   function buildLayout(panel) {
-    // Find all boSection elements by their summary text
-    var allSections = panel.querySelectorAll('details.boSection');
+    // Find only TOP-LEVEL boSection elements (direct children of the form),
+    // NOT nested ones inside devPanel (Attachment Visibility, Profile Editor)
+    var form = panel.querySelector('form[aria-label="Build options"]');
+    var allSections = form
+      ? form.querySelectorAll(':scope > details.boSection')
+      : panel.querySelectorAll('details.boSection');
     var byName = {};
     allSections.forEach(function(s) {
       var summary = s.querySelector('summary');
@@ -161,14 +168,20 @@
     prevBtn.className = 'mc-footer-btn mc-prev';
     prevBtn.textContent = '← Back';
     prevBtn.addEventListener('click', function() {
-      if (activeStep > 0) goToStep(activeStep - 1);
+      // Find previous visible step
+      for (var i = activeStep - 1; i >= 0; i--) {
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); return; }
+      }
     });
 
     var nextBtn = document.createElement('button');
     nextBtn.className = 'mc-footer-btn mc-next';
     nextBtn.textContent = 'Next →';
     nextBtn.addEventListener('click', function() {
-      if (activeStep < STEPS.length - 1) goToStep(activeStep + 1);
+      // Find next visible step
+      for (var i = activeStep + 1; i < STEPS.length; i++) {
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); return; }
+      }
     });
 
     footer.appendChild(prevBtn);
@@ -188,7 +201,7 @@
       console.error('[mobile-configurator] applyMobileStyles FAILED:', e);
       // Fallback: inject a style tag with brute force
       var fallbackStyle = document.createElement('style');
-      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 17px !important; } #mobileConfigurator .boSubhead { font-size: 19px !important; } #mobileConfigurator .hint { font-size: 15px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 18px !important; }';
+      fallbackStyle.textContent = '#mobileConfigurator label, #mobileConfigurator span, #mobileConfigurator p, #mobileConfigurator .check, #mobileConfigurator .boTitle, #mobileConfigurator .boTitle2 { font-size: 11px !important; } #mobileConfigurator .boSubhead { font-size: 12px !important; } #mobileConfigurator .hint { font-size: 10px !important; } #mobileConfigurator input, #mobileConfigurator select { font-size: 16px !important; }';
       document.head.appendChild(fallbackStyle);
     }
 
@@ -214,34 +227,314 @@
     });
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
+
+    // Check profile restrictions and update pill visibility
+    // Runs after layout built, and again whenever profile changes
+    updatePillVisibility();
+
+    // Listen for profile changes (profiles.js dispatches this)
+    document.addEventListener('profile-applied', function(e) {
+      console.log('[mobile-configurator] profile-applied event:', e.detail);
+      updatePillVisibility();
+    });
+
+    // Also poll briefly in case profile loads async after us
+    setTimeout(updatePillVisibility, 3000);
+    setTimeout(updatePillVisibility, 6000);
+  }
+
+  /**
+   * Check which steps should be hidden based on current profile,
+   * and show/hide the corresponding pills.
+   *
+   * Profile data can come from:
+   *   1. URL ?pc= param (compact format: { h: ["sectionKey", ...], c: {...} })
+   *   2. localStorage shedProfilesData (full format: { sections: { key: { visible: false } } })
+   *   3. profiles.json fetch (full format, same as #2)
+   */
+  function updatePillVisibility() {
+    hiddenSteps = [];
+
+    // Read current profile name from URL
+    var profileName = null;
+    try {
+      var params = new URLSearchParams(window.location.search || '');
+      profileName = params.get('profile');
+    } catch (e) {}
+
+    if (!profileName || profileName === 'admin') return; // admin = show everything
+
+    // Collect hidden section keys from all available sources
+    var hiddenKeys = [];
+
+    // Source 1: Embedded compact profile in URL (?pc= param)
+    // Format: { h: ["saveLoad", "developer"], c: { ... } }
+    try {
+      var params2 = new URLSearchParams(window.location.search || '');
+      var pc = params2.get('pc');
+      if (pc) {
+        var decoded = decodeURIComponent(escape(atob(pc)));
+        var compact = JSON.parse(decoded);
+        if (compact.h && Array.isArray(compact.h)) {
+          hiddenKeys = hiddenKeys.concat(compact.h);
+          console.log('[mobile-configurator] Hidden sections from URL pc:', compact.h);
+        }
+      }
+    } catch (e) {
+      console.warn('[mobile-configurator] Failed to parse pc param:', e);
+    }
+
+    // Source 2: localStorage (full profile format)
+    if (hiddenKeys.length === 0) {
+      try {
+        var stored = localStorage.getItem('shedProfilesData');
+        if (stored) {
+          var data = JSON.parse(stored);
+          var profiles = data.profiles || data;
+          var profileData = profiles[profileName];
+          if (profileData && profileData.sections) {
+            Object.keys(profileData.sections).forEach(function(key) {
+              if (profileData.sections[key].visible === false) {
+                hiddenKeys.push(key);
+              }
+            });
+            console.log('[mobile-configurator] Hidden sections from localStorage:', hiddenKeys);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Source 3: Fetch profiles.json as last resort
+    if (hiddenKeys.length === 0 && profileName) {
+      fetch('./profiles.json')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var profiles = data.profiles || data;
+          var profileData = profiles[profileName];
+          if (profileData && profileData.sections) {
+            var keys = [];
+            Object.keys(profileData.sections).forEach(function(key) {
+              if (profileData.sections[key].visible === false) {
+                keys.push(key);
+              }
+            });
+            if (keys.length > 0) {
+              console.log('[mobile-configurator] Hidden sections from profiles.json:', keys);
+              applyHiddenKeys(keys);
+            }
+          }
+        })
+        .catch(function() {});
+    }
+
+    if (hiddenKeys.length > 0) {
+      applyHiddenKeys(hiddenKeys);
+    }
+  }
+
+  /**
+   * Apply hidden section keys — hide pills and update navigation
+   */
+  function applyHiddenKeys(hiddenKeys) {
+    hiddenSteps = [];
+    var pills = document.querySelectorAll('.mc-step-pill');
+
+    STEPS.forEach(function(step, i) {
+      if (!step.profileKey) return; // BOM has no profile key
+
+      if (hiddenKeys.indexOf(step.profileKey) >= 0) {
+        hiddenSteps.push(i);
+        if (pills[i]) pills[i].style.display = 'none';
+      } else {
+        if (pills[i]) pills[i].style.display = '';
+      }
+    });
+
+    // If current step is hidden, jump to first visible step
+    if (hiddenSteps.indexOf(activeStep) >= 0) {
+      for (var i = 0; i < STEPS.length; i++) {
+        if (hiddenSteps.indexOf(i) < 0) { goToStep(i); break; }
+      }
+    }
+
+    console.log('[mobile-configurator] Pills updated, hidden steps:', hiddenSteps.length);
   }
 
   function goToStep(idx) {
     if (idx < 0 || idx >= STEPS.length) return;
+
+    // Skip hidden steps
+    if (hiddenSteps.indexOf(idx) >= 0) return;
+
     activeStep = idx;
 
     var isBom = STEPS[idx].section === '__bom__';
+    var isDev = STEPS[idx].section === 'Developer';
 
     // Hide all sections
     sections.forEach(function(s, i) {
       if (s) s.style.display = 'none';
     });
 
-    // Remove any previous BOM content
+    // Remove any previous injected content
     var existingBom = document.getElementById('mcBomContent');
     if (existingBom) existingBom.remove();
+    var existingDev = document.getElementById('mcDevContent');
+    if (existingDev) existingDev.remove();
 
-    if (isBom) {
+    if (isDev) {
+      // === MOBILE DEV TOOLS — parallel UI, bypasses devPanel entirely ===
+      var devDiv = document.createElement('div');
+      devDiv.id = 'mcDevContent';
+      devDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
+
+      // Copy State button
+      var copyBtn = document.createElement('button');
+      copyBtn.textContent = '📋 Copy State to Clipboard';
+      copyBtn.style.cssText = 'width:100%;padding:12px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:8px;';
+      copyBtn.addEventListener('click', function() {
+        // Reuse the existing copyStateBtn handler if available
+        var origBtn = document.getElementById('copyStateBtn');
+        if (origBtn) {
+          origBtn.click();
+          copyBtn.textContent = '✅ Copied!';
+          setTimeout(function() { copyBtn.textContent = '📋 Copy State to Clipboard'; }, 2000);
+        }
+      });
+      devDiv.appendChild(copyBtn);
+
+      var copyHint = document.createElement('p');
+      copyHint.textContent = 'Copy current state JSON for adding to presets file.';
+      copyHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:0 0 16px 0;';
+      devDiv.appendChild(copyHint);
+
+      // Profile section
+      var profileHeading = document.createElement('div');
+      profileHeading.textContent = 'PROFILE EDITOR';
+      profileHeading.style.cssText = 'font-size:11px;font-weight:700;color:#2D5016;text-transform:uppercase;letter-spacing:0.03em;border-bottom:2px solid #E8F0E2;padding-bottom:4px;margin-bottom:12px;';
+      devDiv.appendChild(profileHeading);
+
+      // Profile selector row
+      var profileRow = document.createElement('div');
+      profileRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
+
+      // Use the SAME IDs as the original (now-nuked) devPanel elements
+      // so profile-editor.js can find and populate them
+      var profileSelect = document.createElement('select');
+      profileSelect.id = 'profileEditorSelect';
+      profileSelect.style.cssText = 'flex:1;min-width:100px;padding:7px 9px;font-size:14px;border:1px solid #E0D5C8;border-radius:8px;';
+
+      function populateMobileProfileSelect(profiles) {
+        profileSelect.innerHTML = '';
+        Object.keys(profiles).forEach(function(name) {
+          var profile = profiles[name];
+          var opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = (profile && profile.label) ? profile.label : name;
+          profileSelect.appendChild(opt);
+        });
+        if (profiles['admin']) profileSelect.value = 'admin';
+      }
+
+      // Try localStorage first (data shape: { profiles: { admin: {...}, ... } })
+      var populated = false;
+      try {
+        var stored = localStorage.getItem('shedProfilesData');
+        if (stored) {
+          var data = JSON.parse(stored);
+          var profiles = data.profiles || data;
+          if (Object.keys(profiles).length > 0) {
+            populateMobileProfileSelect(profiles);
+            populated = true;
+          }
+        }
+      } catch (e) {
+        console.warn('[mobile-configurator] localStorage profiles parse error:', e);
+      }
+
+      // Fallback: fetch profiles.json directly (same source profiles.js uses)
+      if (!populated) {
+        fetch('./profiles.json')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var profiles = data.profiles || data;
+            populateMobileProfileSelect(profiles);
+            console.log('[mobile-configurator] Populated profiles from profiles.json');
+          })
+          .catch(function(e) {
+            console.warn('[mobile-configurator] Could not fetch profiles.json:', e);
+          });
+      }
+
+      // Change handler — profile-editor.js wires its own 'change' listener
+      // on #profileEditorSelect during wireEditorEvents(), so if re-render
+      // runs, that listener will handle profile switching automatically.
+      // As a fallback for initial load, dispatch the event:
+      profileSelect.addEventListener('change', function() {
+        // profile-editor.js listens for this event on #profileEditorSelect
+        console.log('[mobile-configurator] Profile select changed to:', profileSelect.value);
+      });
+
+      profileRow.appendChild(profileSelect);
+      devDiv.appendChild(profileRow);
+
+      // Profile action buttons
+      var btnGrid = document.createElement('div');
+      btnGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;';
+
+      var profileActions = [
+        { id: 'profileNewBtn', label: '➕ New' },
+        { id: 'profileRenameBtn', label: '✏️ Rename' },
+        { id: 'profileDeleteBtn', label: '🗑️ Delete' },
+        { id: 'profileImportBtn', label: '📥 Import' },
+        { id: 'profileExportBtn', label: '📤 Export' },
+        { id: 'profileResetBtn', label: '🔄 Reset' }
+      ];
+      profileActions.forEach(function(action) {
+        var btn = document.createElement('button');
+        btn.textContent = action.label;
+        btn.style.cssText = 'padding:10px 4px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;';
+        btn.addEventListener('click', function() {
+          var origBtn = document.getElementById(action.id);
+          if (origBtn) origBtn.click();
+        });
+        btnGrid.appendChild(btn);
+      });
+      devDiv.appendChild(btnGrid);
+
+      // Active profile hint — use same ID so profile-editor.js can update it
+      var activeHint = document.createElement('p');
+      activeHint.id = 'profileActiveHint';
+      activeHint.style.cssText = 'font-size:10px;color:#8A8A8A;margin:4px 0 12px 0;';
+      devDiv.appendChild(activeHint);
+
+      // Profile controls container — same ID as the nuked original
+      // profile-editor.js renders section checkboxes into this
+      var profileControls = document.createElement('div');
+      profileControls.id = 'profileControlsContainer';
+      profileControls.style.cssText = 'max-height:50vh;overflow-y:auto;';
+      devDiv.appendChild(profileControls);
+
+      var controls = document.getElementById('mcControls');
+      if (controls) controls.appendChild(devDiv);
+
+      // Trigger profile-editor.js to re-render into our new containers
+      if (typeof window._mcRerenderProfiles === 'function') {
+        window._mcRerenderProfiles();
+      }
+    } else if (isBom) {
       // Inject BOM buttons
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
       bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
-      bomDiv.innerHTML = '<p style="font-size:15px;color:#5C5C5C;margin:0 0 16px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<button class="mc-bom-btn" data-view="base" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
-        '<button class="mc-bom-btn" data-view="walls" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
-        '<button class="mc-bom-btn" data-view="roof" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
-        '<button class="mc-bom-btn" data-view="openings" style="padding:16px;border:1.5px solid #E0D5C8;border-radius:10px;background:#fff;font-size:16px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
+      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
+        '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
+        '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
+        '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
+        '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>' +
+        '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>' +
         '</div>';
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
@@ -249,6 +542,24 @@
       // Wire BOM buttons to switch view
       bomDiv.querySelectorAll('.mc-bom-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (btn.dataset.view === 'pricing') {
+            // Show pricing breakdown inline
+            var pricingDiv = document.getElementById('mcBomPricingBreakdown');
+            if (!pricingDiv) {
+              pricingDiv = document.createElement('div');
+              pricingDiv.id = 'mcBomPricingBreakdown';
+              pricingDiv.style.cssText = 'padding:12px 0;';
+              bomDiv.appendChild(pricingDiv);
+            }
+            // Toggle visibility
+            if (pricingDiv.style.display === 'none' || !pricingDiv.innerHTML) {
+              pricingDiv.style.display = '';
+              window.dispatchEvent(new CustomEvent('renderPricingBreakdown', { detail: { containerId: 'mcBomPricingBreakdown' } }));
+            } else {
+              pricingDiv.style.display = 'none';
+            }
+            return;
+          }
           var viewSelect = document.getElementById('viewSelect');
           if (viewSelect) {
             viewSelect.value = btn.dataset.view;
@@ -352,31 +663,31 @@
       radius: '8px'
     };
 
-    // Labels — slightly bigger than last evening's 16px
+    // Labels
     container.querySelectorAll('label').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
-    // Subheadings — slightly bigger than last evening's 18px
+    // Subheadings
     container.querySelectorAll('.boSubhead').forEach(function(el) {
-      el.style.setProperty('font-size', '19px', 'important');
+      el.style.setProperty('font-size', '12px', 'important');
       el.style.setProperty('font-weight', '700', 'important');
       el.style.setProperty('color', mc.primary, 'important');
       el.style.setProperty('text-transform', 'uppercase', 'important');
       el.style.setProperty('letter-spacing', '0.03em', 'important');
       el.style.setProperty('border-bottom', '2px solid ' + mc.primaryLight, 'important');
-      el.style.setProperty('padding-bottom', '6px', 'important');
-      el.style.setProperty('margin-bottom', '12px', 'important');
+      el.style.setProperty('padding-bottom', '4px', 'important');
+      el.style.setProperty('margin-bottom', '8px', 'important');
     });
 
-    // Inputs and selects — 16px is iOS minimum, bump to 18px for comfort
+    // Inputs and selects — 16px minimum for iOS (prevents auto-zoom), reduced padding
     container.querySelectorAll('input[type="number"], input[type="text"], select').forEach(function(el) {
-      el.style.setProperty('font-size', '18px', 'important');
-      el.style.setProperty('padding', '12px 14px', 'important');
-      el.style.setProperty('min-height', '48px', 'important');
-      el.style.setProperty('border', '1.5px solid ' + mc.border, 'important');
+      el.style.setProperty('font-size', '16px', 'important');
+      el.style.setProperty('padding', '7px 9px', 'important');
+      el.style.setProperty('min-height', '34px', 'important');
+      el.style.setProperty('border', '1px solid ' + mc.border, 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
       el.style.setProperty('color', mc.text, 'important');
       el.style.setProperty('background', mc.bg, 'important');
@@ -385,44 +696,44 @@
 
     // Buttons (not step pills or footer)
     container.querySelectorAll('#mcControls button').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
       el.style.setProperty('font-weight', '600', 'important');
-      el.style.setProperty('padding', '12px 16px', 'important');
-      el.style.setProperty('min-height', '48px', 'important');
+      el.style.setProperty('padding', '7px 11px', 'important');
+      el.style.setProperty('min-height', '34px', 'important');
       el.style.setProperty('border-radius', mc.radius, 'important');
     });
 
     // Checkboxes and radios — text labels
     container.querySelectorAll('.check').forEach(function(el) {
-      el.style.setProperty('font-size', '17px', 'important');
-      el.style.setProperty('padding', '10px 0', 'important');
-      el.style.setProperty('min-height', '44px', 'important');
-      el.style.setProperty('gap', '10px', 'important');
+      el.style.setProperty('font-size', '11px', 'important');
+      el.style.setProperty('padding', '5px 0', 'important');
+      el.style.setProperty('min-height', '30px', 'important');
+      el.style.setProperty('gap', '6px', 'important');
     });
 
     container.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function(el) {
-      el.style.setProperty('width', '26px', 'important');
-      el.style.setProperty('height', '26px', 'important');
+      el.style.setProperty('width', '18px', 'important');
+      el.style.setProperty('height', '18px', 'important');
     });
 
     // Hints
     container.querySelectorAll('.hint, p.hint').forEach(function(el) {
-      el.style.setProperty('font-size', '15px', 'important');
+      el.style.setProperty('font-size', '10px', 'important');
       el.style.setProperty('color', mc.muted, 'important');
     });
 
     // Titles
     container.querySelectorAll('.boTitle, .boTitle2').forEach(function(el) {
-      el.style.setProperty('font-size', '18px', 'important');
+      el.style.setProperty('font-size', '12px', 'important');
       el.style.setProperty('color', mc.text, 'important');
     });
 
-    // All spans and divs — only bump up tiny text
+    // All spans and divs — no inflation, just normalise small text
     container.querySelectorAll('#mcControls span, #mcControls div').forEach(function(el) {
       var current = window.getComputedStyle(el).fontSize;
       var px = parseFloat(current);
-      if (px < 14) {
-        el.style.setProperty('font-size', '15px', 'important');
+      if (px > 14) {
+        el.style.setProperty('font-size', '11px', 'important');
       }
     });
 
