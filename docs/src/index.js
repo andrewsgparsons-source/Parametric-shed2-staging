@@ -4859,6 +4859,7 @@ if (state && state.overhang) {
           patch.vis.baseAll = true;
         }
 
+        __skipNextReposition = true; // Preset openings are pre-positioned, don't scale
         store.setState(patch);
         updateBuildingTypeUI(newType);
       });
@@ -7759,9 +7760,18 @@ function parseOverhangInput(val) {
     var __prevDimW = null;
     var __prevDimD = null;
     var __repositioningInProgress = false;
+    var __skipNextReposition = false; // Set when building type changes (openings are already correct)
 
     function repositionOpeningsOnDimensionChange(s) {
       if (__repositioningInProgress) return; // Prevent infinite loop
+      if (__skipNextReposition) {
+        // Building type just changed — preset openings are already positioned correctly.
+        // Just update tracked dimensions without scaling.
+        __skipNextReposition = false;
+        __prevDimW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : __prevDimW;
+        __prevDimD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : __prevDimD;
+        return;
+      }
       
       var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
       var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
