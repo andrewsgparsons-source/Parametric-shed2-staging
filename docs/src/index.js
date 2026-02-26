@@ -4654,6 +4654,7 @@ if (state && state.overhang) {
             overhang: { uniform_mm: 75 },
             walls: { variant: "basic", height_mm: 2400 },
             frame: { thickness_mm: 50, depth_mm: 75 },
+            shelving: [],
             vis: { base: true, baseAll: false }
           },
           "gardenroom-pent": {
@@ -4710,6 +4711,7 @@ if (state && state.overhang) {
             },
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
           "fieldshelter": {
@@ -4733,6 +4735,7 @@ if (state && state.overhang) {
             },
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
             base: { type: "skids" },
             vis: { base: false, baseAll: false, deck: false, frame: true, ins: false, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true }
           },
@@ -4793,6 +4796,7 @@ if (state && state.overhang) {
             },
             frame: { thickness_mm: 50, depth_mm: 100 },
             cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
             vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
               roofParts: { ply: true, insulation: true, membraneBattens: false } }
           },
@@ -4818,6 +4822,7 @@ if (state && state.overhang) {
             },
             frame: { thickness_mm: 50, depth_mm: 100 },
             cladding: { style: "overlap", colour: "natural-wood" },
+            shelving: [],
             vis: { base: true, baseAll: false, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
           },
           "summerhouse": {
@@ -4839,6 +4844,7 @@ if (state && state.overhang) {
             },
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
+            shelving: [],
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true }
           }
         };
@@ -4857,6 +4863,7 @@ if (state && state.overhang) {
           if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
           if (!patch.vis) patch.vis = {};
           patch.vis.baseAll = true;
+          if (!patch.shelving) patch.shelving = [];
         }
 
         store.setState(patch);
