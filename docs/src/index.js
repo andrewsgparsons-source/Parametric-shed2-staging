@@ -7767,18 +7767,20 @@ function parseOverhangInput(val) {
       var newW = s.dim && s.dim.frameW_mm ? s.dim.frameW_mm : null;
       var newD = s.dim && s.dim.frameD_mm ? s.dim.frameD_mm : null;
       
-      // Detect if openings themselves changed (e.g. building type switch loaded a preset).
-      // If openings are different, they're already positioned correctly — don't scale them.
+      // Detect if both dims AND openings changed simultaneously (building type switch).
+      // When both change at once, the preset openings are already correctly positioned.
       var openings = s.walls && s.walls.openings ? s.walls.openings : [];
-      var currentOpeningIds = openings.map(function(o) { return o.id + ':' + o.wall; }).join(',');
-      if (__prevOpeningIds !== null && currentOpeningIds !== __prevOpeningIds) {
-        console.log("[repositionOpenings] Openings changed (preset loaded) — skipping scale, updating dims");
+      var currentOpeningSig = openings.map(function(o) { return o.id + ':' + o.wall + ':' + o.width_mm + ':' + (o.height_mm || ''); }).join(',');
+      var dimsChanged = (newW !== __prevDimW || newD !== __prevDimD);
+      var openingsChanged = (__prevOpeningIds !== null && currentOpeningSig !== __prevOpeningIds);
+      if (dimsChanged && openingsChanged) {
+        console.log("[repositionOpenings] Both dims AND openings changed (preset) — skipping scale");
         __prevDimW = newW;
         __prevDimD = newD;
-        __prevOpeningIds = currentOpeningIds;
+        __prevOpeningIds = currentOpeningSig;
         return;
       }
-      __prevOpeningIds = currentOpeningIds;
+      __prevOpeningIds = currentOpeningSig;
 
       // Initialize previous dimensions on first run
       if (__prevDimW === null) { __prevDimW = newW; }
