@@ -146,7 +146,7 @@
     var typeBar = document.createElement('div');
     typeBar.id = 'mcTypeBar';
     typeBar.innerHTML = '<span class="mc-type-label">Design Your</span>' +
-      '<select id="mcBuildingTypeSelect" class="mc-type-select">' +
+      '<select id="buildingTypeSelect" class="mc-type-select">' +
         '<option value="shed">Shed</option>' +
         '<option value="summerhouse">Summer House</option>' +
         '<option value="gardenroom-pent">Garden Room (Pent)</option>' +
@@ -157,30 +157,6 @@
         '<option value="fieldshelter">Field Shelter</option>' +
         '<option value="gazebo">Gazebo</option>' +
       '</select>';
-    container.appendChild(typeBar);
-
-    // Sync mobile type select with the hidden desktop one
-    var mcTypeSelect = document.getElementById('mcBuildingTypeSelect');
-    var syncTypeInterval = setInterval(function() {
-      var desktopSelect = document.getElementById('buildingTypeSelect');
-      if (desktopSelect && mcTypeSelect) {
-        // Sync initial value
-        mcTypeSelect.value = desktopSelect.value;
-        clearInterval(syncTypeInterval);
-
-        // Mobile → Desktop
-        mcTypeSelect.addEventListener('change', function() {
-          desktopSelect.value = mcTypeSelect.value;
-          desktopSelect.dispatchEvent(new Event('change'));
-        });
-
-        // Desktop → Mobile (in case it changes elsewhere)
-        desktopSelect.addEventListener('change', function() {
-          mcTypeSelect.value = desktopSelect.value;
-        });
-      }
-    }, 500);
-    setTimeout(function() { clearInterval(syncTypeInterval); }, 15000);
 
     // === STEP NAVIGATION ===
     var stepNav = document.createElement('div');
