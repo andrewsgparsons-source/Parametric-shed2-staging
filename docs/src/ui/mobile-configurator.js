@@ -158,6 +158,8 @@
         '<option value="gazebo">Gazebo</option>' +
       '</select>';
 
+    container.appendChild(typeBar);
+
     // === STEP NAVIGATION ===
     var stepNav = document.createElement('div');
     stepNav.id = 'mcStepNav';
