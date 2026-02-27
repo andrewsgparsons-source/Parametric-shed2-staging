@@ -28,7 +28,7 @@
     { num: 4, label: 'Appearance',         section: 'Appearance' },
     { num: 5, label: 'Walls & Openings',   section: 'Walls & Openings' },
     { num: 6, label: 'Attachments',        section: 'Building Attachments' },
-    { num: 7, label: 'Visibility',         section: 'Visibility', adminOnly: true },
+    { num: 7, label: 'Customise View',     section: 'Visibility' },
     { num: 8, label: 'Bill of Materials',  section: '__bom__', adminOnly: true },
     { num: 9, label: 'Save & Share',       section: 'Save / Load Design' },
     { num: 10, label: 'Developer',         section: 'Developer', adminOnly: true }
