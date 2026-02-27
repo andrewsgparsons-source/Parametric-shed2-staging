@@ -26,7 +26,7 @@
     { label: 'Walls',      section: 'Walls & Openings',    profileKey: 'wallsOpenings' },
     { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
     { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
-    { label: 'Visibility', section: 'Visibility',           profileKey: 'visibility', adminOnly: true },
+    { label: 'Customise View', section: 'Visibility',        profileKey: 'visibility' },
     { label: 'BOM',        section: '__bom__',              profileKey: 'display', adminOnly: true },
     { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
     { label: 'Dev',        section: 'Developer',            profileKey: 'developer', adminOnly: true }
