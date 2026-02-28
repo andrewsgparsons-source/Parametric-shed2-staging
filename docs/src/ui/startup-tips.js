@@ -217,8 +217,42 @@
   }
 
   function positionCard(targetEl, tip) {
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var margin = 16;
+
+    // On mobile, let CSS handle horizontal positioning (left/right: 16px !important)
+    // Only set vertical position from JS to prevent off-screen overflow
+    if (isMobile()) {
+      card.style.left = '';
+      card.style.transform = '';
+
+      if (!targetEl) {
+        card.style.top = '50%';
+        card.style.left = '50%';
+        card.style.transform = 'translate(-50%, -50%)';
+        return;
+      }
+
+      var rect = targetEl.getBoundingClientRect();
+      var cardHeight = 200;
+
+      // Position below target if room, otherwise above, otherwise center
+      var topBelow = rect.bottom + margin;
+      var topAbove = rect.top - cardHeight - margin;
+
+      if (topBelow + cardHeight < vh) {
+        card.style.top = topBelow + 'px';
+      } else if (topAbove > margin) {
+        card.style.top = topAbove + 'px';
+      } else {
+        card.style.top = Math.max(margin, (vh - cardHeight) / 2) + 'px';
+      }
+      return;
+    }
+
+    // Desktop positioning
     if (!targetEl) {
-      // Fallback: center of screen
       card.style.top = '50%';
       card.style.left = '50%';
       card.style.transform = 'translate(-50%, -50%)';
@@ -228,13 +262,9 @@
     card.style.transform = '';
     var rect = targetEl.getBoundingClientRect();
     var cardWidth = 320;
-    var cardHeight = 200; // approximate
-    var margin = 16;
-    var vw = window.innerWidth;
-    var vh = window.innerHeight;
+    var cardHeight = 200;
 
     if (tip.position === 'center') {
-      // Center over the canvas area
       card.style.top = Math.max(margin, rect.top + rect.height / 2 - cardHeight / 2) + 'px';
       card.style.left = Math.max(margin, Math.min(vw - cardWidth - margin, rect.left + rect.width / 2 - cardWidth / 2)) + 'px';
     } else if (tip.position === 'below') {
@@ -244,7 +274,6 @@
       card.style.top = Math.max(margin, rect.top) + 'px';
       card.style.left = Math.min(vw - cardWidth - margin, rect.right + margin) + 'px';
     } else {
-      // Default: below
       card.style.top = Math.min(vh - cardHeight - margin, rect.bottom + margin) + 'px';
       card.style.left = Math.max(margin, Math.min(vw - cardWidth - margin, rect.left)) + 'px';
     }
