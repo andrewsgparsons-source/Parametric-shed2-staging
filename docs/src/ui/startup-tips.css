@@ -1,0 +1,172 @@
+/* === Startup Tips Overlay === */
+
+.tips-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 2147483600;
+  pointer-events: none;
+}
+
+.tips-overlay.active {
+  pointer-events: auto;
+}
+
+/* Backdrop with cutout highlight */
+.tips-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.tips-overlay.active .tips-backdrop {
+  opacity: 1;
+}
+
+/* Highlighted element gets a glow */
+.tips-highlight {
+  position: relative;
+  z-index: 2147483601 !important;
+  box-shadow: 0 0 0 4px rgba(45, 106, 48, 0.6), 0 0 20px rgba(45, 106, 48, 0.3) !important;
+  border-radius: 8px;
+}
+
+/* Tip card */
+.tips-card {
+  position: fixed;
+  z-index: 2147483602;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  max-width: 320px;
+  width: calc(100vw - 40px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(10px);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tips-overlay.active .tips-card {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.tips-card-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.tips-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.tips-card-body {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Footer with dots and button */
+.tips-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tips-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.tips-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 0.2s;
+}
+
+.tips-dot.active {
+  background: #2d6a30;
+}
+
+.tips-next-btn {
+  background: #2d6a30;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tips-next-btn:hover {
+  background: #245521;
+}
+
+.tips-skip {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #999;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.tips-skip:hover {
+  color: #666;
+}
+
+/* Help replay button */
+.tips-help-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 2147483000;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2d6a30;
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.tips-help-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .tips-card {
+    max-width: calc(100vw - 32px);
+    padding: 16px 20px;
+    left: 16px !important;
+    right: 16px !important;
+  }
+  
+  .tips-help-btn {
+    bottom: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+}
