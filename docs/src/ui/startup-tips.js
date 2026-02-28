@@ -223,14 +223,15 @@
 
     // On mobile, let CSS handle horizontal positioning (left/right: 16px !important)
     // Only set vertical position from JS to prevent off-screen overflow
+    // IMPORTANT: never set transform on mobile — CSS left !important + transform
+    // causes the card to shift off-screen
     if (isMobile()) {
       card.style.left = '';
-      card.style.transform = '';
+      card.style.transform = 'translateY(0)';
 
       if (!targetEl) {
-        card.style.top = '50%';
-        card.style.left = '50%';
-        card.style.transform = 'translate(-50%, -50%)';
+        // Center vertically, CSS handles horizontal
+        card.style.top = Math.max(margin, (vh - 200) / 2) + 'px';
         return;
       }
 
