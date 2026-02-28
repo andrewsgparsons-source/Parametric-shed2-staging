@@ -38,34 +38,35 @@ export function estimatePrice(state) {
   const roofStyle = state.roof?.style || 'apex';
   const roofCovering = state.roof?.covering || 'felt';
 
-  // ─── VISIBILITY STATE ───
-  // If something is hidden via visibility toggles, exclude it from pricing
-  const vis = state.vis || {};
-  const visBase = vis.baseAll !== false;
-  const visWalls = (typeof vis.walls === 'boolean') ? vis.walls : (vis.wallsEnabled !== false);
-  const visRoof = vis.roof !== false;
-  const visCladding = vis.cladding !== false;
-  const visOpenings = vis.openings !== false;
-  // Per-wall cladding visibility
-  const cladParts = vis.cladParts || {};
-  const visCladFront = visCladding && (cladParts.front !== false);
-  const visCladBack = visCladding && (cladParts.back !== false);
-  const visCladLeft = visCladding && (cladParts.left !== false);
-  const visCladRight = visCladding && (cladParts.right !== false);
-  // Roof sub-components
-  const roofParts = vis.roofParts || {};
-  const visRoofOsb = visRoof && (roofParts.osb !== false);
-  const visRoofCovering = visRoof && (roofParts.covering !== false);
-  const visRoofInsulation = visRoof && (roofParts.insulation !== false);
-  const visRoofPly = visRoof && (roofParts.ply !== false);
-  // Wall sub-components
-  const visWallIns = visWalls && (vis.wallIns !== false);
-  const visWallPly = visWalls && (vis.wallPly !== false);
-  // Base sub-components — respect individual toggles
-  const visBaseGrid = visBase && (vis.base !== false);   // Plastic ground grids
-  const visBaseFrame = visBase && (vis.frame !== false);  // Timber frame joists
-  const visBaseDeck = visBase && (vis.deck !== false);    // OSB decking
-  const visBaseIns = visBase && (vis.ins !== false);      // Floor insulation
+  // ─── BUILD CONFIGURATION ───
+  // What the customer wants included in their build (affects pricing).
+  // Separate from visibility toggles which are view-only (hide roof to peek inside etc.)
+  // Everything defaults to true (included) unless explicitly excluded via state.build.
+  const build = state.build || {};
+  const visBase = build.base !== false;
+  const visWalls = build.walls !== false;
+  const visRoof = build.roof !== false;
+  const visCladding = build.cladding !== false;
+  const visOpenings = build.openings !== false;
+  // Per-wall cladding configuration
+  const buildCladParts = build.cladParts || {};
+  const visCladFront = visCladding && (buildCladParts.front !== false);
+  const visCladBack = visCladding && (buildCladParts.back !== false);
+  const visCladLeft = visCladding && (buildCladParts.left !== false);
+  const visCladRight = visCladding && (buildCladParts.right !== false);
+  // Roof sub-components — always included (structural, not optional)
+  const visRoofOsb = visRoof;
+  const visRoofCovering = visRoof;
+  const visRoofInsulation = visRoof;
+  const visRoofPly = visRoof;
+  // Insulation & lining — read from build config (customer choices)
+  const visWallIns = visWalls && (build.wallInsulation !== false);
+  const visWallPly = visWalls && (build.interiorLining !== false);
+  // Base sub-components — always included when base is included (structural)
+  const visBaseGrid = visBase;
+  const visBaseFrame = visBase;
+  const visBaseDeck = visBase;
+  const visBaseIns = visBase && (build.floorInsulation !== false);
 
   // Count openings from state
   const doors = visOpenings ? countOpenings(state, 'door') : 0;
@@ -223,11 +224,11 @@ export function estimatePrice(state) {
   // Each attachment is priced as a mini-building: timber, cladding (3 walls), roof OSB, covering, grids, openings
   breakdown.attachments = 0;
   const attachments = state.sections?.attachments || [];
-  const attVis = vis.attachments || {};  // { base: bool, walls: bool, roof: bool, cladding: bool }
-  const attVisBase = attVis.base !== false;
-  const attVisWalls = attVis.walls !== false;
-  const attVisRoof = attVis.roof !== false;
-  const attVisCladding = attVis.cladding !== false;
+  const attBuild = (build.attachments) || {};  // { base: bool, walls: bool, roof: bool, cladding: bool }
+  const attVisBase = attBuild.base !== false;
+  const attVisWalls = attBuild.walls !== false;
+  const attVisRoof = attBuild.roof !== false;
+  const attVisCladding = attBuild.cladding !== false;
 
   for (const att of attachments) {
     if (!att || att.enabled === false) continue;
