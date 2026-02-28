@@ -82,6 +82,7 @@
 
   function addHelpButton() {
     if (document.getElementById('tipsHelpBtn')) return;
+    console.log('[startup-tips] Adding help button');
     var btn = document.createElement('button');
     btn.id = 'tipsHelpBtn';
     btn.className = 'tips-help-btn';
@@ -90,13 +91,24 @@
     btn.addEventListener('click', function() {
       startTips();
     });
-    document.body.appendChild(btn);
+    // Use the tips container
+    var container = document.getElementById('tipsContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'tipsContainer';
+      document.body.appendChild(container);
+    }
+    container.appendChild(btn);
+    console.log('[startup-tips] help button appended');
   }
 
   function startTips() {
+    console.log('[startup-tips] startTips() called');
     currentStep = 0;
     tips = getTips();
+    console.log('[startup-tips] tips:', tips.length, 'items');
     createOverlay();
+    console.log('[startup-tips] overlay created, showing step 0');
     showStep(0);
   }
 
@@ -119,7 +131,15 @@
     card.className = 'tips-card';
     overlay.appendChild(card);
 
-    document.body.appendChild(overlay);
+    // Use a dedicated container that survives DOM manipulation by other scripts
+    var container = document.getElementById('tipsContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'tipsContainer';
+      document.body.appendChild(container);
+    }
+    container.appendChild(overlay);
+    console.log('[startup-tips] overlay appended to #tipsContainer');
 
     // Activate with slight delay for CSS transition
     requestAnimationFrame(function() {
