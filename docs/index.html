@@ -37,6 +37,8 @@
   <div id="statusOverlay">status...</div>
 
   <div id="ui-layer" aria-hidden="true"></div>
+  <!-- Conversion flow overlay container — protected from purgeSidebars -->
+  <div id="cf-root"></div>
 
   <!-- Mobile "Design Your Shed" button -->
   <button id="mobileOpenBtn" aria-label="Open design controls">
@@ -63,6 +65,7 @@
               <option value="base">Base List</option>
               <option value="roof">Roof List</option>
               <option value="openings">Openings List</option>
+              <option value="shelving">Shelving List</option>
             </select>
             <button type="button" class="panel-btn" id="panelMaximizeBtn" title="Maximize panel">⛶</button>
           </div>
@@ -92,9 +95,9 @@
                   <label>
                     Dimension Mode
                     <select id="dimMode" aria-label="Dimension Mode (Base / Frame / Roof)">
-                      <option value="base" selected>base</option>
-                      <option value="frame">frame</option>
-                      <option value="roof">roof</option>
+                      <option value="base" selected>Base</option>
+                      <option value="frame">Frame</option>
+                      <option value="roof">Roof</option>
                     </select>
                   </label>
                   <div></div>
@@ -120,6 +123,7 @@
                     <select id="roofStyle" aria-label="Roof Type">
                       <option value="apex" selected>Apex (gabled)</option>
                       <option value="pent">Pent (single pitch)</option>
+                      <option value="hipped">Hipped (4 slopes)</option>
                       <option value="hipped">Hipped</option>
                     </select>
                   </label>
@@ -128,6 +132,14 @@
                     <select id="wallsVariant" aria-label="Variant">
                       <option value="insulated" selected>Insulated</option>
                       <option value="basic">Basic</option>
+                    </select>
+                  </label>
+                  <label id="internalLiningLabel" style="display: none;">
+                    Internal Lining
+                    <select id="internalLining" aria-label="Internal Lining">
+                      <option value="none">None</option>
+                      <option value="plywood" selected>Plywood (12mm)</option>
+                      <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
                     </select>
                   </label>
                 </div>
@@ -161,40 +173,92 @@
             </details>
 
             <details open class="boSection">
+              <summary>Base</summary>
+              <div class="boBox">
+                <div class="row">
+                  <label>
+                    Base Type
+                    <select id="baseType" aria-label="Base type">
+                      <option value="ecodeck" selected>Eco Deck (Plastic Grids + Timber Floor)</option>
+                      <option value="concrete-timber">Concrete Base + Timber Floor</option>
+                      <option value="concrete-only">Concrete Base Only</option>
+                      <option value="skids">Steel Galvanised Skids</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
               <summary>Walls &amp; Openings</summary>
               <div class="boBox">
                 <div class="boSubhead">Wall Construction</div>
 
-                <div class="boSubhead" style="margin-top:10px;">Doors</div>
-                <div class="row">
-                  <button id="addDoorBtn" type="button">+ Add Door</button>
-                  <button id="removeAllDoorsBtn" type="button">Remove All</button>
-                </div>
-                <div id="doorsList"></div>
-
-                <div class="boSubhead" style="margin-top:10px;">Windows</div>
-                <div class="row">
-                  <button id="addWindowBtn" type="button">+ Add Window</button>
-                  <button id="removeAllWindowsBtn" type="button">Remove All</button>
-                </div>
-                <div id="windowsList"></div>
-
-                <div id="internalDividersSection">
-                  <div class="boSubhead" style="margin-top:10px;">Internal Dividers</div>
-                  <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
-                  <div class="row">
-                    <button id="addDividerBtn" type="button">+ Add Divider</button>
-                    <button id="removeAllDividersBtn" type="button">Remove All</button>
+                <details class="openingsGroup" id="doorsGroup">
+                  <summary class="openingsGroupSummary">Doors <span id="doorsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addDoorBtn" type="button">+ Add Door</button>
+                      <button id="removeAllDoorsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="doorsList"></div>
                   </div>
-                  <div id="dividersList"></div>
-                </div>
+                </details>
+
+                <details class="openingsGroup" id="windowsGroup">
+                  <summary class="openingsGroupSummary">Windows <span id="windowsCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody">
+                    <div class="row">
+                      <button id="addWindowBtn" type="button">+ Add Window</button>
+                      <button id="removeAllWindowsBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="windowsList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="dividersGroup">
+                  <summary class="openingsGroupSummary">Internal Dividers <span id="dividersCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="internalDividersSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add partition walls to divide internal space</div>
+                    <div class="row">
+                      <button id="addDividerBtn" type="button">+ Add Divider</button>
+                      <button id="removeAllDividersBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="dividersList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="shelvingGroup">
+                  <summary class="openingsGroupSummary">Shelving <span id="shelvingCount" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="shelvingSection">
+                    <div class="hint" style="margin:0 0 6px 0;">Add shelves to interior walls</div>
+                    <div class="row">
+                      <button id="addShelfBtn" type="button">+ Add Shelf</button>
+                      <button id="removeAllShelvesBtn" type="button">Remove All</button>
+                    </div>
+                    <div id="shelvesList"></div>
+                  </div>
+                </details>
+
+                <details class="openingsGroup" id="skylightsGroupOpenings">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountOpenings" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionOpenings">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnOpenings" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnOpenings" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListOpenings"></div>
+                  </div>
+                </details>
               </div>
             </details>
 
             <details open class="boSection">
               <summary>Roof</summary>
               <div class="boBox">
-                <div class="boSubhead">Building Height Options</div>
+
+                <details class="openingsGroup" id="roofHeightsGroup">
+                  <summary class="openingsGroupSummary">Building Height Options</summary>
                 <div class="hint" style="margin:0 0 10px 0;">(Shown after roof type selection)</div>
 
                 <div id="roofHeightOptions">
@@ -299,8 +363,10 @@
                   </div>
                 </div>
 
-                <div class="boRuleTitle">───────────────────────────────────────────────────────────</div>
-<div class="boSubhead" style="margin-top:8px;">Overhangs</div>
+                </details>
+
+                <details class="openingsGroup" id="roofOverhangsGroup">
+                  <summary class="openingsGroupSummary">Overhangs</summary>
                 <div class="row">
                   <label>
                     <span id="overUniformLabel">Uniform (mm)</span>
@@ -317,23 +383,81 @@
                   <label><span id="overLeftLabel">Left</span><input id="roofOverLeft" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overLeftFtIn" class="ftInHint" style="display:none;"></span></label>
                   <label><span id="overRightLabel">Right</span><input id="roofOverRight" type="number" min="0" step="1" placeholder="(blank = uniform)" /><span id="overRightFtIn" class="ftInHint" style="display:none;"></span></label>
                 </div>
+                </details>
+
+                <details class="openingsGroup" id="skylightsGroupRoof">
+                  <summary class="openingsGroupSummary">Skylights <span id="skylightsCountRoof" class="openingsCount">(0)</span></summary>
+                  <div class="openingsGroupBody" id="skylightsSectionRoof">
+                    <div class="row" style="margin-bottom:8px;">
+                      <button id="addSkylightBtnRoof" type="button">+ Add Skylight</button>
+                      <button id="removeAllSkylightsBtnRoof" type="button">Remove All</button>
+                    </div>
+                    <div id="skylightsListRoof"></div>
+                  </div>
+                </details>
+
               </div>
             </details>
 
             <details open class="boSection">
               <summary>Appearance</summary>
               <div class="boBox">
-                <div class="boSubhead">Cladding</div>
-                <div class="row">
+                <div class="boSubhead" id="claddingSubhead">Cladding</div>
+                <div class="row" id="claddingStyleRow">
                   <label>
                     Style
                     <select id="claddingStyle" aria-label="Cladding style">
                       <option value="shiplap">Shiplap</option>
                       <option value="overlap">Overlap (Featheredge)</option>
-                      <option value="loglap" disabled>Log Lap (coming soon)</option>
+                      <option value="composite-panel">Composite (Woodgrain)</option>
+                      <!-- Budget styles: code ready but disabled until #125 resolved
+                      <option value="loglap">Log Lap</option>
+                      <option value="box-profile">Box Profile (Steel)</option>
+                      <option value="corrugated">Corrugated (Steel)</option>
+                      <option value="composite-slatted">Composite Slatted</option>
+                      -->
                     </select>
                   </label>
                 </div>
+                <div class="row" id="claddingColourRow">
+                  <label>
+                    Colour — <em style="color:#999; font-weight:normal">coming soon</em>
+                    <!-- Colour picker: code ready but disabled until #125 resolved
+                    <select id="claddingColour" aria-label="Cladding colour">
+                      <option value="natural-wood">Natural Wood</option>
+                      <option value="pale-blue">Pale Blue</option>
+                      <option value="sage-green">Sage Green</option>
+                      <option value="anthracite">Anthracite Grey</option>
+                      <option value="goosewing-grey">Goosewing Grey</option>
+                      <option value="vandyke-brown">Vandyke Brown</option>
+                      <option value="charcoal">Charcoal</option>
+                      <option value="stone-grey">Stone Grey</option>
+                    </select>
+                    -->
+                  </label>
+                </div>
+
+                <div class="boSubhead">Cladding — Per Wall</div>
+                <p class="hint" style="margin:0 0 6px 0;">Exclude cladding from individual walls (e.g. lean-to against an existing wall, or supply your own).</p>
+                <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px; margin-bottom: 12px;">
+                  <label class="check"><input id="buildCladFront" type="checkbox" checked /> Front wall cladding</label>
+                  <label class="check"><input id="buildCladBack" type="checkbox" checked /> Back wall cladding</label>
+                  <label class="check"><input id="buildCladLeft" type="checkbox" checked /> Left wall cladding</label>
+                  <label class="check"><input id="buildCladRight" type="checkbox" checked /> Right wall cladding</label>
+                </div>
+
+                <div class="boSubhead">Roof Covering</div>
+                <div class="row">
+                  <label>
+                    Style
+                    <select id="roofCoveringStyle" aria-label="Roof covering style">
+                      <option value="felt">Standard Felt</option>
+                      <option value="epdm">EPDM Rubber</option>
+                      <option value="slate">Synthetic Slate Tiles</option>
+                    </select>
+                  </label>
+                </div>
+
               </div>
             </details>
 
@@ -362,7 +486,7 @@
                 </div>
 
                 <div class="row" style="margin-top:10px;">
-                  <button id="removeAllAttachmentsBtn" type="button" style="background:#c44;">Remove All Attachments</button>
+                  <button id="removeAllAttachmentsBtn" type="button" style="background:#c44; display:none;">Remove All Attachments</button>
                 </div>
               </div>
             </details>
@@ -370,11 +494,12 @@
             <details open class="boSection">
               <summary>Visibility</summary>
               <div class="boBox" style="padding: 12px;">
+                <p class="hint" style="margin:0 0 12px 0; font-style:italic;">These toggles show/hide parts of the 3D model for viewing — they don't change your quote. Use the controls in each section above to change what's included in your build.</p>
                 
                 <!-- Main Assemblies -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Main Assemblies</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vBaseAll" type="checkbox" checked /> Base</label>
                     <label class="check"><input id="vWalls" type="checkbox" checked /> Walls</label>
                     <label class="check"><input id="vRoof" type="checkbox" checked /> Roof</label>
@@ -386,7 +511,7 @@
                 <!-- Base Components -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Base</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vBase" type="checkbox" checked /> Grid</label>
                     <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
                     <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
@@ -397,7 +522,7 @@
                 <!-- Wall Components -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Walls</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vWallFront" type="checkbox" checked /> Front</label>
                     <label class="check"><input id="vWallBack" type="checkbox" checked /> Back</label>
                     <label class="check"><input id="vWallLeft" type="checkbox" checked /> Left</label>
@@ -407,20 +532,37 @@
                   </div>
                 </div>
 
+                <!-- Cladding Components -->
+                <div style="margin-bottom: 16px;">
+                  <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Cladding</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                    <label class="check"><input id="vCladFront" type="checkbox" checked /> Front</label>
+                    <label class="check"><input id="vCladBack" type="checkbox" checked /> Back</label>
+                    <label class="check"><input id="vCladLeft" type="checkbox" checked /> Left</label>
+                    <label class="check"><input id="vCladRight" type="checkbox" checked /> Right</label>
+                  </div>
+                </div>
+
                 <!-- Roof Components -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Roof</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vRoofStructure" type="checkbox" checked /> Structure</label>
                     <label class="check"><input id="vRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
-                    <label class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Standard covering toggle (felt/shingles) -->
+                    <label id="vRoofCoveringLabel" class="check"><input id="vRoofCovering" type="checkbox" checked /> Covering</label>
+                    <!-- Slate-specific toggles (hidden by default) -->
+                    <label id="vRoofMembraneBattensLabel" class="check" style="display: none;"><input id="vRoofMembraneBattens" type="checkbox" checked /> Membrane &amp; Battens</label>
+                    <label id="vRoofTilesLabel" class="check" style="display: none;"><input id="vRoofTiles" type="checkbox" checked /> Tiles</label>
+                    <label class="check"><input id="vRoofInsulation" type="checkbox" checked /> Insulation</label>
+                    <label class="check"><input id="vRoofPly" type="checkbox" checked /> Interior Plywood</label>
                   </div>
                 </div>
 
                 <!-- Attached Buildings - only shown when attachments exist -->
                 <div id="vAttachmentsSection" style="margin-bottom: 16px; display: none;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Attached Buildings</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vAttBase" type="checkbox" checked /> Base</label>
                     <label class="check"><input id="vAttWalls" type="checkbox" checked /> Walls</label>
                     <label class="check"><input id="vAttRoof" type="checkbox" checked /> Roof</label>
@@ -428,14 +570,14 @@
                   </div>
                   
                   <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Base</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vAttBaseGrid" type="checkbox" checked /> Grid</label>
                     <label class="check"><input id="vAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
                     <label class="check"><input id="vAttBaseDeck" type="checkbox" checked /> Decking (OSB)</label>
                   </div>
                   
                   <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Walls</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vAttWallFront" type="checkbox" checked /> Front</label>
                     <label class="check"><input id="vAttWallBack" type="checkbox" checked /> Back</label>
                     <label class="check"><input id="vAttWallLeft" type="checkbox" checked /> Left</label>
@@ -444,10 +586,11 @@
                   </div>
                   
                   <div style="font-weight: 600; font-size: 12px; color: #555; margin: 12px 0 6px 4px;">Roof</div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vAttRoofStructure" type="checkbox" checked /> Structure</label>
                     <label class="check"><input id="vAttRoofOsb" type="checkbox" checked /> OSB / Sheathing</label>
                     <label class="check"><input id="vAttRoofCovering" type="checkbox" checked /> Covering</label>
+                    <label class="check"><input id="vAttRoofInsulation" type="checkbox" checked /> Insulation</label>
                   </div>
                 </div>
 
@@ -481,6 +624,21 @@
                   </select>
                   <button id="copyShareLinkBtn" type="button">Copy Link</button>
                 </div>
+                <div class="row" style="margin-top:6px;">
+                  <button id="shareWhatsAppBtn" type="button" style="width:100%; background:#25D366; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600;">📱 Create Share Link (WhatsApp)</button>
+                </div>
+                <div class="row" id="priceBadgeModeRow" style="margin-top:6px;">
+                  <label>
+                    Pricing Display
+                    <select id="priceBadgeMode" aria-label="Pricing Display">
+                      <option value="none">No Pricing</option>
+                      <option value="range" selected>Price Range</option>
+                      <option value="low">Lower Tier</option>
+                      <option value="mid">Mid Tier</option>
+                      <option value="high">Higher Tier</option>
+                    </select>
+                  </label>
+                </div>
 
                 <div class="boSubhead" style="margin-top:10px;">Description</div>
                 <div class="row">
@@ -489,7 +647,7 @@
               </div>
             </details>
 
-            <details class="boSection">
+            <details class="boSection" id="developerSection">
               <summary>Developer</summary>
               <div class="boBox" id="developerBox">
                 <div class="row">
@@ -502,33 +660,6 @@
                     <button id="copyStateBtn" type="button">Copy State to Clipboard</button>
                   </div>
                   <p class="hint">Copy current state JSON for adding to presets file.</p>
-
-                  <details class="boSection" style="margin-top:12px;">
-                    <summary>Attachment Visibility</summary>
-                    <div class="boBox">
-                      <p class="hint" style="margin:0 0 8px 0;">Toggle visibility of attached buildings (only applies when attachments exist)</p>
-                      <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label class="check"><input id="devVAttBase" type="checkbox" checked /> Base</label>
-                        <label class="check"><input id="devVAttWalls" type="checkbox" checked /> Walls</label>
-                        <label class="check"><input id="devVAttRoof" type="checkbox" checked /> Roof</label>
-                        <label class="check"><input id="devVAttCladding" type="checkbox" checked /> Cladding</label>
-                      </div>
-                      <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #555;">Base Components</div>
-                      <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
-                        <label class="check"><input id="devVAttBaseGrid" type="checkbox" checked /> Grid</label>
-                        <label class="check"><input id="devVAttBaseFrame" type="checkbox" checked /> Timber Frame</label>
-                        <label class="check"><input id="devVAttBaseDeck" type="checkbox" checked /> Decking</label>
-                      </div>
-                      <div style="margin-top: 10px; font-weight: 600; font-size: 12px; color: #555;">Wall Sides</div>
-                      <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
-                        <label class="check"><input id="devVAttWallFront" type="checkbox" checked /> Front</label>
-                        <label class="check"><input id="devVAttWallBack" type="checkbox" checked /> Back</label>
-                        <label class="check"><input id="devVAttWallLeft" type="checkbox" checked /> Left</label>
-                        <label class="check"><input id="devVAttWallRight" type="checkbox" checked /> Right</label>
-                        <label class="check"><input id="devVAttWallOuter" type="checkbox" checked /> Outer</label>
-                      </div>
-                    </div>
-                  </details>
 
                   <details open class="boSection" style="margin-top:12px;">
                     <summary>Profile Editor</summary>
@@ -565,7 +696,7 @@
   <!-- View: Base Cutting List -->
   <div id="bomPage" class="page" aria-hidden="true">
     <div class="page-header">
-      <h2 tabindex="-1">Master Cutting &amp; Assembly Schedule</h2>
+      <h2 tabindex="-1">Base / Floor Cutting List</h2>
       <button type="button" class="back-to-3d-btn" data-target="3d">← Back to 3D View</button>
     </div>
 
@@ -639,10 +770,10 @@
     </div>
 
     <div id="wallPlySection" class="schedule-section">
-      <h4>Plywood Internal Lining (Walls) — 12mm</h4>
-      <p class="subtle">Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <h4 id="wallPlyTitle">Plywood Internal Lining (Walls) — 12mm</h4>
+      <p id="wallPlyDesc" class="subtle">Internal wall lining from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
       <table>
-        <thead><tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
+        <thead id="wallPlyThead"><tr><th>Piece</th><th>Qty</th><th>Size (H × W)</th><th>Notes</th></tr></thead>
         <tbody id="wallPlyBody"></tbody>
       </table>
       <p id="wallPlySummary" class="subtle"></p>
@@ -691,10 +822,10 @@
     </div>
 
     <div id="wallPlySection2" class="schedule-section">
-      <h4>Internal Plywood Lining — 12mm</h4>
-      <p class="subtle">Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
+      <h4 id="wallPlyTitle2">Internal Plywood Lining — 12mm</h4>
+      <p id="wallPlyDesc2" class="subtle">Cut from 8×4ft (2440×1220mm) sheets. Insulated variant only.</p>
       <table class="sticky-table">
-        <thead><tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr></thead>
+        <thead id="wallPlyThead2"><tr><th>Wall</th><th>Sheets</th><th>Panel Size (H × W)</th><th>Notes</th></tr></thead>
         <tbody id="wallPlyBody2"></tbody>
       </table>
       <p id="wallPlySummary2" class="subtle"></p>
@@ -750,6 +881,27 @@
         </thead>
         <tbody id="windowsBomTable">
           <tr><td colspan="6">No windows configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- View: Shelving Cutting List -->
+  <div id="shelvingBomPage" class="page" aria-hidden="true">
+    <div class="page-header">
+      <h2 tabindex="-1">Shelving Cutting List</h2>
+      <button type="button" class="back-to-3d-btn" data-target="3d">&larr; Back to 3D View</button>
+    </div>
+    <div class="schedule-section">
+      <h4>Shelving &mdash; Items</h4>
+      <table class="sticky-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>Section (mm)</th><th>Length (mm)</th><th>Material</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="shelvingBomTable">
+          <tr><td colspan="6">No shelves configured.</td></tr>
         </tbody>
       </table>
     </div>
@@ -868,10 +1020,92 @@
     })();
   </script>
   <script type="importmap">
-    { "scopes": { "./src/elements/": { "./instances.js": "../instances.js" }, "./src/": { "./elements/instances.js": "./instances.js" } } }
+    { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=31"></script>
+  <script type="module" src="./src/index.js?_v=30"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
+
+  <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
+
+  <!-- Price Estimate Module -->
+  <script type="module">
+    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=3';
+    loadPriceTable().then(ok => {
+      if (ok) {
+        window.__pricingReady = true;
+        window.__updatePriceCard = function(state) {
+          // Badge visibility: show by default unless explicitly disabled
+          var qs = new URLSearchParams(window.location.search || '');
+          var isAdmin = qs.get('profile') === 'admin';
+          // Backwards compat: convert old showPriceBadge to priceBadgeMode
+          if (state && !state.priceBadgeMode && state.showPriceBadge === false) {
+            state.priceBadgeMode = 'none';
+          }
+          var badgeMode = (state && state.priceBadgeMode) || 'range';
+          if (badgeMode !== 'none') {
+            renderPriceBadge(state);
+          } else {
+            hidePriceBadge();
+          }
+          // Update breakdown if visible
+          var breakdownDiv = document.getElementById('bomPricingBreakdown');
+          if (breakdownDiv && breakdownDiv.style.display !== 'none' && breakdownDiv.innerHTML) {
+            renderPricingBreakdown(state, 'bomPricingBreakdown');
+          }
+        };
+        window.__renderPricingBreakdown = function(state, containerId) {
+          renderPricingBreakdown(state, containerId);
+        };
+        // Seed __lastState from store if the initial render already happened before pricing loaded
+        if (!window.__lastState && window.__dbg && window.__dbg.store && typeof window.__dbg.store.getState === 'function') {
+          window.__lastState = window.__dbg.store.getState();
+          console.log('[PRICING] Seeded __lastState from store (initial render already ran)');
+          // Show price badge immediately on load (respects showPriceBadge + admin check)
+          window.__updatePriceCard(window.__lastState);
+        }
+        // Listen for breakdown render requests from sidebar
+        window.addEventListener('renderPricingBreakdown', function(e) {
+          var containerId = e.detail && e.detail.containerId;
+          // Fall back to store state if __lastState hasn't been set yet
+          var state = window.__lastState || (window.__dbg && window.__dbg.store && window.__dbg.store.getState());
+          if (containerId && state) {
+            window.__lastState = state; // cache it
+            renderPricingBreakdown(state, containerId);
+          }
+        });
+        // Wire price badge mode dropdown — writes to store so it persists in shared links
+        var priceBadgeModeEl = document.getElementById('priceBadgeMode');
+        if (priceBadgeModeEl) {
+          // Init dropdown from store state — default to 'range'
+          var initState = window.__dbg && window.__dbg.store && window.__dbg.store.getState();
+          if (initState && initState.priceBadgeMode) {
+            priceBadgeModeEl.value = initState.priceBadgeMode;
+          }
+          // Backwards compat: if old showPriceBadge === false, set to 'none'
+          if (initState && initState.showPriceBadge === false && !initState.priceBadgeMode) {
+            priceBadgeModeEl.value = 'none';
+          }
+          priceBadgeModeEl.addEventListener('change', function() {
+            var store = window.__dbg && window.__dbg.store;
+            if (store && typeof store.setState === 'function') {
+              store.setState({ priceBadgeMode: priceBadgeModeEl.value });
+            }
+            var state = window.__lastState || (store && store.getState());
+            if (state) {
+              state.priceBadgeMode = priceBadgeModeEl.value;
+              window.__lastState = state;
+              if (priceBadgeModeEl.value !== 'none') {
+                renderPriceBadge(state);
+              } else {
+                hidePriceBadge();
+              }
+            }
+          });
+        }
+        console.log('[PRICING] Module ready');
+      }
+    });
+  </script>
 
   <!-- Mobile UX initialization -->
   <script>
@@ -951,6 +1185,7 @@
     (function() {
       var isAdmin = new URLSearchParams(window.location.search).get('profile') === 'admin';
       if (!isAdmin) {
+        // Inject CSS to hide admin-only elements (works even if DOM loads late)
         var style = document.createElement('style');
         style.textContent = '#developerSection, #priceBadgeModeRow { display: none !important; }';
         document.head.appendChild(style);
