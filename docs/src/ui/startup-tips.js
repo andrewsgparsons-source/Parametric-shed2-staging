@@ -91,12 +91,12 @@
     btn.addEventListener('click', function() {
       startTips();
     });
-    // Use the tips container
+    // Attach to documentElement — survives purgeSidebars() which only touches body children
     var container = document.getElementById('tipsContainer');
     if (!container) {
       container = document.createElement('div');
       container.id = 'tipsContainer';
-      document.body.appendChild(container);
+      document.documentElement.appendChild(container);
     }
     container.appendChild(btn);
     console.log('[startup-tips] help button appended');
@@ -131,12 +131,12 @@
     card.className = 'tips-card';
     overlay.appendChild(card);
 
-    // Use a dedicated container that survives DOM manipulation by other scripts
+    // Attach to documentElement — survives purgeSidebars() which only touches body children
     var container = document.getElementById('tipsContainer');
     if (!container) {
       container = document.createElement('div');
       container.id = 'tipsContainer';
-      document.body.appendChild(container);
+      document.documentElement.appendChild(container);
     }
     container.appendChild(overlay);
     console.log('[startup-tips] overlay appended to #tipsContainer');
