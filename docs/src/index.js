@@ -4519,6 +4519,9 @@ if (state && state.overhang) {
         // Update visibility toggle display based on covering type
         updateRoofCoveringToggles(state?.roof?.covering || "felt");
 
+        // Sync build configuration checkboxes (per-wall cladding, insulation, lining)
+        if (typeof syncBuildConfigUI === "function") syncBuildConfigUI(state);
+
         if (wallHeightEl) {
           if (isPent) {
             wallHeightEl.value = String(computePentDisplayHeight(state));
@@ -5978,6 +5981,70 @@ function parseOverhangInput(val) {
         setOpenings(next);
       });
     }
+
+    // ==================== BUILD CONFIGURATION HANDLERS ====================
+    // These control what's INCLUDED in the build (affects pricing).
+    // Separate from visibility toggles which are view-only.
+
+    var buildCladFrontEl = $("buildCladFront");
+    var buildCladBackEl = $("buildCladBack");
+    var buildCladLeftEl = $("buildCladLeft");
+    var buildCladRightEl = $("buildCladRight");
+    var buildWallInsulationEl = $("buildWallInsulation");
+    var buildFloorInsulationEl = $("buildFloorInsulation");
+    var buildInteriorLiningEl = $("buildInteriorLining");
+
+    function patchBuildCladPart(key, value) {
+      var s = store.getState();
+      var cur = (s && s.build && s.build.cladParts) ? s.build.cladParts : {};
+      var next = Object.assign({}, cur);
+      next[key] = value;
+      store.setState({ build: { cladParts: next } });
+      console.log("[build] cladParts." + key + "=", value ? "ON" : "OFF");
+    }
+
+    if (buildCladFrontEl) buildCladFrontEl.addEventListener("change", function(e) { patchBuildCladPart("front", !!e.target.checked); });
+    if (buildCladBackEl)  buildCladBackEl.addEventListener("change",  function(e) { patchBuildCladPart("back",  !!e.target.checked); });
+    if (buildCladLeftEl)  buildCladLeftEl.addEventListener("change",  function(e) { patchBuildCladPart("left",  !!e.target.checked); });
+    if (buildCladRightEl) buildCladRightEl.addEventListener("change", function(e) { patchBuildCladPart("right", !!e.target.checked); });
+
+    if (buildWallInsulationEl) buildWallInsulationEl.addEventListener("change", function(e) {
+      store.setState({ build: { wallInsulation: !!e.target.checked } });
+      console.log("[build] wallInsulation=", e.target.checked ? "ON" : "OFF");
+    });
+    if (buildFloorInsulationEl) buildFloorInsulationEl.addEventListener("change", function(e) {
+      store.setState({ build: { floorInsulation: !!e.target.checked } });
+      console.log("[build] floorInsulation=", e.target.checked ? "ON" : "OFF");
+    });
+    if (buildInteriorLiningEl) buildInteriorLiningEl.addEventListener("change", function(e) {
+      store.setState({ build: { interiorLining: !!e.target.checked } });
+      console.log("[build] interiorLining=", e.target.checked ? "ON" : "OFF");
+    });
+
+    // Sync build config checkboxes from state on render
+    function syncBuildConfigUI(state) {
+      var build = (state && state.build) ? state.build : {};
+      var cladParts = build.cladParts || {};
+      if (buildCladFrontEl) buildCladFrontEl.checked = cladParts.front !== false;
+      if (buildCladBackEl)  buildCladBackEl.checked  = cladParts.back !== false;
+      if (buildCladLeftEl)  buildCladLeftEl.checked   = cladParts.left !== false;
+      if (buildCladRightEl) buildCladRightEl.checked  = cladParts.right !== false;
+      if (buildWallInsulationEl) buildWallInsulationEl.checked = build.wallInsulation !== false;
+      if (buildFloorInsulationEl) buildFloorInsulationEl.checked = build.floorInsulation !== false;
+      if (buildInteriorLiningEl) buildInteriorLiningEl.checked = build.interiorLining !== false;
+
+      // Show/hide interior options based on insulated variant
+      var isInsulated = state && state.walls && state.walls.variant === 'insulated';
+      var interiorOpts = [buildWallInsulationEl, buildFloorInsulationEl, buildInteriorLiningEl];
+      interiorOpts.forEach(function(el) {
+        if (el) {
+          var label = el.closest('label');
+          if (label) label.style.display = isInsulated ? '' : 'none';
+        }
+      });
+    }
+
+    // ==================== END BUILD CONFIGURATION HANDLERS ====================
 
     // ==================== ATTACHMENT HANDLERS (v2 - Sub-buildings) ====================
 
