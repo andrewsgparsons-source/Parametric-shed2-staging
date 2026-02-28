@@ -30,6 +30,9 @@
 // Firebase Realtime Database endpoint
 var FIREBASE_URL = 'https://dashboards-5c2fb-default-rtdb.europe-west1.firebasedatabase.app';
 
+// Email endpoint on Krystal (sends confirmation to customer + notification to Andrew)
+var EMAIL_API_URL = 'https://api.my3dbuild.co.uk/send-quote.php';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -396,6 +399,25 @@ function handleSubmit(e) {
     })
     .then(function(data) {
       console.log('[quote-form] Lead saved:', data.name, 'ref:', refNumber);
+      
+      // Fire off email (best-effort — don't block on failure)
+      var emailPayload = {
+        name: name, email: email, refNumber: refNumber,
+        postcode: postcode || null, phone: phone || null,
+        budget: budget || null, siteStatus: siteStatus || null,
+        priceEstimate: formContext.priceEstimate || null,
+        pageUrl: window.location.href, deviceType: getDeviceType(),
+        timestamp: new Date().toISOString(), source: emailOnly ? 'email-copy' : 'quote-request'
+      };
+      fetch(EMAIL_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailPayload)
+      }).then(function(r) {
+        console.log('[quote-form] Email API response:', r.status);
+      }).catch(function(e) {
+        console.warn('[quote-form] Email API failed (non-blocking):', e);
+      });
       
       // Success → show confirmation (Screen 6)
       hideQuoteForm();
