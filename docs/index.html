@@ -6,6 +6,17 @@
   <title>Parametric Shed — Views</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./src/ui/design-summary.css">
+  <script>
+    // Inline cache-bust: append ?v= to theme-loader to prevent stale JS
+    (function() {
+      var p = new URLSearchParams(window.location.search);
+      var v = p.get('bust') || Date.now();
+      var s = document.createElement('script');
+      s.src = './src/ui/theme-loader.js?v=' + v;
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
   <link rel="stylesheet" href="./src/ui/startup-tips.css">
 </head>
 
@@ -935,6 +946,21 @@
       }
     })();
   </script>
+  <!-- Sidebar wizard is desktop-only; mobile uses the original UI -->
+
+  <!-- Get a Quote CTA is now integrated into the price badge (pricing.js) -->
+  <script>
+    // Hide admin-only sections for public visitors
+    (function() {
+      var isAdmin = new URLSearchParams(window.location.search).get('profile') === 'admin';
+      if (!isAdmin) {
+        var style = document.createElement('style');
+        style.textContent = '#developerSection, #priceBadgeModeRow { display: none !important; }';
+        document.head.appendChild(style);
+      }
+    })();
+  </script>
+  <script src="./src/ui/startup-tips.js"></script>
 </body>
 </html>
 <!-- cache nudge 1769518008 -->
