@@ -3,7 +3,7 @@
 .tips-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 2147483600;
+  z-index: 2147483646;
   pointer-events: none;
 }
 
@@ -24,18 +24,19 @@
   opacity: 1;
 }
 
-/* Highlighted element gets a glow */
+/* Highlighted element gets a glow — must sit above normal content
+   but below the overlay (2147483646) so the card stays visible */
 .tips-highlight {
   position: relative;
-  z-index: 2147483601 !important;
+  z-index: 2147483640 !important;
   box-shadow: 0 0 0 4px rgba(45, 106, 48, 0.6), 0 0 20px rgba(45, 106, 48, 0.3) !important;
   border-radius: 8px;
 }
 
-/* Tip card */
+/* Tip card — inside overlay stacking context, just needs to be above backdrop */
 .tips-card {
   position: fixed;
-  z-index: 2147483602;
+  z-index: 2147483647;
   background: #fff;
   border-radius: 16px;
   padding: 20px 24px;
