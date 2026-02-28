@@ -91,12 +91,12 @@
     btn.addEventListener('click', function() {
       startTips();
     });
-    // Attach to documentElement — survives purgeSidebars() which only touches body children
+    // Append to body — isProtected() in views.js covers #tipsContainer
     var container = document.getElementById('tipsContainer');
     if (!container) {
       container = document.createElement('div');
       container.id = 'tipsContainer';
-      document.documentElement.appendChild(container);
+      document.body.appendChild(container);
     }
     container.appendChild(btn);
     console.log('[startup-tips] help button appended');
@@ -131,12 +131,12 @@
     card.className = 'tips-card';
     overlay.appendChild(card);
 
-    // Attach to documentElement — survives purgeSidebars() which only touches body children
+    // Append to body — isProtected() in views.js covers #tipsContainer
     var container = document.getElementById('tipsContainer');
     if (!container) {
       container = document.createElement('div');
       container.id = 'tipsContainer';
-      document.documentElement.appendChild(container);
+      document.body.appendChild(container);
     }
     container.appendChild(overlay);
     console.log('[startup-tips] overlay appended to #tipsContainer');
