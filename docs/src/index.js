@@ -5990,16 +5990,16 @@ function parseOverhangInput(val) {
     var buildCladBackEl = $("buildCladBack");
     var buildCladLeftEl = $("buildCladLeft");
     var buildCladRightEl = $("buildCladRight");
-    var buildWallInsulationEl = $("buildWallInsulation");
-    var buildFloorInsulationEl = $("buildFloorInsulation");
-    var buildInteriorLiningEl = $("buildInteriorLining");
+    // Interior options (buildWallInsulation, buildFloorInsulation, buildInteriorLining)
+    // removed — to be redesigned as part of a proper materials/options system
 
     function patchBuildCladPart(key, value) {
       var s = store.getState();
       var cur = (s && s.build && s.build.cladParts) ? s.build.cladParts : {};
       var next = Object.assign({}, cur);
       next[key] = value;
-      store.setState({ build: { cladParts: next } });
+      // Update both build config (pricing) and vis (3D view) so they stay in sync
+      store.setState({ build: { cladParts: next }, vis: { cladParts: next } });
       console.log("[build] cladParts." + key + "=", value ? "ON" : "OFF");
     }
 
@@ -6007,19 +6007,6 @@ function parseOverhangInput(val) {
     if (buildCladBackEl)  buildCladBackEl.addEventListener("change",  function(e) { patchBuildCladPart("back",  !!e.target.checked); });
     if (buildCladLeftEl)  buildCladLeftEl.addEventListener("change",  function(e) { patchBuildCladPart("left",  !!e.target.checked); });
     if (buildCladRightEl) buildCladRightEl.addEventListener("change", function(e) { patchBuildCladPart("right", !!e.target.checked); });
-
-    if (buildWallInsulationEl) buildWallInsulationEl.addEventListener("change", function(e) {
-      store.setState({ build: { wallInsulation: !!e.target.checked } });
-      console.log("[build] wallInsulation=", e.target.checked ? "ON" : "OFF");
-    });
-    if (buildFloorInsulationEl) buildFloorInsulationEl.addEventListener("change", function(e) {
-      store.setState({ build: { floorInsulation: !!e.target.checked } });
-      console.log("[build] floorInsulation=", e.target.checked ? "ON" : "OFF");
-    });
-    if (buildInteriorLiningEl) buildInteriorLiningEl.addEventListener("change", function(e) {
-      store.setState({ build: { interiorLining: !!e.target.checked } });
-      console.log("[build] interiorLining=", e.target.checked ? "ON" : "OFF");
-    });
 
     // Sync build config checkboxes from state on render
     function syncBuildConfigUI(state) {
@@ -6029,19 +6016,6 @@ function parseOverhangInput(val) {
       if (buildCladBackEl)  buildCladBackEl.checked  = cladParts.back !== false;
       if (buildCladLeftEl)  buildCladLeftEl.checked   = cladParts.left !== false;
       if (buildCladRightEl) buildCladRightEl.checked  = cladParts.right !== false;
-      if (buildWallInsulationEl) buildWallInsulationEl.checked = build.wallInsulation !== false;
-      if (buildFloorInsulationEl) buildFloorInsulationEl.checked = build.floorInsulation !== false;
-      if (buildInteriorLiningEl) buildInteriorLiningEl.checked = build.interiorLining !== false;
-
-      // Show/hide interior options based on insulated variant
-      var isInsulated = state && state.walls && state.walls.variant === 'insulated';
-      var interiorOpts = [buildWallInsulationEl, buildFloorInsulationEl, buildInteriorLiningEl];
-      interiorOpts.forEach(function(el) {
-        if (el) {
-          var label = el.closest('label');
-          if (label) label.style.display = isInsulated ? '' : 'none';
-        }
-      });
     }
 
     // ==================== END BUILD CONFIGURATION HANDLERS ====================
