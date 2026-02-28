@@ -98,6 +98,11 @@ export function initViews() {
     // Protect startup-tips overlay from purge
     var tipsC = document.getElementById('tipsContainer');
     if (tipsC && (el === tipsC || tipsC.contains(el))) return true;
+    // Protect cf-root and any element marked data-cf-protected (quote form, design summary, etc.)
+    var cfRoot = document.getElementById('cf-root');
+    if (cfRoot && (el === cfRoot || cfRoot.contains(el))) return true;
+    if (el.getAttribute && el.getAttribute('data-cf-protected') === 'true') return true;
+    if (el.closest && el.closest('[data-cf-protected="true"]')) return true;
     return false;
   }
 
