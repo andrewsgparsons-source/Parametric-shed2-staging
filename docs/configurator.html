@@ -436,6 +436,15 @@
                   </label>
                 </div>
 
+                <div class="boSubhead">Cladding — Per Wall</div>
+                <p class="hint" style="margin:0 0 6px 0;">Exclude cladding from individual walls (e.g. lean-to against an existing wall, or supply your own).</p>
+                <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px; margin-bottom: 12px;">
+                  <label class="check"><input id="buildCladFront" type="checkbox" checked /> Front wall cladding</label>
+                  <label class="check"><input id="buildCladBack" type="checkbox" checked /> Back wall cladding</label>
+                  <label class="check"><input id="buildCladLeft" type="checkbox" checked /> Left wall cladding</label>
+                  <label class="check"><input id="buildCladRight" type="checkbox" checked /> Right wall cladding</label>
+                </div>
+
                 <div class="boSubhead">Roof Covering</div>
                 <div class="row">
                   <label>
@@ -446,6 +455,14 @@
                       <option value="slate">Synthetic Slate Tiles</option>
                     </select>
                   </label>
+                </div>
+
+                <div class="boSubhead">Interior Options</div>
+                <p class="hint" style="margin:0 0 6px 0;">Optional extras for insulated builds.</p>
+                <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px;">
+                  <label class="check"><input id="buildWallInsulation" type="checkbox" checked /> Wall insulation</label>
+                  <label class="check"><input id="buildFloorInsulation" type="checkbox" checked /> Floor insulation</label>
+                  <label class="check"><input id="buildInteriorLining" type="checkbox" checked /> Interior wall lining</label>
                 </div>
               </div>
             </details>
@@ -483,6 +500,7 @@
             <details open class="boSection">
               <summary>Visibility</summary>
               <div class="boBox" style="padding: 12px;">
+                <p class="hint" style="margin:0 0 12px 0; font-style:italic;">These toggles show/hide parts of the 3D model for viewing — they don't change your quote. Use the controls in each section above to change what's included in your build.</p>
                 
                 <!-- Main Assemblies -->
                 <div style="margin-bottom: 16px;">
