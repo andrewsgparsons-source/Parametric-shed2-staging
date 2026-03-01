@@ -10,12 +10,12 @@
  *   │ Dashboard    ││ (scrollable) │
  *   │              ││              │
  *   │ ① Size    ▸  ││              │
- *   │ ② Roof    ▸  ││              │
- *   │ ③ Appear  ▸  ││              │
- *   │ ④ Walls   ▸  ││              │
- *   │ ⑤ Attach  ▸  ││              │
- *   │ ⑥ Save    ▸  ││              │
- *   │ ⑦ Dev     ▸  ││              │
+ *   │ ② Base    ▸  ││              │
+ *   │ ③ Walls   ▸  ││              │
+ *   │ ④ Roof    ▸  ││              │
+ *   │ ⑤ Appear  ▸  ││              │
+ *   │ ⑥ Attach  ▸  ││              │
+ *   │ ⑦ Custom  ▸  ││              │
  *   └──────────────┘└──────────────┘
  */
 (function() {
@@ -23,10 +23,10 @@
 
   var ALL_STEPS = [
     { num: 1, label: 'Size & Shape',       section: 'Size & Shape' },
-    { num: 2, label: 'Roof',               section: 'Roof' },
-    { num: 3, label: 'Base',               section: 'Base' },
-    { num: 4, label: 'Appearance',         section: 'Appearance' },
-    { num: 5, label: 'Walls & Openings',   section: 'Walls & Openings' },
+    { num: 2, label: 'Base',               section: 'Base' },
+    { num: 3, label: 'Walls & Openings',   section: 'Walls & Openings' },
+    { num: 4, label: 'Roof',               section: 'Roof' },
+    { num: 5, label: 'Appearance',         section: 'Appearance' },
     { num: 6, label: 'Attachments',        section: 'Building Attachments' },
     { num: 7, label: 'Customise View',     section: 'Visibility' },
     { num: 8, label: 'Bill of Materials',  section: '__bom__', adminOnly: true },
@@ -172,10 +172,10 @@
     // Wire up dashboard bubbles as shortcuts to flyouts
     const dashMap = {
       dashSize: 0,      // → Size & Shape
-      dashRoof: 1,      // → Roof
-      dashCladding: 2,  // → Appearance
-      dashDoors: 3,     // → Walls & Openings
-      dashWindows: 3    // → Walls & Openings
+      dashRoof: 3,      // → Roof
+      dashCladding: 4,  // → Appearance
+      dashDoors: 2,     // → Walls & Openings
+      dashWindows: 2    // → Walls & Openings
     };
     Object.entries(dashMap).forEach(function([id, stepIdx]) {
       const el = document.getElementById(id);

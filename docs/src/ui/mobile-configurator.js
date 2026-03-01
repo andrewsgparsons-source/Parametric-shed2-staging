@@ -21,9 +21,9 @@
 
   var STEPS = [
     { label: 'Size',       section: 'Size & Shape',        profileKey: 'sizeShape' },
-    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
     { label: 'Base',       section: 'Base',                profileKey: 'base' },
     { label: 'Walls',      section: 'Walls & Openings',    profileKey: 'wallsOpenings' },
+    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
     { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
     { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
     { label: 'Customise View', section: 'Visibility',        profileKey: 'visibility' },

@@ -19,8 +19,8 @@
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
     polished: { css: './src/ui/polished-theme.css' },
     wild:     { css: './src/ui/wild-theme.css' },
-    sidebar:  { css: './src/ui/sidebar-wizard.css', js: './src/ui/sidebar-wizard.js' },
-    mobile:   { css: './src/ui/mobile-configurator.css', js: './src/ui/mobile-configurator.js' }
+    sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=2' },
+    mobile:   { css: './src/ui/mobile-configurator.css?_v=2', js: './src/ui/mobile-configurator.js?_v=2' }
   };
 
   // Mobile auto-selects 'mobile' theme (unless user explicitly chose something)
