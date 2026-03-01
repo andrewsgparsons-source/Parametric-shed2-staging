@@ -134,14 +134,6 @@
                       <option value="basic">Basic</option>
                     </select>
                   </label>
-                  <label id="internalLiningLabel" style="display: none;">
-                    Internal Lining
-                    <select id="internalLining" aria-label="Internal Lining">
-                      <option value="none">None</option>
-                      <option value="plywood" selected>Plywood (12mm)</option>
-                      <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
-                    </select>
-                  </label>
                 </div>
 
                 <div class="row">
@@ -456,6 +448,20 @@
                       <option value="slate">Synthetic Slate Tiles</option>
                     </select>
                   </label>
+                </div>
+
+                <div id="internalLiningLabel" style="display: none;">
+                  <div class="boSubhead">Internal Lining</div>
+                  <div class="row">
+                    <label>
+                      Style
+                      <select id="internalLining" aria-label="Internal Lining">
+                        <option value="none">None</option>
+                        <option value="plywood" selected>Plywood (12mm)</option>
+                        <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
 
               </div>
@@ -1022,7 +1028,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=34"></script>
+  <script type="module" src="./src/index.js?_v=35"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
