@@ -783,11 +783,15 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12; // 12mm cladding board
-      let soffitMat = scene._claddingMatLight;
-      if (!soffitMat) {
-        soffitMat = new BABYLON.StandardMaterial('soffitMat-pent-' + Date.now(), scene);
-        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42);
+      if (!scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
       }
+      const soffitMat = scene._claddingMatLight;
 
       // Soffit Y: sits at bottom of fascia (horizontal panel)
       // fasciaBottomY_m was computed in the fascia section above; recalculate here
@@ -2714,12 +2718,16 @@ if (roofParts.osb) {
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12; // 12mm cladding board
-      // Use cladding material — create fallback if walls haven't set it yet
-      let soffitMat = scene._claddingMatLight;
-      if (!soffitMat) {
-        soffitMat = new BABYLON.StandardMaterial('soffitMat-' + Date.now(), scene);
-        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42); // warm wood tone matching cladding
+      // Ensure cladding material exists (same as walls.js) so soffits always match cladding
+      if (!scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
       }
+      const soffitMat = scene._claddingMatLight;
 
       // Soffit Y position: bottom of fascia, in local roof coords
       // Fascia depth = 135mm, top aligns with top of OSB
@@ -4769,11 +4777,15 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12;
-      let soffitMat = scene._claddingMatLight;
-      if (!soffitMat) {
-        soffitMat = new BABYLON.StandardMaterial('soffitMat-hipped-' + Date.now(), scene);
-        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42);
+      if (!scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
       }
+      const soffitMat = scene._claddingMatLight;
       const _fasciaDepth = 135;
       const _osbTop_mm = memberD_mm + 18 + 1;
       const soffitY_mm = _osbTop_mm - _fasciaDepth;
