@@ -783,7 +783,11 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12; // 12mm cladding board
-      const soffitMat = scene._claddingMatLight || joistMat;
+      let soffitMat = scene._claddingMatLight;
+      if (!soffitMat) {
+        soffitMat = new BABYLON.StandardMaterial('soffitMat-pent-' + Date.now(), scene);
+        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42);
+      }
 
       // Soffit Y: sits at bottom of fascia (horizontal panel)
       // fasciaBottomY_m was computed in the fascia section above; recalculate here
@@ -2710,7 +2714,12 @@ if (roofParts.osb) {
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12; // 12mm cladding board
-      const soffitMat = scene._claddingMatLight || joistMat;
+      // Use cladding material — create fallback if walls haven't set it yet
+      let soffitMat = scene._claddingMatLight;
+      if (!soffitMat) {
+        soffitMat = new BABYLON.StandardMaterial('soffitMat-' + Date.now(), scene);
+        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42); // warm wood tone matching cladding
+      }
 
       // Soffit Y position: bottom of fascia, in local roof coords
       // Fascia depth = 135mm, top aligns with top of OSB
@@ -2744,33 +2753,55 @@ if (roofParts.osb) {
         );
       }
 
-      // Front gable soffit (Z: 0 to f_mm, X: l_mm to A_mm - r_mm — between the eaves soffits)
-      if (f_mm > 0) {
-        const gableW_mm = A_mm - l_mm - r_mm; // width between eaves soffits
-        if (gableW_mm > 0) {
-          mkBoxCenteredLocal(
-            `${meshPrefix}roof-soffit-gable-front`,
-            gableW_mm, SOFFIT_THK_MM, f_mm,
-            l_mm + gableW_mm / 2, soffitY_m, f_mm / 2,
-            roofRoot, soffitMat,
-            { roof: "apex", part: "soffit", edge: "gable-front" }
-          );
-        }
+      // Gable soffits (front/back): SLOPED panels following the roof pitch
+      // Each gable gets two panels — one per slope side (L and R of ridge)
+      // Panels are rotated to match the roof slope angle
+      const sinT = Math.sin(slopeAng);
+      const cosT = Math.cos(slopeAng);
+
+      function buildGableSoffitPair(label, zCenter_mm) {
+        // Each slope panel: length = rafterLen (along slope), width = overhang depth (f_mm or b_mm)
+        const ovhDepth_mm = (label === "front") ? f_mm : b_mm;
+        if (ovhDepth_mm <= 0) return;
+
+        // Left slope: from eaves (X=0) up to ridge (X=halfSpan_mm)
+        // Mid-slope position in local coords
+        const sMid_mm = rafterLen_mm / 2;
+        const runMid_mm = sMid_mm * cosT;
+        const riseMid_mm = sMid_mm * sinT;
+
+        // Left slope center
+        const lCenterX_mm = halfSpan_mm - runMid_mm;
+        const lCenterY_mm = memberD_mm + (rise_mm - riseMid_mm);
+
+        const soffitL = mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-gable-${label}-L`,
+          rafterLen_mm, SOFFIT_THK_MM, ovhDepth_mm,
+          lCenterX_mm, lCenterY_mm, zCenter_mm,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: `gable-${label}-L` }
+        );
+        soffitL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+        // Right slope center (mirror)
+        const rCenterX_mm = halfSpan_mm + runMid_mm;
+        const rCenterY_mm = lCenterY_mm; // symmetric
+
+        const soffitR = mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-gable-${label}-R`,
+          rafterLen_mm, SOFFIT_THK_MM, ovhDepth_mm,
+          rCenterX_mm, rCenterY_mm, zCenter_mm,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: `gable-${label}-R` }
+        );
+        soffitR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
       }
 
-      // Back gable soffit (Z: B_mm - b_mm to B_mm, X: l_mm to A_mm - r_mm)
-      if (b_mm > 0) {
-        const gableW_mm = A_mm - l_mm - r_mm;
-        if (gableW_mm > 0) {
-          mkBoxCenteredLocal(
-            `${meshPrefix}roof-soffit-gable-back`,
-            gableW_mm, SOFFIT_THK_MM, b_mm,
-            l_mm + gableW_mm / 2, soffitY_m, B_mm - b_mm / 2,
-            roofRoot, soffitMat,
-            { roof: "apex", part: "soffit", edge: "gable-back" }
-          );
-        }
-      }
+      // Front gable soffits (z center = f_mm / 2)
+      if (f_mm > 0) buildGableSoffitPair("front", f_mm / 2);
+
+      // Back gable soffits (z center = B_mm - b_mm / 2)
+      if (b_mm > 0) buildGableSoffitPair("back", B_mm - b_mm / 2);
 
       console.log('[SOFFIT] Built apex soffit boards - overhangs L:', l_mm, 'R:', r_mm, 'F:', f_mm, 'B:', b_mm);
     }
@@ -4738,7 +4769,11 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     const showSoffits = (state?.roof?.soffits !== false);
     if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
       const SOFFIT_THK_MM = 12;
-      const soffitMat = scene._claddingMatLight || joistMat;
+      let soffitMat = scene._claddingMatLight;
+      if (!soffitMat) {
+        soffitMat = new BABYLON.StandardMaterial('soffitMat-hipped-' + Date.now(), scene);
+        soffitMat.diffuseColor = new BABYLON.Color3(0.76, 0.60, 0.42);
+      }
       const _fasciaDepth = 135;
       const _osbTop_mm = memberD_mm + 18 + 1;
       const soffitY_mm = _osbTop_mm - _fasciaDepth;
