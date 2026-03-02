@@ -60,7 +60,7 @@ import { boot, disposeAll } from "./renderer/babylon.js";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js?_v=2";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js?_v=12";
+import * as Roof from "./elements/roof.js?_v=13";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
 import { updateAttachmentBOM } from "./bom/attachments.js";
@@ -633,6 +633,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var wallsVariantEl = $("wallsVariant");
     var internalLiningEl = $("internalLining");
     var internalLiningLabel = $("internalLiningLabel");
+    var soffitsEnabledEl = $("soffitsEnabled");
     var wallHeightEl = $("wallHeight");
     var claddingStyleEl = $("claddingStyle");
     var claddingColourEl = $("claddingColour");
@@ -4513,6 +4514,7 @@ if (state && state.overhang) {
         // Sync internal lining dropdown
         updateInternalLiningVisibility(state?.walls?.variant || "insulated");
         if (internalLiningEl && state && state.walls && state.walls.internalLining) internalLiningEl.value = state.walls.internalLining;
+        if (soffitsEnabledEl) soffitsEnabledEl.checked = (state?.roof?.soffits !== false); // default on
         if (claddingStyleEl && state && state.cladding && state.cladding.style) claddingStyleEl.value = state.cladding.style;
         if (claddingColourEl && state && state.cladding && state.cladding.colour) claddingColourEl.value = state.cladding.colour;
         if (roofCoveringStyleEl && state && state.roof && state.roof.covering) roofCoveringStyleEl.value = state.roof.covering;
@@ -5787,6 +5789,7 @@ function parseOverhangInput(val) {
       updateInternalLiningVisibility(wallsVariantEl.value);
     });
     if (internalLiningEl) internalLiningEl.addEventListener("change", function () { store.setState({ walls: { internalLining: internalLiningEl.value } }); });
+    if (soffitsEnabledEl) soffitsEnabledEl.addEventListener("change", function () { store.setState({ roof: { soffits: soffitsEnabledEl.checked } }); });
     if (claddingStyleEl) claddingStyleEl.addEventListener("change", function () { store.setState({ cladding: { style: claddingStyleEl.value, colour: (claddingColourEl ? claddingColourEl.value : "natural-wood") } }); });
     if (claddingColourEl) claddingColourEl.addEventListener("change", function () { store.setState({ cladding: { style: (claddingStyleEl ? claddingStyleEl.value : "shiplap"), colour: claddingColourEl.value } }); });
     if (roofCoveringStyleEl) roofCoveringStyleEl.addEventListener("change", function () { 
