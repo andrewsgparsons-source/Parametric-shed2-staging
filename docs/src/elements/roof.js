@@ -1215,6 +1215,35 @@ function updateBOM_Pent(state, tbody) {
     });
   }
 
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits = (state?.roof?.soffits !== false);
+  if (showSoffits) {
+    const dims_pent = resolveDims(state);
+    const ovh = dims_pent?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+    const roofW_s = data.roofW_mm;
+    const roofD_s = data.roofD_mm;
+    const frameW_s = data.frameW_mm;
+    const frameD_s = data.frameD_mm;
+
+    // Eaves/ridge soffits (long sides)
+    if (data.isWShort) {
+      // Slope along X: eaves (low) = left overhang, ridge (high) = right overhang
+      if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofD_s, W: ol, notes: "12mm; eaves side (low)" });
+      if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofD_s, W: or_, notes: "12mm; ridge side (high)" });
+      if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameW_s, W: of_, notes: "12mm; front verge" });
+      if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameW_s, W: ob, notes: "12mm; back verge" });
+    } else {
+      if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofW_s, W: of_, notes: "12mm; eaves side (low)" });
+      if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofW_s, W: ob, notes: "12mm; ridge side (high)" });
+      if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameD_s, W: ol, notes: "12mm; left verge" });
+      if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameD_s, W: or_, notes: "12mm; right verge" });
+    }
+  }
+
   rows.sort((a, b) => {
     const ai = String(a.item), bi = String(b.item);
     if (ai !== bi) return ai.localeCompare(bi);
@@ -3735,6 +3764,24 @@ function updateBOM_Apex(state, tbody) {
     });
   }
 
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits_apex = (state?.roof?.soffits !== false);
+  if (showSoffits_apex) {
+    const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+
+    // Eaves soffits: run along ridge (B_mm depth), width = overhang
+    if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: ol, notes: "12mm; left eaves" });
+    if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: or_, notes: "12mm; right eaves" });
+    // Gable soffits: each gable has 2 sloped panels (L + R of ridge)
+    // Length along slope = rafterLen_mm, width = overhang depth
+    if (of_ > 0) rows.push({ item: "Soffit Board", qty: 2, L: rafterLen_mm, W: of_, notes: "12mm; front gable (L+R slopes)" });
+    if (ob > 0) rows.push({ item: "Soffit Board", qty: 2, L: rafterLen_mm, W: ob, notes: "12mm; back gable (L+R slopes)" });
+  }
+
   rows.sort((a, b) => String(a.item).localeCompare(String(b.item)));
 
   for (let i = 0; i < rows.length; i++) {
@@ -4959,6 +5006,24 @@ function updateBOM_Hipped(state, tbody) {
       W: memberW_mm,
       notes: "D (mm): " + String(memberD_mm) + "; varying lengths; hipped ends",
     });
+  }
+
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits_hipped = (state?.roof?.soffits !== false);
+  if (showSoffits_hipped) {
+    const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+
+    // Hipped roof: soffits run around all 4 sides
+    // Eaves soffits (left/right): full depth of roof
+    if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: ol, notes: "12mm; left eaves" });
+    if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: or_, notes: "12mm; right eaves" });
+    // Front/back soffits: full width of roof
+    if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: A_mm, W: of_, notes: "12mm; front" });
+    if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: A_mm, W: ob, notes: "12mm; back" });
   }
 
   rows.sort((a, b) => String(a.item).localeCompare(String(b.item)));
