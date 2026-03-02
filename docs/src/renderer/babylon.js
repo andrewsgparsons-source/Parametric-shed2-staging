@@ -60,7 +60,9 @@ export function boot(canvas) {
   camera.angularSensibilityX = 3000;    // Slower rotation for mobile (was 2000)
   camera.angularSensibilityY = 3000;
 
-  new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
+  const hemiLight = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
+  // Ground colour illuminates undersides (soffits, overhangs, any face pointing down)
+  hemiLight.groundColor = new BABYLON.Color3(0.35, 0.35, 0.35);
 
 const materials = {
     timber: mkMat(scene, 'timber', new BABYLON.Color3(0.72, 0.50, 0.28)),
