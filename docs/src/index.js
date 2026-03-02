@@ -56,11 +56,11 @@ window.addEventListener("unhandledrejection", function (e) {
 
 import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS } from "./params.js";
-import { boot, disposeAll } from "./renderer/babylon.js?_v=2";
+import { boot, disposeAll } from "./renderer/babylon.js?_v=3";
 import * as Base from "./elements/base.js";
-import * as Walls from "./elements/walls.js?_v=2";
+import * as Walls from "./elements/walls.js?_v=3";
 import * as Dividers from "./elements/dividers.js";
-import * as Roof from "./elements/roof.js?_v=16";
+import * as Roof from "./elements/roof.js?_v=17";
 import * as Attachments from "./elements/attachments.js?_v=2";
 import { renderBOM } from "./bom/index.js";
 import { updateAttachmentBOM } from "./bom/attachments.js";

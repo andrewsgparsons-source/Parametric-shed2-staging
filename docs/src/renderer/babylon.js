@@ -86,6 +86,15 @@ function createExteriorWoodMat(name) {
   scene._claddingMat = createExteriorWoodMat("claddingMat");
   scene._claddingMatLight = createExteriorWoodMat("claddingMatLight");
 
+  // Soffit material: same wood colour but higher emissive so downward-facing
+  // surfaces (lit by hemi groundColor) still read as warm wood, not grey.
+  var soffitMat = new BABYLON.StandardMaterial("soffitMat", scene);
+  soffitMat.diffuseColor = exteriorWoodColor.clone();
+  soffitMat.emissiveColor = exteriorWoodColor.scale(0.35);
+  soffitMat.specularColor = new BABYLON.Color3(0.03, 0.03, 0.03);
+  soffitMat.specularPower = 8;
+  scene._soffitMat = soffitMat;
+
   // ---- Budget range: steel cladding materials (metallic) ----
   function createSteelCladdingMat(name, baseColor) {
     var m = new BABYLON.StandardMaterial(name, scene);
