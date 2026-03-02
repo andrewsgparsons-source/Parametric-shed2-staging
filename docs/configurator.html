@@ -1036,14 +1036,14 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=41"></script>
+  <script type="module" src="./src/index.js?_v=42"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
 
   <!-- Price Estimate Module -->
   <script type="module">
-    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=3';
+    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=4';
     loadPriceTable().then(ok => {
       if (ok) {
         window.__pricingReady = true;

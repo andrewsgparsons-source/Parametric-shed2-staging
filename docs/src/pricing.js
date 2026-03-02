@@ -184,6 +184,28 @@ export function estimatePrice(state) {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.felt_per_m2;
   }
 
+  // ─── 5a. SOFFITS (12mm cladding board under overhang) ───
+  breakdown.soffits = 0;
+  const showSoffits = visRoof && (state?.roof?.soffits !== false);
+  if (showSoffits) {
+    const ovh = state?.overhang || {};
+    const uni = ovh.uniform_mm ?? 75;
+    const isUnsetV = (v) => v == null || v === '';
+    const ol = isUnsetV(ovh.left_mm)  ? uni : Number(ovh.left_mm)  || 0;
+    const or2 = isUnsetV(ovh.right_mm) ? uni : Number(ovh.right_mm) || 0;
+    const of2 = isUnsetV(ovh.front_mm) ? uni : Number(ovh.front_mm) || 0;
+    const ob = isUnsetV(ovh.back_mm)  ? uni : Number(ovh.back_mm)  || 0;
+    const roofW_s = w_mm + ol + or2;
+    const roofD_s = d_mm + of2 + ob;
+    // Eaves soffits (left + right): depth of roof × overhang width
+    const eavesArea_m2 = ((ol * roofD_s) + (or2 * roofD_s)) / 1_000_000;
+    // Verge/gable soffits (front + back): frame width × overhang depth
+    const vergeArea_m2 = ((of2 * w_mm) + (ob * w_mm)) / 1_000_000;
+    const soffitArea_m2 = eavesArea_m2 + vergeArea_m2;
+    // Price as cladding board (same material)
+    breakdown.soffits = soffitArea_m2 * claddingCostPerM2;
+  }
+
   // ─── 5b. ROOF COMPLEXITY PREMIUM ───
   // Pent = baseline (simple rafters). Apex adds trusses. Hipped adds hip rafters + complex cuts.
   breakdown.roofComplexity = 0;
@@ -737,6 +759,7 @@ export function renderPricingBreakdown(state, containerId) {
           ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
           ${b.plyLining ? `<tr><td>${b.liningLabel || 'Ply lining'}</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
           <tr><td>Roof covering</td><td class="pb-val">£${b.roofCovering.toLocaleString()}</td></tr>
+          ${b.soffits ? `<tr><td>Soffits</td><td class="pb-val">£${b.soffits.toLocaleString()}</td></tr>` : ''}
           ${b.roofInsulation ? `<tr><td>Roof insulation (PIR)</td><td class="pb-val">£${b.roofInsulation.toLocaleString()}</td></tr>` : ''}
           ${b.roofPly ? `<tr><td>Roof interior plywood</td><td class="pb-val">£${b.roofPly.toLocaleString()}</td></tr>` : ''}
           ${b.roofComplexity ? `<tr><td>Roof complexity (${est.roofStyle})</td><td class="pb-val">£${b.roofComplexity.toLocaleString()}</td></tr>` : ''}
