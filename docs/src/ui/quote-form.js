@@ -33,6 +33,9 @@ var FIREBASE_URL = 'https://dashboards-5c2fb-default-rtdb.europe-west1.firebased
 // Email endpoint on Krystal (sends confirmation to customer + notification to Andrew)
 var EMAIL_API_URL = 'https://api.my3dbuild.co.uk/send-quote.php';
 
+// Telegram notification endpoint (Cloudflare Worker → pings Andrew's phone)
+var NOTIFY_API_URL = 'https://quote-notify.andrewsgparsons.workers.dev';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -417,6 +420,17 @@ function handleSubmit(e) {
         console.log('[quote-form] Email API response:', r.status);
       }).catch(function(e) {
         console.warn('[quote-form] Email API failed (non-blocking):', e);
+      });
+      
+      // Telegram notification (best-effort — pings Andrew's phone instantly)
+      fetch(NOTIFY_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailPayload)
+      }).then(function(r) {
+        console.log('[quote-form] Telegram notify response:', r.status);
+      }).catch(function(e) {
+        console.warn('[quote-form] Telegram notify failed (non-blocking):', e);
       });
       
       // Success → show confirmation (Screen 6)
