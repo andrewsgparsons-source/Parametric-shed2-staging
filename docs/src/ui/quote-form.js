@@ -27,6 +27,8 @@
  *   });
  */
 
+import { generateViewerUrl } from '../profiles.js';
+
 // Firebase Realtime Database endpoint
 var FIREBASE_URL = 'https://dashboards-5c2fb-default-rtdb.europe-west1.firebasedatabase.app';
 
@@ -404,12 +406,14 @@ function handleSubmit(e) {
       console.log('[quote-form] Lead saved:', data.name, 'ref:', refNumber);
       
       // Fire off email (best-effort — don't block on failure)
+      // Generate proper share URL with design state encoded
+      var designUrl = formContext.state ? generateViewerUrl(formContext.state) : window.location.href;
       var emailPayload = {
         name: name, email: email, refNumber: refNumber,
         postcode: postcode || null, phone: phone || null,
         budget: budget || null, siteStatus: siteStatus || null,
         priceEstimate: formContext.priceEstimate || null,
-        pageUrl: window.location.href, deviceType: getDeviceType(),
+        pageUrl: designUrl, deviceType: getDeviceType(),
         timestamp: new Date().toISOString(), source: emailOnly ? 'email-copy' : 'quote-request'
       };
       fetch(EMAIL_API_URL, {
