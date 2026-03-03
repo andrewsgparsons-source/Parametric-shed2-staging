@@ -4828,7 +4828,8 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 100 },
             cladding: { style: "overlap", colour: "natural-wood" },
             shelving: [],
-            vis: { base: true, baseAll: false, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
+            base: { type: "concrete-only" },
+            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
           },
           "summerhouse": {
             w: 2340, d: 2900,

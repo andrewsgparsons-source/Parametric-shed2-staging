@@ -61,6 +61,39 @@ export function build3D(state, ctx, sectionContext) {
     }
   }
 
+  // Concrete base rendering for garage and concrete base types
+  const showConcrete = state.vis.base && (baseType === 'concrete-only' || baseType === 'concrete-timber');
+  if (showConcrete) {
+    const concreteHeight = 150; // 150mm thick concrete slab
+    const concreteOverhang = 50; // 50mm overhang beyond building footprint
+    const concreteW = state.w + (concreteOverhang * 2);
+    const concreteD = state.d + (concreteOverhang * 2);
+    
+    const mat = new BABYLON.StandardMaterial('concreteMat', scene);
+    mat.diffuseColor = new BABYLON.Color3(0.7, 0.7, 0.7); // Light grey
+    
+    const concretePad = BABYLON.MeshBuilder.CreateBox('concrete-base', {
+      width: concreteW * 0.001,
+      height: concreteHeight * 0.001,
+      depth: concreteD * 0.001
+    }, scene);
+    
+    concretePad.position = new BABYLON.Vector3(
+      (state.w / 2) * 0.001,
+      (concreteHeight / 2) * 0.001,
+      (state.d / 2) * 0.001
+    );
+    concretePad.material = mat;
+    concretePad.parent = shedRoot;
+    concretePad.metadata = { dynamic: true, sectionId: sectionId || null, type: 'concrete-base' };
+    
+    concretePad.enableEdgesRendering();
+    concretePad.edgesWidth = 2;
+    concretePad.edgesColor = new BABYLON.Color4(0.5, 0.5, 0.5, 1);
+    
+    meshes.base.push(concretePad);
+  }
+
   if (showFrame) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.5, 0.4, 0.3);
