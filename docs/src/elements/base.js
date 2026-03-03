@@ -297,12 +297,28 @@ export function updateBOM(state) {
     }
     renderOsbTable(osbStd, 'osbStdBody', 'osbStdTotals', 'Standard Sheet');
     renderOsbTable(osbRip, 'osbRipBody', 'osbRipTotals', 'Rip/Trim Cut');
+
+    // ----- OSB Minimum Sheet Summary (area-based) -----
+    let totalOSBArea = 0;
+    Object.keys(osbMap).forEach(key => {
+      const [wStr, hStr] = key.split('x');
+      const w = parseInt(wStr, 10);
+      const h = parseInt(hStr, 10);
+      const qty = osbMap[key];
+      totalOSBArea += qty * w * h;
+    });
+    const sheetArea = sheetShort * sheetLong;
+    const minSheets = sheetArea > 0 ? Math.ceil(totalOSBArea / sheetArea) : 0;
+    const osbSummaryEl = document.getElementById('osbSummary');
+    if (osbSummaryEl) osbSummaryEl.textContent = `Minimum full sheets required (by area): ${minSheets}`;
   } else {
     // OSB excluded for baseType 'none' or 'concrete-only'
     document.getElementById('osbStdBody').innerHTML = '<tr><td colspan="4">Floor OSB excluded (customer supplied)</td></tr>';
     document.getElementById('osbRipBody').innerHTML = '';
     document.getElementById('osbStdTotals').textContent = '';
     document.getElementById('osbRipTotals').textContent = '';
+    const osbSummaryEl = document.getElementById('osbSummary');
+    if (osbSummaryEl) osbSummaryEl.textContent = '';
   }
 
   // ----- PIR Insulation — Rip Cuts Only (derived from placement) -----
@@ -369,20 +385,6 @@ export function updateBOM(state) {
     </tr>`;
   });
   document.getElementById('gridBody').innerHTML = gridHtml || `<tr><td colspan="4">None</td></tr>`;
-
-  // ----- OSB Minimum Sheet Summary (area-based) -----
-  let totalOSBArea = 0;
-  Object.keys(osbMap).forEach(key => {
-    const [wStr, hStr] = key.split('x');
-    const w = parseInt(wStr, 10);
-    const h = parseInt(hStr, 10);
-    const qty = osbMap[key];
-    totalOSBArea += qty * w * h;
-  });
-  const sheetArea = sheetShort * sheetLong;
-  const minSheets = sheetArea > 0 ? Math.ceil(totalOSBArea / sheetArea) : 0;
-  const osbSummaryEl = document.getElementById('osbSummary');
-  if (osbSummaryEl) osbSummaryEl.textContent = `Minimum full sheets required (by area): ${minSheets}`;
 
   // NOTE: No plywood floor covering — floor is OSB decking only.
   // Hide the legacy ply floor BOM section if it still exists in HTML
