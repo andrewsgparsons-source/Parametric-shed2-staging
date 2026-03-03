@@ -4818,7 +4818,7 @@ if (state && state.overhang) {
             },
             overhang: { uniform_mm: 200, front_mm: null, back_mm: null, left_mm: null, right_mm: null },
             walls: { variant: "insulated", internalLining: "plywood", height_mm: 2400,
-              insulated: { section: { w: 50, h: 100 }, spacing: 400 },
+              insulated: { section: { w: 50, h: 100 }, spacing: 600 },
               basic: { section: { w: 50, h: 100 }, spacing: null },
               openings: [
                 { id: "door1", wall: "front", type: "door", enabled: true, x_mm: 300, width_mm: 2900, height_mm: 1850, style: "double-mortise-tenon", isOpen: true }
@@ -4829,7 +4829,7 @@ if (state && state.overhang) {
             cladding: { style: "overlap", colour: "natural-wood" },
             shelving: [],
             base: { type: "concrete-only" },
-            vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
+            vis: { base: true, baseAll: true, frame: false, deck: false, ins: false, wallsEnabled: true, wallIns: false, wallPly: false, cladding: true, roof: true }
           },
           "summerhouse": {
             w: 2340, d: 2900,
@@ -5805,17 +5805,26 @@ function parseOverhangInput(val) {
       baseTypeEl.addEventListener("change", function () {
         var bt = baseTypeEl.value;
         var patch = { base: { type: bt } };
-        // Concrete-only and skids: hide timber base in 3D (no graphics yet for skids)
-        if (bt === "concrete-only" || bt === "skids") {
-          patch.vis = { base: false, baseAll: false, deck: false };
-        } else {
-          patch.vis = { base: true, baseAll: true, deck: true };
+        // Concrete-only: show base (concrete pad), hide timber frame/deck/insulation
+        if (bt === "concrete-only") {
+          patch.vis = { base: true, baseAll: true, frame: false, deck: false, ins: false };
+        }
+        // Skids: hide all base graphics (no concrete, no grid)
+        else if (bt === "skids") {
+          patch.vis = { base: false, baseAll: false, deck: false, frame: true, ins: true };
+        }
+        // Other types: show grid, frame, deck
+        else {
+          patch.vis = { base: true, baseAll: true, frame: true, deck: true, ins: true };
         }
         store.setState(patch);
       });
-      // Sync on load
-      var s0 = store.getState();
-      if (s0 && s0.base && s0.base.type) baseTypeEl.value = s0.base.type;
+      // Sync dropdown whenever state changes
+      store.onChange(function(state) {
+        if (baseTypeEl && state.base && state.base.type) {
+          baseTypeEl.value = state.base.type;
+        }
+      });
     }
     if (wallHeightEl) wallHeightEl.addEventListener("input", function () {
       if (wallHeightEl && wallHeightEl.disabled === true) return;
