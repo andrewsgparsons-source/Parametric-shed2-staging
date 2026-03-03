@@ -82,7 +82,10 @@ export function estimatePrice(state) {
   const gaugeMultiplier = (section.h >= 100) ? 1.33 : 1.0;
   // Split timber into base frame vs walls+roof so each respects its visibility toggle
   const timberParts = estimateTimberLinearMetresSplit(state, w_mm, d_mm);
-  const timberLm = (visBaseFrame ? timberParts.base : 0)
+  // Check baseType to exclude base timber when customer supplies their own floor
+  const baseType = state.base?.type || 'ecodeck';
+  const includeBaseTimber = visBaseFrame && (baseType !== 'none' && baseType !== 'concrete-only');
+  const timberLm = (includeBaseTimber ? timberParts.base : 0)
                  + (visWalls ? timberParts.walls : 0)
                  + (visRoof ? timberParts.roof : 0);
   breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
@@ -92,7 +95,7 @@ export function estimatePrice(state) {
   const gridCostPerM2 = pt.base_grids?.cost_per_m2 || 0;
   breakdown.baseGrids = visBaseGrid ? footprint_m2 * gridCostPerM2 : 0;
 
-  // ─── 1c. BASE UPGRADE (concrete / skids) ───
+  // ─── 1c. BASE UPGRADE (concrete / skids / floor-only / none) ───
   const baseType = state.base?.type || 'ecodeck';
   breakdown.baseUpgrade = 0;
   if (baseType === 'concrete-timber' || baseType === 'concrete-only') {
@@ -105,6 +108,15 @@ export function estimatePrice(state) {
   } else if (baseType === 'skids') {
     // Steel galvanised skids: ~£86/m² (scaled from £1500 for 17.5m² garage)
     breakdown.baseUpgrade = footprint_m2 * (pt.base_upgrades?.skids_per_m2 || 86);
+  } else if (baseType === 'floor-only') {
+    // Customer has existing base (slab/paving), just supply timber floor frame + OSB
+    breakdown.baseGrids = 0;
+    breakdown.baseUpgrade = 0;
+  } else if (baseType === 'none') {
+    // Customer has existing base and floor, walls go straight onto it
+    breakdown.baseGrids = 0;
+    breakdown.baseUpgrade = 0;
+    // Exclude base timber from material cost (handled in timber calculation above)
   }
 
   // ─── 2. CLADDING ───
@@ -126,7 +138,9 @@ export function estimatePrice(state) {
 
   // ─── 3. OSB DECKING ───
   const sheetArea = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000; // ~2.977 m²
-  const osbSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
+  // Exclude OSB floor deck when customer supplies their own floor (baseType === 'none')
+  const includeFloorOsb = visBaseDeck && (baseType !== 'none' && baseType !== 'concrete-only');
+  const osbSheets = includeFloorOsb ? Math.ceil(footprint_m2 / sheetArea) : 0;
   breakdown.osb = osbSheets * pt.sheets.osb_18mm_per_sheet;
 
   // ─── 4. INSULATION (floor + walls, if insulated) ───
@@ -381,7 +395,9 @@ export function estimatePrice(state) {
     dividerCount: (state.dividers?.items || []).filter(d => d && d.enabled !== false).length,
     baseTypeLabel: baseType === 'concrete-timber' ? 'Concrete + Timber Floor' :
                    baseType === 'concrete-only' ? 'Concrete Only' :
-                   baseType === 'skids' ? 'Steel Galvanised Skids' : '',
+                   baseType === 'skids' ? 'Steel Galvanised Skids' :
+                   baseType === 'floor-only' ? 'Timber Floor Only (No Base)' :
+                   baseType === 'none' ? 'No Base or Floor' : '',
     breakdown: Object.fromEntries(
       Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
     )
