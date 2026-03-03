@@ -5809,11 +5809,15 @@ function parseOverhangInput(val) {
         if (bt === "concrete-only") {
           patch.vis = { base: true, baseAll: true, frame: false, deck: false, ins: false };
         }
+        // No base or floor: hide everything including insulation
+        else if (bt === "none") {
+          patch.vis = { base: false, baseAll: false, frame: false, deck: false, ins: false };
+        }
         // Skids: hide all base graphics (no concrete, no grid)
         else if (bt === "skids") {
           patch.vis = { base: false, baseAll: false, deck: false, frame: true, ins: true };
         }
-        // Other types: show grid, frame, deck
+        // Other types: show grid, frame, deck, insulation
         else {
           patch.vis = { base: true, baseAll: true, frame: true, deck: true, ins: true };
         }

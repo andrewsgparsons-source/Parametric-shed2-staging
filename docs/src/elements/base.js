@@ -129,7 +129,9 @@ export function build3D(state, ctx, sectionContext) {
     });
   }
 
-  if (state.vis.ins) {
+  // Floor insulation: hide when base type is 'none' (no floor) or 'concrete-only' (no timber floor)
+  const showInsulation = state.vis.ins && (baseType !== 'none' && baseType !== 'concrete-only');
+  if (showInsulation) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.9, 0.85, 0.7);
     for (let i = 0; i < L.positions.length - 1; i++) {
