@@ -74,6 +74,9 @@ export function estimatePrice(state) {
   const skylights = visRoof ? countSkylights(state) : 0;
 
   const breakdown = {};
+  
+  // Base type needs to be available for multiple calculations
+  const baseType = state.base?.type || 'ecodeck';
 
   // ─── 1. TIMBER (structural framing) ───
   const timberPerLm = pt.timber.structural_50x100_per_lm;
@@ -83,7 +86,6 @@ export function estimatePrice(state) {
   // Split timber into base frame vs walls+roof so each respects its visibility toggle
   const timberParts = estimateTimberLinearMetresSplit(state, w_mm, d_mm);
   // Check baseType to exclude base timber when customer supplies their own floor
-  const baseType = state.base?.type || 'ecodeck';
   const includeBaseTimber = visBaseFrame && (baseType !== 'none' && baseType !== 'concrete-only');
   const timberLm = (includeBaseTimber ? timberParts.base : 0)
                  + (visWalls ? timberParts.walls : 0)
@@ -96,7 +98,6 @@ export function estimatePrice(state) {
   breakdown.baseGrids = visBaseGrid ? footprint_m2 * gridCostPerM2 : 0;
 
   // ─── 1c. BASE UPGRADE (concrete / skids / floor-only / none) ───
-  const baseType = state.base?.type || 'ecodeck';
   breakdown.baseUpgrade = 0;
   if (baseType === 'concrete-timber' || baseType === 'concrete-only') {
     // Concrete slab: ~£75/m² (supply + lay + labour)
