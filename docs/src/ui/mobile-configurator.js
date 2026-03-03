@@ -553,15 +553,21 @@
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
       bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
-      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+      // Build BOM buttons HTML - hide Pricing button in customer view
+      var bomButtonsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
         '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
         '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
         '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
-        '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>' +
-        '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>' +
-        '</div>';
+        '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>';
+      
+      // Only show Pricing button in admin view
+      if (isAdmin) {
+        bomButtonsHtml += '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>';
+      }
+      bomButtonsHtml += '</div>';
+      
+      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' + bomButtonsHtml;
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
 
