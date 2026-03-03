@@ -254,6 +254,15 @@
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
 
+    // Hide pricing display dropdown for customer view
+    if (!isAdmin) {
+      var priceBadgeModeRow = document.getElementById('priceBadgeModeRow');
+      if (priceBadgeModeRow) {
+        priceBadgeModeRow.style.display = 'none';
+        console.log('[mobile-configurator] Hidden priceBadgeModeRow for customer view');
+      }
+    }
+
     // Check profile restrictions and update pill visibility
     // Runs after layout built, and again whenever profile changes
     updatePillVisibility();
