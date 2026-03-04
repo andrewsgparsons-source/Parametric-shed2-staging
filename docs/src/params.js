@@ -270,8 +270,40 @@ export const ATTACHMENT_DEFAULTS = {
     overhang: {
       extension_mm: 0     // How far to extend main building's overhang (only if type="overhang")
     }
+  },
+
+  // L-Shaped Building Configuration (roof matching main building)
+  lShaped: {
+    enabled: false,       // Enable L-shaped mode (roof matches main building)
+    corner: "near",       // "near" (closer to origin) | "far" (further from origin)
+    type: null            // "apex" | "pent" - auto-set based on main roof, read-only
   }
 };
+
+/**
+ * Check if L-shaped mode is allowed for an attachment
+ * @param {object} state - Main building state
+ * @param {object} attachment - Attachment configuration
+ * @returns {boolean} True if L-shaped mode is allowed
+ */
+export function isLShapedAllowed(state, attachment) {
+  // Depth must be greater than width (long sides are front/back)
+  if (state.d <= state.w) return false;
+  
+  // Building must be rectangular (not gazebo or special shapes)
+  const buildingType = state.buildingType || 'shed';
+  if (buildingType === 'gazebo') return false;
+  
+  // Roof must be apex or pent
+  const roofStyle = state.roof?.style || 'apex';
+  if (roofStyle !== 'apex' && roofStyle !== 'pent') return false;
+  
+  // Attachment must be on a long side (front or back)
+  const wall = attachment?.attachTo?.wall || 'left';
+  if (wall !== 'front' && wall !== 'back') return false;
+  
+  return true;
+}
 
 /**
  * Create a new attachment with default values
