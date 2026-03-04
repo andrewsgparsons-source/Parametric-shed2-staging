@@ -55,7 +55,7 @@ window.addEventListener("unhandledrejection", function (e) {
 });
 
 import { createStateStore, deepMerge } from "./state.js";
-import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS } from "./params.js";
+import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS, isLShapedAllowed } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js?_v=3";
 import * as Base from "./elements/base.js";
 import * as Walls from "./elements/walls.js?_v=3";
@@ -79,6 +79,9 @@ import { initPanelResize } from "./ui/panel-resize.js";
 function $(id) { return document.getElementById(id); }
 function setDisplay(el, val) { if (el && el.style) el.style.display = val; }
 function setAriaHidden(el, hidden) { if (el) el.setAttribute("aria-hidden", String(!!hidden)); }
+
+// Expose utility functions for UI
+window.isLShapedAllowed = isLShapedAllowed;
 
 /**
  * Toggle roof covering visibility checkboxes based on covering type
@@ -6689,6 +6692,63 @@ function parseOverhangInput(val) {
 
           body.appendChild(roofSection);
 
+          // === L-Shaped Building Section ===
+          var lShapedSection = document.createElement("div");
+          lShapedSection.className = "att-section att-lshaped-section";
+          lShapedSection.innerHTML = '<div class="att-section-title">L-Shaped Building Options</div>';
+
+          // Check if L-shaped is allowed for this attachment
+          var lShapedAllowed = window.isLShapedAllowed ? window.isLShapedAllowed(mainState, att) : false;
+
+          if (lShapedAllowed) {
+            var lShapedEnabled = att.lShaped?.enabled || false;
+            var lShapedCorner = att.lShaped?.corner || "near";
+            var mainRoofType = mainState.roof?.style || "apex";
+
+            // Enable toggle row
+            var lShapedRow1 = document.createElement("div");
+            lShapedRow1.className = "att-row full";
+            lShapedRow1.innerHTML =
+              '<label style="display:flex;align-items:center;gap:8px;">' +
+              '<input type="checkbox" class="att-lshaped-enable" ' + (lShapedEnabled ? "checked" : "") + ' />' +
+              '<span style="margin:0;">Enable L-Shaped Configuration</span></label>' +
+              '<div class="att-hint">Match roof height and pitch with main building to create an L-shaped structure.</div>';
+            lShapedSection.appendChild(lShapedRow1);
+
+            // Options (shown only when enabled)
+            var lShapedOptions = document.createElement("div");
+            lShapedOptions.className = "att-lshaped-options";
+            lShapedOptions.style.display = lShapedEnabled ? "block" : "none";
+
+            var lShapedRow2 = document.createElement("div");
+            lShapedRow2.className = "att-row";
+            lShapedRow2.innerHTML =
+              '<label><span>Corner Position</span>' +
+              '<select class="att-lshaped-corner">' +
+              '<option value="near"' + (lShapedCorner === "near" ? " selected" : "") + '>Near (closer to origin)</option>' +
+              '<option value="far"' + (lShapedCorner === "far" ? " selected" : "") + '>Far (further from origin)</option>' +
+              '</select></label>' +
+              '<label><span>Roof Type</span>' +
+              '<input type="text" class="att-lshaped-type-display" value="' + mainRoofType.charAt(0).toUpperCase() + mainRoofType.slice(1) + ' Match" readonly style="background:#f5f5f5;cursor:default;" /></label>';
+            lShapedOptions.appendChild(lShapedRow2);
+
+            var lShapedHint = document.createElement("div");
+            lShapedHint.className = "att-hint";
+            lShapedHint.innerHTML = '<strong>Note:</strong> When L-shaped mode is enabled, attachment width will match main building width, and roof height will match main building ridge/eaves.';
+            lShapedOptions.appendChild(lShapedHint);
+
+            lShapedSection.appendChild(lShapedOptions);
+          } else {
+            // Not allowed - show why
+            var notAllowedMsg = document.createElement("div");
+            notAllowedMsg.className = "att-hint";
+            notAllowedMsg.style.cssText = "color:#888;font-style:italic;";
+            notAllowedMsg.textContent = "L-shaped configuration is only available for attachments on the long sides (front/back) of rectangular buildings where depth > width.";
+            lShapedSection.appendChild(notAllowedMsg);
+          }
+
+          body.appendChild(lShapedSection);
+
           // === Remove Button ===
           var removeBtn = document.createElement("button");
           removeBtn.className = "att-remove-btn";
@@ -6899,6 +6959,39 @@ function parseOverhangInput(val) {
       if (apexTrussesInput) {
         apexTrussesInput.addEventListener("change", function() {
           patchAttachmentById(attId, { roof: { apex: { trussCount: parseInt(this.value, 10) || 2 } } });
+        });
+      }
+
+      // L-Shaped inputs
+      var lShapedEnableCheck = editor.querySelector(".att-lshaped-enable");
+      var lShapedOptions = editor.querySelector(".att-lshaped-options");
+      var lShapedCornerSelect = editor.querySelector(".att-lshaped-corner");
+
+      if (lShapedEnableCheck) {
+        lShapedEnableCheck.addEventListener("change", function() {
+          var enabled = this.checked;
+          patchAttachmentById(attId, { lShaped: { enabled: enabled } });
+          
+          // Show/hide options
+          if (lShapedOptions) {
+            lShapedOptions.style.display = enabled ? "block" : "none";
+          }
+
+          // When enabling L-shaped, auto-set width to match main building and set roof type
+          if (enabled) {
+            var currentState = store.getState();
+            var mainRoofType = currentState.roof?.style || "apex";
+            patchAttachmentById(attId, {
+              dimensions: { width_mm: currentState.d }, // Main building depth (long side)
+              lShaped: { type: mainRoofType, corner: "near" }
+            });
+          }
+        });
+      }
+
+      if (lShapedCornerSelect) {
+        lShapedCornerSelect.addEventListener("change", function() {
+          patchAttachmentById(attId, { lShaped: { corner: this.value } });
         });
       }
     }
