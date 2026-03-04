@@ -428,7 +428,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom, mainState);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -2884,7 +2884,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom, mainState) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -2905,6 +2905,20 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
   }
   console.log("[attachments] buildAttachmentRoof - claddingMat:", claddingMat?.name, "diffuse:", claddingMat?.diffuseColor?.toString());
 
+  // Check for L-shaped mode
+  if (attachment.lShaped?.enabled === true) {
+    console.log("[attachments] L-SHAPED MODE ENABLED - roofType:", roofType);
+    if (roofType === "apex") {
+      const geometry = calculateLShapedApexGeometry(mainState, attachment);
+      buildLShapedApexRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat);
+    } else if (roofType === "pent") {
+      const geometry = calculateLShapedPentGeometry(mainState, attachment);
+      buildLShapedPentRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat);
+    }
+    return;
+  }
+
+  // Standard attachment roof (not L-shaped)
   if (roofType === "pent") {
     console.log("[attachments] PENT ROOF - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
@@ -3980,6 +3994,69 @@ export function calculateLShapedPentGeometry(mainState, attachment) {
     mainSlope: { pitch: mainPitch, minHeight: mainMinHeight, maxHeight: mainMaxHeight },
     attSlope: { pitch: mainPitch, highHeight: attHighHeight, lowHeight: attLowHeight }
   };
+}
+
+/**
+ * Build L-shaped Apex roof meshes from calculated geometry
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment ID
+ * @param {object} geometry - Result from calculateLShapedApexGeometry
+ * @param {BABYLON.Material} joistMat
+ * @param {BABYLON.Material} osbMat
+ * @param {BABYLON.Material} coveringMat
+ * @param {BABYLON.Material} claddingMat
+ */
+function buildLShapedApexRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat) {
+  console.log("[L-Shaped Apex Roof] Building roof meshes...", geometry);
+  
+  // Create a simple pyramid mesh at the ridge intersection point to visualize
+  const marker = BABYLON.MeshBuilder.CreateCylinder(`${attId}-ridge-marker`, {
+    height: 200,
+    diameter: 100
+  }, scene);
+  marker.position = new BABYLON.Vector3(
+    geometry.ridgeIntersection.x,
+    geometry.ridgeIntersection.y,
+    geometry.ridgeIntersection.z
+  );
+  marker.material = coveringMat;
+  marker.parent = root;
+  marker.metadata = { dynamic: true, attachmentId: attId };
+  
+  // TODO: Create actual roof planes, fascia, etc.
+  console.log("[L-Shaped Apex Roof] Marker placed at ridge intersection");
+}
+
+/**
+ * Build L-shaped Pent roof meshes from calculated geometry
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment ID
+ * @param {object} geometry - Result from calculateLShapedPentGeometry
+ * @param {BABYLON.Material} joistMat
+ * @param {BABYLON.Material} osbMat
+ * @param {BABYLON.Material} coveringMat
+ * @param {BABYLON.Material} claddingMat
+ */
+function buildLShapedPentRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat) {
+  console.log("[L-Shaped Pent Roof] Building roof meshes...", geometry);
+  
+  // Create a line to visualize the hip ridge
+  const points = [
+    new BABYLON.Vector3(geometry.hipRidge.start.x, geometry.hipRidge.start.y, geometry.hipRidge.start.z),
+    new BABYLON.Vector3(geometry.hipRidge.end.x, geometry.hipRidge.end.y, geometry.hipRidge.end.z)
+  ];
+  
+  const line = BABYLON.MeshBuilder.CreateLines(`${attId}-hip-ridge`, {
+    points: points
+  }, scene);
+  line.color = new BABYLON.Color3(1, 0, 0); // Red line
+  line.parent = root;
+  line.metadata = { dynamic: true, attachmentId: attId };
+  
+  // TODO: Create actual roof planes, fascia, etc.
+  console.log("[L-Shaped Pent Roof] Hip ridge line created");
 }
 
 /**
