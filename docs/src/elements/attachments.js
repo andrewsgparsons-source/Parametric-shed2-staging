@@ -3812,6 +3812,177 @@ export function disposeAttachment(scene, attachmentId) {
 }
 
 /**
+ * Calculate L-shaped Apex roof geometry (ridge intersection, hip valley, hip ridge)
+ * Used when attachment.lShaped.enabled === true and type === "apex"
+ * @param {object} mainState - Main building state
+ * @param {object} attachment - Attachment configuration
+ * @returns {object} Geometry data: { ridgeIntersection, hipValley, hipRidge, mainRidge, attRidge }
+ */
+export function calculateLShapedApexGeometry(mainState, attachment) {
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM; // 168mm
+  
+  // Main building ridge height (same for both buildings in L-shaped mode)
+  const mainCrestHeight = Number(
+    mainState.roof?.apex?.heightToCrest_mm || 
+    mainState.roof?.apex?.crestHeight_mm || 
+    2200
+  );
+  const mainEavesHeight = Number(
+    mainState.roof?.apex?.heightToEaves_mm ||
+    mainState.roof?.apex?.eavesHeight_mm ||
+    1850
+  );
+  
+  const ridgeY = floorSurfaceY + mainCrestHeight; // Absolute Y from ground
+  const eavesY = floorSurfaceY + mainEavesHeight;
+  
+  // Main building dimensions
+  const mainW = mainState.w || 2400; // width (X)
+  const mainD = mainState.d || 3000; // depth (Z)
+  
+  // For L-shaped, depth > width, so main ridge runs along Z axis (depth)
+  const mainRidgeX = mainW / 2; // Ridge runs down center of width
+  
+  // Attachment dimensions
+  const attWall = attachment.attachTo?.wall || "front";
+  const attCorner = attachment.lShaped?.corner || "near";
+  const attWidth = attachment.dimensions?.width_mm || mainD; // Should match main depth
+  const attDepth = attachment.dimensions?.depth_mm || 1200; // Extends outward
+  
+  // Attachment ridge runs perpendicular (along X axis)
+  // Position depends on wall and corner
+  let attRidgeZ, attRidgeXStart, attRidgeXEnd, cornerX, cornerZ;
+  
+  if (attWall === "front") {
+    attRidgeZ = -attDepth / 2; // Ridge at midpoint of depth, extends in -Z
+    cornerZ = 0; // Corner at front of main building
+    if (attCorner === "near") {
+      cornerX = 0; // Left corner
+      attRidgeXStart = 0;
+      attRidgeXEnd = attWidth;
+    } else {
+      cornerX = mainW; // Right corner
+      attRidgeXStart = mainW - attWidth;
+      attRidgeXEnd = mainW;
+    }
+  } else { // attWall === "back"
+    attRidgeZ = mainD + (attDepth / 2); // Ridge at midpoint, extends in +Z
+    cornerZ = mainD; // Corner at back of main building
+    if (attCorner === "near") {
+      cornerX = 0; // Left corner
+      attRidgeXStart = 0;
+      attRidgeXEnd = attWidth;
+    } else {
+      cornerX = mainW; // Right corner
+      attRidgeXStart = mainW - attWidth;
+      attRidgeXEnd = mainW;
+    }
+  }
+  
+  // Ridge intersection point (where both ridges meet at corner, same height)
+  const ridgeIntersection = { x: cornerX, y: ridgeY, z: cornerZ };
+  
+  // Hip valley runs from corner (at eaves) down along the eaves line
+  // The valley rafter runs diagonally from ridge intersection to eaves corner
+  const hipValley = {
+    top: ridgeIntersection, // At ridge height
+    bottom: { x: cornerX, y: eavesY, z: cornerZ } // At eaves height
+  };
+  
+  // Hip ridge: the line where the two roof planes meet at the corner
+  // In L-shaped apex, this is just the corner vertical from eaves to ridge
+  const hipRidge = {
+    bottom: { x: cornerX, y: eavesY, z: cornerZ },
+    top: ridgeIntersection
+  };
+  
+  console.log("[L-Shaped Apex Geometry]", {
+    ridgeIntersection,
+    hipValley,
+    hipRidge,
+    mainRidge: { x: mainRidgeX, z: [0, mainD], y: ridgeY },
+    attRidge: { x: [attRidgeXStart, attRidgeXEnd], z: attRidgeZ, y: ridgeY }
+  });
+  
+  return {
+    ridgeIntersection,
+    hipValley,
+    hipRidge,
+    mainRidge: { x: mainRidgeX, zStart: 0, zEnd: mainD, y: ridgeY },
+    attRidge: { xStart: attRidgeXStart, xEnd: attRidgeXEnd, z: attRidgeZ, y: ridgeY }
+  };
+}
+
+/**
+ * Calculate L-shaped Pent roof geometry (hip ridge where slopes meet)
+ * Used when attachment.lShaped.enabled === true and type === "pent"
+ * @param {object} mainState - Main building state  
+ * @param {object} attachment - Attachment configuration
+ * @returns {object} Geometry data: { hipRidge, mainSlope, attSlope }
+ */
+export function calculateLShapedPentGeometry(mainState, attachment) {
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
+  
+  // Main building pent roof heights
+  const mainMinHeight = Number(mainState.roof?.pent?.minHeight_mm || 2100);
+  const mainMaxHeight = Number(mainState.roof?.pent?.maxHeight_mm || 2400);
+  const mainDepth = mainState.d || 3000;
+  
+  // Calculate main roof pitch (rise over run)
+  const mainRise = mainMaxHeight - mainMinHeight;
+  const mainPitch = mainRise / mainDepth;
+  
+  // Attachment dimensions
+  const attWall = attachment.attachTo?.wall || "front";
+  const attCorner = attachment.lShaped?.corner || "near";
+  const attWidth = attachment.dimensions?.width_mm || mainDepth;
+  const attDepth = attachment.dimensions?.depth_mm || 1200;
+  
+  // Attachment roof matches main pitch
+  const attHighHeight = mainMaxHeight; // At main building edge
+  const attLowHeight = attHighHeight - (mainPitch * attDepth);
+  
+  // Hip ridge calculation (where two sloped planes meet at corner)
+  let cornerX, cornerZ, hipRidgeStartY, hipRidgeEndX, hipRidgeEndZ, hipRidgeEndY;
+  
+  const mainW = mainState.w || 2400;
+  
+  if (attWall === "front") {
+    cornerZ = 0;
+    cornerX = attCorner === "near" ? 0 : mainW;
+    hipRidgeStartY = floorSurfaceY + mainMaxHeight; // Top (at main building corner)
+    hipRidgeEndX = cornerX; // Hip runs straight out along attachment
+    hipRidgeEndZ = -attDepth;
+    hipRidgeEndY = floorSurfaceY + attLowHeight;
+  } else { // "back"
+    cornerZ = mainDepth;
+    cornerX = attCorner === "near" ? 0 : mainW;
+    hipRidgeStartY = floorSurfaceY + mainMinHeight; // Main roof is lowest at back
+    hipRidgeEndX = cornerX;
+    hipRidgeEndZ = mainDepth + attDepth;
+    hipRidgeEndY = floorSurfaceY + attLowHeight;
+  }
+  
+  console.log("[L-Shaped Pent Geometry]", {
+    hipRidge: {
+      start: { x: cornerX, y: hipRidgeStartY, z: cornerZ },
+      end: { x: hipRidgeEndX, y: hipRidgeEndY, z: hipRidgeEndZ }
+    },
+    mainSlope: { pitch: mainPitch, minHeight: mainMinHeight, maxHeight: mainMaxHeight },
+    attSlope: { pitch: mainPitch, highHeight: attHighHeight, lowHeight: attLowHeight }
+  });
+  
+  return {
+    hipRidge: {
+      start: { x: cornerX, y: hipRidgeStartY, z: cornerZ },
+      end: { x: hipRidgeEndX, y: hipRidgeEndY, z: hipRidgeEndZ }
+    },
+    mainSlope: { pitch: mainPitch, minHeight: mainMinHeight, maxHeight: mainMaxHeight },
+    attSlope: { pitch: mainPitch, highHeight: attHighHeight, lowHeight: attLowHeight }
+  };
+}
+
+/**
  * Disposes all attachment meshes and root nodes from the scene.
  * Used when clearing all attachments (e.g., before rebuild).
  * 
