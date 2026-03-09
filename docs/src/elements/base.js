@@ -62,7 +62,7 @@ export function build3D(state, ctx, sectionContext) {
   }
 
   // Concrete base rendering for garage and concrete base types
-  const showConcrete = state.vis.base && (baseType === 'concrete-only' || baseType === 'concrete-timber');
+  const showConcrete = (state.vis.concrete !== false) && (baseType === 'concrete-only' || baseType === 'concrete-timber');
   if (showConcrete) {
     const concreteHeight = 150; // 150mm thick concrete slab
     const concreteOverhang = 50; // 50mm overhang beyond building footprint
@@ -129,8 +129,9 @@ export function build3D(state, ctx, sectionContext) {
     });
   }
 
-  // Floor insulation: hide when base type is 'none' (no floor) or 'concrete-only' (no timber floor)
-  const showInsulation = state.vis.ins && (baseType !== 'none' && baseType !== 'concrete-only');
+  // Floor insulation: only for insulated variant, hide when base type is 'none' or 'concrete-only'
+  const isInsulated = state.walls?.variant === 'insulated';
+  const showInsulation = isInsulated && state.vis.ins && (baseType !== 'none' && baseType !== 'concrete-only');
   if (showInsulation) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.9, 0.85, 0.7);
@@ -356,12 +357,13 @@ export function updateBOM(state) {
     if (osbSummaryEl) osbSummaryEl.textContent = '';
   }
 
-  // ----- PIR Insulation — Rip Cuts Only (derived from placement) -----
+  // ----- PIR Insulation — Rip Cuts Only (insulated variant only) -----
+  const isInsulatedBOM = state.walls?.variant === 'insulated';
   const gW = CONFIG.insulation.w;
   const gL = CONFIG.insulation.d;
   const pirRipCuts = {};
   let totalPirArea = 0;
-  for (let i = 0; i < L.positions.length - 1; i++) {
+  for (let i = 0; isInsulatedBOM && i < L.positions.length - 1; i++) {
     const start = L.positions[i] + 25;
     const currentBayW = (L.positions[i + 1] - 25) - start;
     for (let z = 0; z < L.innerJoistLen; z += gL) {
@@ -392,6 +394,10 @@ export function updateBOM(state) {
   const pirMinSheets = pirSheetArea > 0 ? Math.ceil(totalPirArea / pirSheetArea) : 0;
   const pirSummaryEl = document.getElementById('pirSummary');
   if (pirSummaryEl) pirSummaryEl.textContent = `Minimum full sheets required (by area): ${pirMinSheets}`;
+
+  // Hide entire floor PIR section when not insulated variant
+  const floorPirSection = document.getElementById('floorPirSection');
+  if (floorPirSection) floorPirSection.style.display = isInsulatedBOM ? '' : 'none';
 
   // ----- Plastic Grid Tiles (mirror base grid placement) -----
   const g = CONFIG.grid.size;

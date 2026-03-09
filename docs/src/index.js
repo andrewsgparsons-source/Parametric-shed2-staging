@@ -528,6 +528,7 @@ function initApp() {
     var vRoofOsbEl = $("vRoofOsb");
     var vBaseAllEl = $("vBaseAll");
     var vBaseEl = $("vBase");
+    var vConcreteEl = $("vConcrete");
     var vFrameEl = $("vFrame");
     var vInsEl = $("vIns");
     var vDeckEl = $("vDeck");
@@ -651,6 +652,7 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var windowsListEl = $("windowsList");
 
     // Attachment controls (simplified - most inputs are dynamically created)
+    var attachmentTypeEl = $("attachmentType");
     var attachmentWallEl = $("attachmentWall");
     var addAttachmentBtnEl = $("addAttachmentBtn");
     var removeAllAttachmentsBtnEl = $("removeAllAttachmentsBtn");
@@ -716,8 +718,10 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
         }
       }
 
-      // Base insulation checkbox (vIns)
-      toggleCheckboxVisibility(vInsEl, isInsulated);
+      // Base insulation checkbox (vIns) — only if base type has timber floor
+      var bt = (state && state.base && state.base.type) ? state.base.type : "ecodeck";
+      var hasTimberFloor = (bt !== "none" && bt !== "concrete-only");
+      toggleCheckboxVisibility(vInsEl, isInsulated && hasTimberFloor);
 
       // Wall insulation and plywood checkboxes
       toggleCheckboxVisibility(vWallInsulationEl, isInsulated);
@@ -740,6 +744,43 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
       if (wallPlySection) wallPlySection.style.display = isInsulated ? "" : "none";
       if (wallPirSection2) wallPirSection2.style.display = isInsulated ? "" : "none";
       if (wallPlySection2) wallPlySection2.style.display = isInsulated ? "" : "none";
+    }
+
+    /**
+     * Show/hide base visibility toggles based on selected base type.
+     * Each base type only shows the toggles relevant to its components:
+     *   ecodeck:          Grid, Timber Frame, Insulation*, Decking
+     *   concrete-timber:  Concrete Base, Timber Frame, Insulation*, Decking
+     *   concrete-only:    Concrete Base
+     *   skids:            Timber Frame, Insulation*, Decking
+     *   floor-only:       Timber Frame, Insulation*, Decking
+     *   none:             (nothing)
+     * (*Insulation only when variant=insulated — handled by updateInsulationControlsForVariant)
+     */
+    function updateBaseViewToggles(state) {
+      var baseType = (state && state.base && state.base.type) ? state.base.type : "ecodeck";
+
+      function toggleEl(el, show) {
+        if (!el) return;
+        var label = el.closest("label") || el.parentElement;
+        if (label) label.style.display = show ? "" : "none";
+      }
+
+      var hasConcrete = (baseType === "concrete-only" || baseType === "concrete-timber");
+      var hasGrid = (baseType === "ecodeck");
+      var hasTimber = (baseType !== "none" && baseType !== "concrete-only");
+      var hasDeck = hasTimber;
+
+      toggleEl(vBaseEl, hasGrid);
+      toggleEl(vConcreteEl, hasConcrete);
+      toggleEl(vFrameEl, hasTimber);
+      toggleEl(vDeckEl, hasDeck);
+      // vIns visibility is handled by updateInsulationControlsForVariant,
+      // but we also need to hide it when there's no timber floor at all
+      if (!hasTimber) {
+        toggleEl(vInsEl, false);
+      }
+      // else let the variant function control it (it runs separately)
     }
 
     var asPosInt = function (v, def) {
@@ -4476,9 +4517,13 @@ if (state && state.overhang) {
 
         if (vBaseAllEl) vBaseAllEl.checked = getBaseEnabled(state);
         if (vBaseEl) vBaseEl.checked = !!(state && state.vis && state.vis.base);
+        if (vConcreteEl) vConcreteEl.checked = (state && state.vis && state.vis.concrete !== false);
         if (vFrameEl) vFrameEl.checked = !!(state && state.vis && state.vis.frame);
         if (vInsEl) vInsEl.checked = (state && state.vis && state.vis.ins !== false);
         if (vDeckEl) vDeckEl.checked = !!(state && state.vis && state.vis.deck);
+
+        // Dynamic base view toggles based on selected base type
+        updateBaseViewToggles(state);
 
         if (vWallsEl) vWallsEl.checked = getWallsEnabled(state);
         if (vRoofEl) vRoofEl.checked = getRoofEnabled(state);
@@ -4663,6 +4708,7 @@ if (state && state.overhang) {
             walls: { variant: "basic", height_mm: 2400 },
             frame: { thickness_mm: 50, depth_mm: 75 },
             shelving: [],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: false }
           },
           "gardenroom-pent": {
@@ -4693,6 +4739,7 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
             shelving: [{ wall: "left", side: "outside", x_mm: 1050, y_mm: 1350, length_mm: 1350, depth_mm: 500, thickness_mm: 25, bracket_size_mm: 250, enabled: true }],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
           "gardenroom-apex": {
@@ -4720,6 +4767,7 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
             shelving: [],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true, wallIns: true, wallPly: true }
           },
           "fieldshelter": {
@@ -4775,6 +4823,7 @@ if (state && state.overhang) {
               { wall: "left", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 1500, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true },
               { wall: "front", side: "inside", x_mm: 200, y_mm: 1500, length_mm: 800, depth_mm: 300, thickness_mm: 25, bracket_size_mm: 250, enabled: true }
             ],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
               walls: { front: true, back: true, left: true, right: false },
               roofParts: { ply: true, insulation: true, membraneBattens: false } }
@@ -4805,6 +4854,7 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 100 },
             cladding: { style: "shiplap", colour: "natural-wood" },
             shelving: [],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: true, wallsEnabled: true, wallIns: true, wallPly: true, cladding: true, roof: true,
               roofParts: { ply: true, insulation: true, membraneBattens: false } }
           },
@@ -4854,6 +4904,7 @@ if (state && state.overhang) {
             frame: { thickness_mm: 50, depth_mm: 75 },
             cladding: { style: "shiplap", colour: "natural-wood" },
             shelving: [],
+            base: { type: "ecodeck" },
             vis: { base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true }
           }
         };
@@ -4874,6 +4925,9 @@ if (state && state.overhang) {
           patch.vis.baseAll = true;
           if (!patch.shelving) patch.shelving = [];
         }
+
+        // Safety net: always reset base type if not explicitly set by preset
+        if (!patch.base) patch.base = { type: "ecodeck" };
 
         store.setState(patch);
         updateBuildingTypeUI(newType);
@@ -5395,6 +5449,7 @@ if (vCladdingEl) vCladdingEl.addEventListener("change", function (e) {
     });
 
     if (vBaseEl) vBaseEl.addEventListener("change", function (e) { store.setState({ vis: { base: !!e.target.checked } }); });
+    if (vConcreteEl) vConcreteEl.addEventListener("change", function (e) { store.setState({ vis: { concrete: !!e.target.checked } }); });
     if (vFrameEl) vFrameEl.addEventListener("change", function (e) { store.setState({ vis: { frame: !!e.target.checked } }); });
     if (vInsEl) vInsEl.addEventListener("change", function (e) { store.setState({ vis: { ins: !!e.target.checked } }); });
     if (vDeckEl) vDeckEl.addEventListener("change", function (e) { store.setState({ vis: { deck: !!e.target.checked } }); });
@@ -5808,21 +5863,25 @@ function parseOverhangInput(val) {
       baseTypeEl.addEventListener("change", function () {
         var bt = baseTypeEl.value;
         var patch = { base: { type: bt } };
-        // Concrete-only: show base (concrete pad), hide timber frame/deck/insulation
+        // Set vis defaults appropriate for each base type
         if (bt === "concrete-only") {
-          patch.vis = { base: true, baseAll: true, frame: false, deck: false, ins: false };
+          patch.vis = { base: false, concrete: true, baseAll: true, frame: false, deck: false, ins: false };
         }
-        // No base or floor: hide everything including insulation
+        else if (bt === "concrete-timber") {
+          patch.vis = { base: false, concrete: true, baseAll: true, frame: true, deck: true, ins: true };
+        }
         else if (bt === "none") {
-          patch.vis = { base: false, baseAll: false, frame: false, deck: false, ins: false };
+          patch.vis = { base: false, concrete: false, baseAll: false, frame: false, deck: false, ins: false };
         }
-        // Skids: hide all base graphics (no concrete, no grid)
         else if (bt === "skids") {
-          patch.vis = { base: false, baseAll: false, deck: false, frame: true, ins: true };
+          patch.vis = { base: false, concrete: false, baseAll: true, deck: true, frame: true, ins: true };
         }
-        // Other types: show grid, frame, deck, insulation
+        else if (bt === "floor-only") {
+          patch.vis = { base: false, concrete: false, baseAll: true, frame: true, deck: true, ins: true };
+        }
+        // ecodeck (default): show grid, frame, deck, insulation
         else {
-          patch.vis = { base: true, baseAll: true, frame: true, deck: true, ins: true };
+          patch.vis = { base: true, concrete: false, baseAll: true, frame: true, deck: true, ins: true };
         }
         store.setState(patch);
       });
@@ -6743,7 +6802,7 @@ function parseOverhangInput(val) {
             var notAllowedMsg = document.createElement("div");
             notAllowedMsg.className = "att-hint";
             notAllowedMsg.style.cssText = "color:#888;font-style:italic;";
-            notAllowedMsg.textContent = "L-shaped configuration is only available for attachments on the long sides (front/back) of rectangular buildings where depth > width.";
+            notAllowedMsg.textContent = "L-shaped configuration is only available for attachments on the long sides (left/right) of rectangular buildings where depth > width.";
             lShapedSection.appendChild(notAllowedMsg);
           }
 
@@ -7000,9 +7059,17 @@ function parseOverhangInput(val) {
     if (addAttachmentBtnEl) {
       addAttachmentBtnEl.addEventListener("click", function() {
         var currentAtts = getAttachmentsFromState(store.getState());
+        var mainState = store.getState();
         
-        // Wall priority order: right, back, front, left
-        var wallPriority = ["right", "back", "front", "left"];
+        // Check attachment type
+        var attachmentType = attachmentTypeEl ? attachmentTypeEl.value : "standard";
+        var isLShaped = attachmentType === "lshaped";
+        
+        // For L-shaped buildings, only left/right walls are allowed (depth > width requirement)
+        // For standard attachments, use all walls
+        var wallPriority = isLShaped 
+          ? ["left", "right"] 
+          : ["right", "back", "front", "left"];
         
         // Find walls that already have attachments
         var usedWalls = {};
@@ -7022,13 +7089,21 @@ function parseOverhangInput(val) {
         
         // If all walls have attachments, show alert and return
         if (!nextWall) {
-          alert("All walls already have attachments. Remove an attachment first.");
+          var msg = isLShaped 
+            ? "Both front and back walls already have attachments. Remove one first."
+            : "All walls already have attachments. Remove an attachment first.";
+          alert(msg);
           return;
         }
         
         // Use the selected wall from dropdown, but if it's already taken, use next available
-        var selectedWall = attachmentWallEl ? attachmentWallEl.value : "right";
+        var selectedWall = attachmentWallEl ? attachmentWallEl.value : nextWall;
         var attWall = usedWalls[selectedWall] ? nextWall : selectedWall;
+        
+        // For L-shaped, validate that selected wall is left or right
+        if (isLShaped && attWall !== "left" && attWall !== "right") {
+          attWall = nextWall; // Force to left or right
+        }
         
         // Update dropdown to show next available wall for future additions
         if (attachmentWallEl) {
@@ -7037,6 +7112,24 @@ function parseOverhangInput(val) {
 
         // Use the new createAttachment function from params.js
         var newAttachment = createAttachment(attWall);
+        
+        // Configure L-shaped mode if selected
+        if (isLShaped) {
+          var mainRoofStyle = mainState.roof && mainState.roof.style || "apex";
+          newAttachment.lShaped = {
+            enabled: true,
+            corner: "near",
+            type: mainRoofStyle // Match main building roof type
+          };
+          
+          // For L-shaped, width should match main building depth
+          // and we'll use a reasonable default depth
+          var mainDepth = mainState.d || mainState.dim?.frameD_mm || 4000;
+          newAttachment.dimensions = {
+            width_mm: mainDepth,
+            depth_mm: 2400
+          };
+        }
 
         currentAtts.push(newAttachment);
         setAttachments(currentAtts);
@@ -7055,7 +7148,13 @@ function parseOverhangInput(val) {
       if (!attachmentWallEl) return;
       
       var currentAtts = getAttachmentsFromState(store.getState());
-      var wallPriority = ["right", "back", "front", "left"];
+      var attachmentType = attachmentTypeEl ? attachmentTypeEl.value : "standard";
+      var isLShaped = attachmentType === "lshaped";
+      
+      // For L-shaped, only left/right are allowed
+      var wallPriority = isLShaped 
+        ? ["left", "right"] 
+        : ["right", "back", "front", "left"];
       
       // Find walls that already have attachments
       var usedWalls = {};
@@ -7070,8 +7169,16 @@ function parseOverhangInput(val) {
         var opt = options[j];
         var wallName = opt.value;
         var isUsed = usedWalls[wallName];
-        opt.disabled = isUsed;
-        opt.text = wallName.charAt(0).toUpperCase() + wallName.slice(1) + (isUsed ? " (used)" : "");
+        
+        // For L-shaped, hide front/back walls entirely (only left/right allowed)
+        if (isLShaped && (wallName === "front" || wallName === "back")) {
+          opt.style.display = "none";
+          opt.disabled = true;
+        } else {
+          opt.style.display = "";
+          opt.disabled = isUsed;
+          opt.text = wallName.charAt(0).toUpperCase() + wallName.slice(1) + (isUsed ? " (used)" : "");
+        }
       }
       
       // Select next available wall
@@ -7110,6 +7217,13 @@ function parseOverhangInput(val) {
     
     // Initial update of dropdown
     updateAttachmentWallDropdown();
+    
+    // Update wall dropdown when attachment type changes
+    if (attachmentTypeEl) {
+      attachmentTypeEl.addEventListener("change", function() {
+        updateAttachmentWallDropdown();
+      });
+    }
 
     // Re-render when user finishes editing (on blur from attachment inputs)
     if (attachmentsListEl) {

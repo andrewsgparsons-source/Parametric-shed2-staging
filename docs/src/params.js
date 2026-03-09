@@ -298,9 +298,9 @@ export function isLShapedAllowed(state, attachment) {
   const roofStyle = state.roof?.style || 'apex';
   if (roofStyle !== 'apex' && roofStyle !== 'pent') return false;
   
-  // Attachment must be on a long side (front or back)
+  // Attachment must be on a long side (left or right when depth > width)
   const wall = attachment?.attachTo?.wall || 'left';
-  if (wall !== 'front' && wall !== 'back') return false;
+  if (wall !== 'left' && wall !== 'right') return false;
   
   return true;
 }

@@ -485,6 +485,15 @@
                 <div class="boSubhead">Add New Attachment</div>
                 <div class="row">
                   <label>
+                    Attachment Type
+                    <select id="attachmentType" aria-label="Attachment type">
+                      <option value="standard" selected>Standard Attachment</option>
+                      <option value="lshaped" disabled>L-Shaped Building (Coming Soon)</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>
                     Attach to Wall
                     <select id="attachmentWall" aria-label="Wall to attach to">
                       <option value="right" selected>Right</option>
@@ -527,8 +536,9 @@
                 <!-- Base Components -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Base</div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                  <div id="baseVisToggles" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vBase" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vConcrete" type="checkbox" checked /> Concrete Base</label>
                     <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
                     <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
                     <label class="check"><input id="vDeck" type="checkbox" checked /> Decking (OSB)</label>
@@ -766,7 +776,7 @@
       <p id="plySummary" class="subtle"></p>
     </div>
 
-    <div class="schedule-section">
+    <div id="floorPirSection" class="schedule-section">
       <h4>PIR Insulation (Floor) — Rip Cuts Only</h4>
       <table id="pirRipTable">
         <thead><tr><th>Piece Ref</th><th>Qty</th><th>Cut Size (L x W)</th><th>Type</th></tr></thead>
@@ -1038,7 +1048,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=42"></script>
+  <script type="module" src="./src/index.js?_v=44"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->

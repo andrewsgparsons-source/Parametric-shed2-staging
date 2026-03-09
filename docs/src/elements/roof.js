@@ -898,6 +898,7 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
 
   // ---- PENT ROOF INSULATION (PIR panels between rafters, interior side) ----
   // Only for insulated variant. Panels sit below rafters, between them.
+  // Skylight openings are cut out so you can see through the glass.
   if (roofParts.insulation && data.rafters.length >= 2) {
     const INS_THICKNESS_MM = 50; // 50mm PIR
     const insBottomY_m = -INS_THICKNESS_MM / 1000; // Below rafter underside (local y=0 is rafter bottom)
@@ -905,6 +906,11 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const insMat = new BABYLON.StandardMaterial(`${meshPrefix}roofInsMat-pent`, scene);
     insMat.diffuseColor = new BABYLON.Color3(0.75, 0.85, 0.45); // Green PIR
 
+    // Get skylight openings to cut through insulation (same coords as OSB)
+    let skyOpeningsIns = [];
+    try { skyOpeningsIns = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe */ }
+
+    let insIdx = 0;
     for (let i = 0; i < data.rafters.length - 1; i++) {
       const bayStart_b = data.rafters[i].b0_mm + data.rafterW_mm; // inside edge of rafter i
       const bayEnd_b = data.rafters[i + 1].b0_mm;                  // inside edge of rafter i+1
@@ -913,26 +919,35 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
 
       // Insulation panel runs along A (slope axis), same length as rafters but slope-scaled
       const insLen_a = A_phys_mm;
+      const bayRect = { a0_mm: 0, b0_mm: bayStart_b, aLen_mm: insLen_a, bLen_mm: bayWidth_b };
 
-      const m = mapABtoLocalXZ(0, bayStart_b, insLen_a, bayWidth_b, data.isWShort);
-      mkBoxBottomLocal(
-        `${meshPrefix}roof-ins-bay${i}`,
-        m.lenX,
-        INS_THICKNESS_MM,
-        m.lenZ,
-        m.x0,
-        insBottomY_m,
-        m.z0,
-        roofRoot,
-        insMat,
-        { roof: "pent", part: "insulation", bay: i }
-      );
+      // Split around skylight openings if any
+      const pieces = skyOpeningsIns.length > 0
+        ? splitRectAroundHoles(bayRect, skyOpeningsIns)
+        : [bayRect];
+
+      for (const sp of pieces) {
+        const m = mapABtoLocalXZ(sp.a0_mm, sp.b0_mm, sp.aLen_mm, sp.bLen_mm, data.isWShort);
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-ins-${insIdx++}`,
+          m.lenX,
+          INS_THICKNESS_MM,
+          m.lenZ,
+          m.x0,
+          insBottomY_m,
+          m.z0,
+          roofRoot,
+          insMat,
+          { roof: "pent", part: "insulation", bay: i }
+        );
+      }
     }
-    console.log('[ROOF_INS] Pent: Created insulation for', data.rafters.length - 1, 'bays');
+    console.log('[ROOF_INS] Pent: Created insulation pieces:', insIdx, '(with skylight cutouts:', skyOpeningsIns.length, ')');
   }
 
   // ---- PENT ROOF INTERIOR PLYWOOD (12mm lining below insulation) ----
   // Only for insulated variant. Continuous sheet below insulation.
+  // Skylight openings are cut out (same holes as insulation).
   if (roofParts.ply && data.rafters.length >= 2) {
     const INS_THICKNESS_MM = 50;
     const PLY_THICKNESS_MM = 12;
@@ -948,20 +963,46 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const plyWidth_b = plyEnd_b - plyStart_b;
     const plyLen_a = A_phys_mm;
 
-    const m = mapABtoLocalXZ(0, plyStart_b, plyLen_a, plyWidth_b, data.isWShort);
-    mkBoxBottomLocal(
-      `${meshPrefix}roof-ply`,
-      m.lenX,
-      PLY_THICKNESS_MM,
-      m.lenZ,
-      m.x0,
-      plyBottomY_m,
-      m.z0,
-      roofRoot,
-      plyMat,
-      { roof: "pent", part: "ply" }
-    );
-    console.log('[ROOF_PLY] Pent: Created interior plywood lining');
+    // Get skylight openings to cut through plywood (same coords as OSB/insulation)
+    let skyOpeningsPly = [];
+    try { skyOpeningsPly = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe */ }
+
+    const plyRect = { a0_mm: 0, b0_mm: plyStart_b, aLen_mm: plyLen_a, bLen_mm: plyWidth_b };
+
+    if (skyOpeningsPly.length > 0) {
+      const plyPieces = splitRectAroundHoles(plyRect, skyOpeningsPly);
+      for (let pi = 0; pi < plyPieces.length; pi++) {
+        const m = mapABtoLocalXZ(plyPieces[pi].a0_mm, plyPieces[pi].b0_mm, plyPieces[pi].aLen_mm, plyPieces[pi].bLen_mm, data.isWShort);
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-ply-${pi}`,
+          m.lenX,
+          PLY_THICKNESS_MM,
+          m.lenZ,
+          m.x0,
+          plyBottomY_m,
+          m.z0,
+          roofRoot,
+          plyMat,
+          { roof: "pent", part: "ply" }
+        );
+      }
+    } else {
+      // No skylights — single panel as before
+      const m = mapABtoLocalXZ(0, plyStart_b, plyLen_a, plyWidth_b, data.isWShort);
+      mkBoxBottomLocal(
+        `${meshPrefix}roof-ply`,
+        m.lenX,
+        PLY_THICKNESS_MM,
+        m.lenZ,
+        m.x0,
+        plyBottomY_m,
+        m.z0,
+        roofRoot,
+        plyMat,
+        { roof: "pent", part: "ply" }
+      );
+    }
+    console.log('[ROOF_PLY] Pent: Created interior plywood lining (skylight cutouts:', (skyOpeningsPly.length > 0 ? 'yes' : 'none'), ')');
   }
 
   // ---- Analytic alignment (no wall mesh queries) ----

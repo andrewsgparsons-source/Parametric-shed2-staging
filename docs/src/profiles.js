@@ -531,6 +531,7 @@ export function generateViewerUrl(state) {
 
     // Base sub-components
     if (state.vis.base === false) { compactVis.base = false; hasVisChanges = true; }
+    if (state.vis.concrete === false) { compactVis.concrete = false; hasVisChanges = true; }
     if (state.vis.frame === false) { compactVis.frame = false; hasVisChanges = true; }
     if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
     if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
@@ -1025,6 +1026,7 @@ export function hideDisabledVisibilityControls(state) {
 
   // Base sub-components
   if (vis.base === false) hideCheckbox("vBase");
+  if (vis.concrete === false) hideCheckbox("vConcrete");
   if (vis.frame === false) hideCheckbox("vFrame");
   if (vis.ins === false) hideCheckbox("vIns");
   if (vis.deck === false) hideCheckbox("vDeck");
@@ -1299,6 +1301,7 @@ export function generateProfileUrl(profileName, state) {
 
     // Base sub-components
     if (state.vis.base === false) { compactVis.base = false; hasVisChanges = true; }
+    if (state.vis.concrete === false) { compactVis.concrete = false; hasVisChanges = true; }
     if (state.vis.frame === false) { compactVis.frame = false; hasVisChanges = true; }
     if (state.vis.ins === false) { compactVis.ins = false; hasVisChanges = true; }
     if (state.vis.deck === false) { compactVis.deck = false; hasVisChanges = true; }
