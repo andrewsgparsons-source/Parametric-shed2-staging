@@ -17,6 +17,7 @@
       document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
     })();
   </script>
+  <link rel="stylesheet" href="./src/ui/startup-tips.css?_v=3">
 </head>
 
 <body data-view="3d">
@@ -133,14 +134,6 @@
                       <option value="basic">Basic</option>
                     </select>
                   </label>
-                  <label id="internalLiningLabel" style="display: none;">
-                    Internal Lining
-                    <select id="internalLining" aria-label="Internal Lining">
-                      <option value="none">None</option>
-                      <option value="plywood" selected>Plywood (12mm)</option>
-                      <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
-                    </select>
-                  </label>
                 </div>
 
                 <div class="row">
@@ -182,6 +175,8 @@
                       <option value="concrete-timber">Concrete Base + Timber Floor</option>
                       <option value="concrete-only">Concrete Base Only</option>
                       <option value="skids">Steel Galvanised Skids</option>
+                      <option value="floor-only">Timber Floor Only (No Base)</option>
+                      <option value="none">No Base or Floor</option>
                     </select>
                   </label>
                 </div>
@@ -436,6 +431,15 @@
                   </label>
                 </div>
 
+                <div class="boSubhead">Cladding — Per Wall</div>
+                <p class="hint" style="margin:0 0 6px 0;">Exclude cladding from individual walls (e.g. lean-to against an existing wall, or supply your own).</p>
+                <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 4px; margin-bottom: 12px;">
+                  <label class="check"><input id="buildCladFront" type="checkbox" checked /> Front wall cladding</label>
+                  <label class="check"><input id="buildCladBack" type="checkbox" checked /> Back wall cladding</label>
+                  <label class="check"><input id="buildCladLeft" type="checkbox" checked /> Left wall cladding</label>
+                  <label class="check"><input id="buildCladRight" type="checkbox" checked /> Right wall cladding</label>
+                </div>
+
                 <div class="boSubhead">Roof Covering</div>
                 <div class="row">
                   <label>
@@ -447,6 +451,29 @@
                     </select>
                   </label>
                 </div>
+
+                <div id="internalLiningLabel" style="display: none;">
+                  <div class="boSubhead">Internal Lining</div>
+                  <div class="row">
+                    <label>
+                      Style
+                      <select id="internalLining" aria-label="Internal Lining">
+                        <option value="none">None</option>
+                        <option value="plywood" selected>Plywood (12mm)</option>
+                        <option value="pine-tg">Pine T&amp;G (Horizontal)</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="boSubhead">Soffits</div>
+                <div class="row">
+                  <label class="check">
+                    <input id="soffitsEnabled" type="checkbox" checked />
+                    Soffit boards (under roof overhang)
+                  </label>
+                </div>
+
               </div>
             </details>
 
@@ -456,6 +483,15 @@
                 <div class="hint" style="margin:0 0 10px 0;">Add secondary buildings attached to the main structure. Each attachment is a complete sub-building with its own base, walls, openings, and roof.</div>
 
                 <div class="boSubhead">Add New Attachment</div>
+                <div class="row">
+                  <label>
+                    Attachment Type
+                    <select id="attachmentType" aria-label="Attachment type">
+                      <option value="standard" selected>Standard Attachment</option>
+                      <option value="lshaped" disabled>L-Shaped Building (Coming Soon)</option>
+                    </select>
+                  </label>
+                </div>
                 <div class="row">
                   <label>
                     Attach to Wall
@@ -483,6 +519,7 @@
             <details open class="boSection">
               <summary>Visibility</summary>
               <div class="boBox" style="padding: 12px;">
+                <p class="hint" style="margin:0 0 12px 0; font-style:italic;">These toggles show/hide parts of the 3D model for viewing — they don't change your quote. Use the controls in each section above to change what's included in your build.</p>
                 
                 <!-- Main Assemblies -->
                 <div style="margin-bottom: 16px;">
@@ -499,8 +536,9 @@
                 <!-- Base Components -->
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 700; font-size: 13px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Base</div>
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
+                  <div id="baseVisToggles" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding-left: 4px;">
                     <label class="check"><input id="vBase" type="checkbox" checked /> Grid</label>
+                    <label class="check"><input id="vConcrete" type="checkbox" checked /> Concrete Base</label>
                     <label class="check"><input id="vFrame" type="checkbox" checked /> Timber Frame</label>
                     <label class="check"><input id="vIns" type="checkbox" checked /> Insulation</label>
                     <label class="check"><input id="vDeck" type="checkbox" checked /> Decking (OSB)</label>
@@ -738,7 +776,7 @@
       <p id="plySummary" class="subtle"></p>
     </div>
 
-    <div class="schedule-section">
+    <div id="floorPirSection" class="schedule-section">
       <h4>PIR Insulation (Floor) — Rip Cuts Only</h4>
       <table id="pirRipTable">
         <thead><tr><th>Piece Ref</th><th>Qty</th><th>Cut Size (L x W)</th><th>Type</th></tr></thead>
@@ -1010,14 +1048,14 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=30"></script>
+  <script type="module" src="./src/index.js?_v=44"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
 
   <!-- Price Estimate Module -->
   <script type="module">
-    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=3';
+    import { loadPriceTable, renderPriceCard, renderPriceBadge, hidePriceBadge, renderPricingBreakdown } from './src/pricing.js?_v=4';
     loadPriceTable().then(ok => {
       if (ok) {
         window.__pricingReady = true;
@@ -1180,6 +1218,7 @@
       }
     })();
   </script>
+  <script src="./src/ui/startup-tips.js?_v=3"></script>
 </body>
 </html>
 <!-- cache nudge 1769518008 -->

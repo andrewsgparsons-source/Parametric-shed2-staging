@@ -428,7 +428,7 @@ export function build3D(mainState, attachment, ctx) {
     console.log("[attachments] Building roof... memberW:", memberW_mm, "memberD:", memberD_mm);
     try {
       buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom);
+                          attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom, mainState);
       console.log("[attachments] Roof built successfully");
     } catch (roofErr) {
       console.error("[attachments] ERROR building roof:", roofErr);
@@ -2884,7 +2884,7 @@ function buildCladdingAlongZ(scene, root, attId, wallId, length, wallHeight, xPo
  * Includes rafters, OSB sheathing, covering (felt), and fascia boards
  */
 function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInner, wallHeightOuter,
-                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom) {
+                              attachWall, roofType, attachment, materials, memberW_mm, memberD_mm, mainFasciaBottom, mainState) {
   // Floor surface Y position
   const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
 
@@ -2905,6 +2905,20 @@ function buildAttachmentRoof(scene, root, attId, extentX, extentZ, wallHeightInn
   }
   console.log("[attachments] buildAttachmentRoof - claddingMat:", claddingMat?.name, "diffuse:", claddingMat?.diffuseColor?.toString());
 
+  // Check for L-shaped mode
+  if (attachment.lShaped?.enabled === true) {
+    console.log("[attachments] L-SHAPED MODE ENABLED - roofType:", roofType);
+    if (roofType === "apex") {
+      const geometry = calculateLShapedApexGeometry(mainState, attachment);
+      buildLShapedApexRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat);
+    } else if (roofType === "pent") {
+      const geometry = calculateLShapedPentGeometry(mainState, attachment);
+      buildLShapedPentRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat);
+    }
+    return;
+  }
+
+  // Standard attachment roof (not L-shaped)
   if (roofType === "pent") {
     console.log("[attachments] PENT ROOF - claddingMat:", claddingMat?.name, "color:", claddingMat?.diffuseColor);
     buildPentRoof(scene, root, attId, extentX, extentZ, roofInnerY, roofOuterY,
@@ -3809,6 +3823,240 @@ export function disposeAttachment(scene, attachmentId) {
   const rootName = `attachment-${attachmentId}-root`;
   const root = scene.getTransformNodeByName(rootName);
   if (root) root.dispose();
+}
+
+/**
+ * Calculate L-shaped Apex roof geometry (ridge intersection, hip valley, hip ridge)
+ * Used when attachment.lShaped.enabled === true and type === "apex"
+ * @param {object} mainState - Main building state
+ * @param {object} attachment - Attachment configuration
+ * @returns {object} Geometry data: { ridgeIntersection, hipValley, hipRidge, mainRidge, attRidge }
+ */
+export function calculateLShapedApexGeometry(mainState, attachment) {
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM; // 168mm
+  
+  // Main building ridge height (same for both buildings in L-shaped mode)
+  const mainCrestHeight = Number(
+    mainState.roof?.apex?.heightToCrest_mm || 
+    mainState.roof?.apex?.crestHeight_mm || 
+    2200
+  );
+  const mainEavesHeight = Number(
+    mainState.roof?.apex?.heightToEaves_mm ||
+    mainState.roof?.apex?.eavesHeight_mm ||
+    1850
+  );
+  
+  const ridgeY = floorSurfaceY + mainCrestHeight; // Absolute Y from ground
+  const eavesY = floorSurfaceY + mainEavesHeight;
+  
+  // Main building dimensions
+  const mainW = mainState.w || 2400; // width (X)
+  const mainD = mainState.d || 3000; // depth (Z)
+  
+  // For L-shaped, depth > width, so main ridge runs along Z axis (depth)
+  const mainRidgeX = mainW / 2; // Ridge runs down center of width
+  
+  // Attachment dimensions
+  const attWall = attachment.attachTo?.wall || "front";
+  const attCorner = attachment.lShaped?.corner || "near";
+  const attWidth = attachment.dimensions?.width_mm || mainD; // Should match main depth
+  const attDepth = attachment.dimensions?.depth_mm || 1200; // Extends outward
+  
+  // Attachment ridge runs perpendicular (along X axis)
+  // Position depends on wall and corner
+  let attRidgeZ, attRidgeXStart, attRidgeXEnd, cornerX, cornerZ;
+  
+  if (attWall === "front") {
+    attRidgeZ = -attDepth / 2; // Ridge at midpoint of depth, extends in -Z
+    cornerZ = 0; // Corner at front of main building
+    if (attCorner === "near") {
+      cornerX = 0; // Left corner
+      attRidgeXStart = 0;
+      attRidgeXEnd = attWidth;
+    } else {
+      cornerX = mainW; // Right corner
+      attRidgeXStart = mainW - attWidth;
+      attRidgeXEnd = mainW;
+    }
+  } else { // attWall === "back"
+    attRidgeZ = mainD + (attDepth / 2); // Ridge at midpoint, extends in +Z
+    cornerZ = mainD; // Corner at back of main building
+    if (attCorner === "near") {
+      cornerX = 0; // Left corner
+      attRidgeXStart = 0;
+      attRidgeXEnd = attWidth;
+    } else {
+      cornerX = mainW; // Right corner
+      attRidgeXStart = mainW - attWidth;
+      attRidgeXEnd = mainW;
+    }
+  }
+  
+  // Ridge intersection point (where both ridges meet at corner, same height)
+  const ridgeIntersection = { x: cornerX, y: ridgeY, z: cornerZ };
+  
+  // Hip valley runs from corner (at eaves) down along the eaves line
+  // The valley rafter runs diagonally from ridge intersection to eaves corner
+  const hipValley = {
+    top: ridgeIntersection, // At ridge height
+    bottom: { x: cornerX, y: eavesY, z: cornerZ } // At eaves height
+  };
+  
+  // Hip ridge: the line where the two roof planes meet at the corner
+  // In L-shaped apex, this is just the corner vertical from eaves to ridge
+  const hipRidge = {
+    bottom: { x: cornerX, y: eavesY, z: cornerZ },
+    top: ridgeIntersection
+  };
+  
+  console.log("[L-Shaped Apex Geometry]", {
+    ridgeIntersection,
+    hipValley,
+    hipRidge,
+    mainRidge: { x: mainRidgeX, z: [0, mainD], y: ridgeY },
+    attRidge: { x: [attRidgeXStart, attRidgeXEnd], z: attRidgeZ, y: ridgeY }
+  });
+  
+  return {
+    ridgeIntersection,
+    hipValley,
+    hipRidge,
+    mainRidge: { x: mainRidgeX, zStart: 0, zEnd: mainD, y: ridgeY },
+    attRidge: { xStart: attRidgeXStart, xEnd: attRidgeXEnd, z: attRidgeZ, y: ridgeY }
+  };
+}
+
+/**
+ * Calculate L-shaped Pent roof geometry (hip ridge where slopes meet)
+ * Used when attachment.lShaped.enabled === true and type === "pent"
+ * @param {object} mainState - Main building state  
+ * @param {object} attachment - Attachment configuration
+ * @returns {object} Geometry data: { hipRidge, mainSlope, attSlope }
+ */
+export function calculateLShapedPentGeometry(mainState, attachment) {
+  const floorSurfaceY = GRID_HEIGHT_MM + FLOOR_FRAME_DEPTH_MM + FLOOR_OSB_MM;
+  
+  // Main building pent roof heights
+  const mainMinHeight = Number(mainState.roof?.pent?.minHeight_mm || 2100);
+  const mainMaxHeight = Number(mainState.roof?.pent?.maxHeight_mm || 2400);
+  const mainDepth = mainState.d || 3000;
+  
+  // Calculate main roof pitch (rise over run)
+  const mainRise = mainMaxHeight - mainMinHeight;
+  const mainPitch = mainRise / mainDepth;
+  
+  // Attachment dimensions
+  const attWall = attachment.attachTo?.wall || "front";
+  const attCorner = attachment.lShaped?.corner || "near";
+  const attWidth = attachment.dimensions?.width_mm || mainDepth;
+  const attDepth = attachment.dimensions?.depth_mm || 1200;
+  
+  // Attachment roof matches main pitch
+  const attHighHeight = mainMaxHeight; // At main building edge
+  const attLowHeight = attHighHeight - (mainPitch * attDepth);
+  
+  // Hip ridge calculation (where two sloped planes meet at corner)
+  let cornerX, cornerZ, hipRidgeStartY, hipRidgeEndX, hipRidgeEndZ, hipRidgeEndY;
+  
+  const mainW = mainState.w || 2400;
+  
+  if (attWall === "front") {
+    cornerZ = 0;
+    cornerX = attCorner === "near" ? 0 : mainW;
+    hipRidgeStartY = floorSurfaceY + mainMaxHeight; // Top (at main building corner)
+    hipRidgeEndX = cornerX; // Hip runs straight out along attachment
+    hipRidgeEndZ = -attDepth;
+    hipRidgeEndY = floorSurfaceY + attLowHeight;
+  } else { // "back"
+    cornerZ = mainDepth;
+    cornerX = attCorner === "near" ? 0 : mainW;
+    hipRidgeStartY = floorSurfaceY + mainMinHeight; // Main roof is lowest at back
+    hipRidgeEndX = cornerX;
+    hipRidgeEndZ = mainDepth + attDepth;
+    hipRidgeEndY = floorSurfaceY + attLowHeight;
+  }
+  
+  console.log("[L-Shaped Pent Geometry]", {
+    hipRidge: {
+      start: { x: cornerX, y: hipRidgeStartY, z: cornerZ },
+      end: { x: hipRidgeEndX, y: hipRidgeEndY, z: hipRidgeEndZ }
+    },
+    mainSlope: { pitch: mainPitch, minHeight: mainMinHeight, maxHeight: mainMaxHeight },
+    attSlope: { pitch: mainPitch, highHeight: attHighHeight, lowHeight: attLowHeight }
+  });
+  
+  return {
+    hipRidge: {
+      start: { x: cornerX, y: hipRidgeStartY, z: cornerZ },
+      end: { x: hipRidgeEndX, y: hipRidgeEndY, z: hipRidgeEndZ }
+    },
+    mainSlope: { pitch: mainPitch, minHeight: mainMinHeight, maxHeight: mainMaxHeight },
+    attSlope: { pitch: mainPitch, highHeight: attHighHeight, lowHeight: attLowHeight }
+  };
+}
+
+/**
+ * Build L-shaped Apex roof meshes from calculated geometry
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment ID
+ * @param {object} geometry - Result from calculateLShapedApexGeometry
+ * @param {BABYLON.Material} joistMat
+ * @param {BABYLON.Material} osbMat
+ * @param {BABYLON.Material} coveringMat
+ * @param {BABYLON.Material} claddingMat
+ */
+function buildLShapedApexRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat) {
+  console.log("[L-Shaped Apex Roof] Building roof meshes...", geometry);
+  
+  // Create a simple pyramid mesh at the ridge intersection point to visualize
+  const marker = BABYLON.MeshBuilder.CreateCylinder(`${attId}-ridge-marker`, {
+    height: 200,
+    diameter: 100
+  }, scene);
+  marker.position = new BABYLON.Vector3(
+    geometry.ridgeIntersection.x,
+    geometry.ridgeIntersection.y,
+    geometry.ridgeIntersection.z
+  );
+  marker.material = coveringMat;
+  marker.parent = root;
+  marker.metadata = { dynamic: true, attachmentId: attId };
+  
+  // TODO: Create actual roof planes, fascia, etc.
+  console.log("[L-Shaped Apex Roof] Marker placed at ridge intersection");
+}
+
+/**
+ * Build L-shaped Pent roof meshes from calculated geometry
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.TransformNode} root - Attachment root node
+ * @param {string} attId - Attachment ID
+ * @param {object} geometry - Result from calculateLShapedPentGeometry
+ * @param {BABYLON.Material} joistMat
+ * @param {BABYLON.Material} osbMat
+ * @param {BABYLON.Material} coveringMat
+ * @param {BABYLON.Material} claddingMat
+ */
+function buildLShapedPentRoof(scene, root, attId, geometry, joistMat, osbMat, coveringMat, claddingMat) {
+  console.log("[L-Shaped Pent Roof] Building roof meshes...", geometry);
+  
+  // Create a line to visualize the hip ridge
+  const points = [
+    new BABYLON.Vector3(geometry.hipRidge.start.x, geometry.hipRidge.start.y, geometry.hipRidge.start.z),
+    new BABYLON.Vector3(geometry.hipRidge.end.x, geometry.hipRidge.end.y, geometry.hipRidge.end.z)
+  ];
+  
+  const line = BABYLON.MeshBuilder.CreateLines(`${attId}-hip-ridge`, {
+    points: points
+  }, scene);
+  line.color = new BABYLON.Color3(1, 0, 0); // Red line
+  line.parent = root;
+  line.metadata = { dynamic: true, attachmentId: attId };
+  
+  // TODO: Create actual roof planes, fascia, etc.
+  console.log("[L-Shaped Pent Roof] Hip ridge line created");
 }
 
 /**

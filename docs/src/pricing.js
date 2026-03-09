@@ -38,34 +38,35 @@ export function estimatePrice(state) {
   const roofStyle = state.roof?.style || 'apex';
   const roofCovering = state.roof?.covering || 'felt';
 
-  // ─── VISIBILITY STATE ───
-  // If something is hidden via visibility toggles, exclude it from pricing
-  const vis = state.vis || {};
-  const visBase = vis.baseAll !== false;
-  const visWalls = (typeof vis.walls === 'boolean') ? vis.walls : (vis.wallsEnabled !== false);
-  const visRoof = vis.roof !== false;
-  const visCladding = vis.cladding !== false;
-  const visOpenings = vis.openings !== false;
-  // Per-wall cladding visibility
-  const cladParts = vis.cladParts || {};
-  const visCladFront = visCladding && (cladParts.front !== false);
-  const visCladBack = visCladding && (cladParts.back !== false);
-  const visCladLeft = visCladding && (cladParts.left !== false);
-  const visCladRight = visCladding && (cladParts.right !== false);
-  // Roof sub-components
-  const roofParts = vis.roofParts || {};
-  const visRoofOsb = visRoof && (roofParts.osb !== false);
-  const visRoofCovering = visRoof && (roofParts.covering !== false);
-  const visRoofInsulation = visRoof && (roofParts.insulation !== false);
-  const visRoofPly = visRoof && (roofParts.ply !== false);
-  // Wall sub-components
-  const visWallIns = visWalls && (vis.wallIns !== false);
-  const visWallPly = visWalls && (vis.wallPly !== false);
-  // Base sub-components — respect individual toggles
-  const visBaseGrid = visBase && (vis.base !== false);   // Plastic ground grids
-  const visBaseFrame = visBase && (vis.frame !== false);  // Timber frame joists
-  const visBaseDeck = visBase && (vis.deck !== false);    // OSB decking
-  const visBaseIns = visBase && (vis.ins !== false);      // Floor insulation
+  // ─── BUILD CONFIGURATION ───
+  // What the customer wants included in their build (affects pricing).
+  // Separate from visibility toggles which are view-only (hide roof to peek inside etc.)
+  // Everything defaults to true (included) unless explicitly excluded via state.build.
+  const build = state.build || {};
+  const visBase = build.base !== false;
+  const visWalls = build.walls !== false;
+  const visRoof = build.roof !== false;
+  const visCladding = build.cladding !== false;
+  const visOpenings = build.openings !== false;
+  // Per-wall cladding configuration
+  const buildCladParts = build.cladParts || {};
+  const visCladFront = visCladding && (buildCladParts.front !== false);
+  const visCladBack = visCladding && (buildCladParts.back !== false);
+  const visCladLeft = visCladding && (buildCladParts.left !== false);
+  const visCladRight = visCladding && (buildCladParts.right !== false);
+  // Roof sub-components — always included (structural, not optional)
+  const visRoofOsb = visRoof;
+  const visRoofCovering = visRoof;
+  const visRoofInsulation = visRoof;
+  const visRoofPly = visRoof;
+  // Insulation & lining — read from build config (customer choices)
+  const visWallIns = visWalls && (build.wallInsulation !== false);
+  const visWallPly = visWalls && (build.interiorLining !== false);
+  // Base sub-components — always included when base is included (structural)
+  const visBaseGrid = visBase;
+  const visBaseFrame = visBase;
+  const visBaseDeck = visBase;
+  const visBaseIns = visBase && (build.floorInsulation !== false);
 
   // Count openings from state
   const doors = visOpenings ? countOpenings(state, 'door') : 0;
@@ -73,6 +74,9 @@ export function estimatePrice(state) {
   const skylights = visRoof ? countSkylights(state) : 0;
 
   const breakdown = {};
+  
+  // Base type needs to be available for multiple calculations
+  const baseType = state.base?.type || 'ecodeck';
 
   // ─── 1. TIMBER (structural framing) ───
   const timberPerLm = pt.timber.structural_50x100_per_lm;
@@ -81,7 +85,9 @@ export function estimatePrice(state) {
   const gaugeMultiplier = (section.h >= 100) ? 1.33 : 1.0;
   // Split timber into base frame vs walls+roof so each respects its visibility toggle
   const timberParts = estimateTimberLinearMetresSplit(state, w_mm, d_mm);
-  const timberLm = (visBaseFrame ? timberParts.base : 0)
+  // Check baseType to exclude base timber when customer supplies their own floor
+  const includeBaseTimber = visBaseFrame && (baseType !== 'none' && baseType !== 'concrete-only');
+  const timberLm = (includeBaseTimber ? timberParts.base : 0)
                  + (visWalls ? timberParts.walls : 0)
                  + (visRoof ? timberParts.roof : 0);
   breakdown.timber = timberLm * timberPerLm * gaugeMultiplier;
@@ -91,8 +97,7 @@ export function estimatePrice(state) {
   const gridCostPerM2 = pt.base_grids?.cost_per_m2 || 0;
   breakdown.baseGrids = visBaseGrid ? footprint_m2 * gridCostPerM2 : 0;
 
-  // ─── 1c. BASE UPGRADE (concrete / skids) ───
-  const baseType = state.base?.type || 'ecodeck';
+  // ─── 1c. BASE UPGRADE (concrete / skids / floor-only / none) ───
   breakdown.baseUpgrade = 0;
   if (baseType === 'concrete-timber' || baseType === 'concrete-only') {
     // Concrete slab: ~£75/m² (supply + lay + labour)
@@ -104,6 +109,15 @@ export function estimatePrice(state) {
   } else if (baseType === 'skids') {
     // Steel galvanised skids: ~£86/m² (scaled from £1500 for 17.5m² garage)
     breakdown.baseUpgrade = footprint_m2 * (pt.base_upgrades?.skids_per_m2 || 86);
+  } else if (baseType === 'floor-only') {
+    // Customer has existing base (slab/paving), just supply timber floor frame + OSB
+    breakdown.baseGrids = 0;
+    breakdown.baseUpgrade = 0;
+  } else if (baseType === 'none') {
+    // Customer has existing base and floor, walls go straight onto it
+    breakdown.baseGrids = 0;
+    breakdown.baseUpgrade = 0;
+    // Exclude base timber from material cost (handled in timber calculation above)
   }
 
   // ─── 2. CLADDING ───
@@ -125,7 +139,9 @@ export function estimatePrice(state) {
 
   // ─── 3. OSB DECKING ───
   const sheetArea = (pt.sheets.sheet_w_mm * pt.sheets.sheet_l_mm) / 1_000_000; // ~2.977 m²
-  const osbSheets = visBaseDeck ? Math.ceil(footprint_m2 / sheetArea) : 0;
+  // Exclude OSB floor deck when customer supplies their own floor (baseType === 'none')
+  const includeFloorOsb = visBaseDeck && (baseType !== 'none' && baseType !== 'concrete-only');
+  const osbSheets = includeFloorOsb ? Math.ceil(footprint_m2 / sheetArea) : 0;
   breakdown.osb = osbSheets * pt.sheets.osb_18mm_per_sheet;
 
   // ─── 4. INSULATION (floor + walls, if insulated) ───
@@ -183,6 +199,28 @@ export function estimatePrice(state) {
     breakdown.roofCovering = roofArea_m2 * pt.roofing.felt_per_m2;
   }
 
+  // ─── 5a. SOFFITS (12mm cladding board under overhang) ───
+  breakdown.soffits = 0;
+  const showSoffits = visRoof && (state?.roof?.soffits !== false);
+  if (showSoffits) {
+    const ovh = state?.overhang || {};
+    const uni = ovh.uniform_mm ?? 75;
+    const isUnsetV = (v) => v == null || v === '';
+    const ol = isUnsetV(ovh.left_mm)  ? uni : Number(ovh.left_mm)  || 0;
+    const or2 = isUnsetV(ovh.right_mm) ? uni : Number(ovh.right_mm) || 0;
+    const of2 = isUnsetV(ovh.front_mm) ? uni : Number(ovh.front_mm) || 0;
+    const ob = isUnsetV(ovh.back_mm)  ? uni : Number(ovh.back_mm)  || 0;
+    const roofW_s = w_mm + ol + or2;
+    const roofD_s = d_mm + of2 + ob;
+    // Eaves soffits (left + right): depth of roof × overhang width
+    const eavesArea_m2 = ((ol * roofD_s) + (or2 * roofD_s)) / 1_000_000;
+    // Verge/gable soffits (front + back): frame width × overhang depth
+    const vergeArea_m2 = ((of2 * w_mm) + (ob * w_mm)) / 1_000_000;
+    const soffitArea_m2 = eavesArea_m2 + vergeArea_m2;
+    // Price as cladding board (same material)
+    breakdown.soffits = soffitArea_m2 * claddingCostPerM2;
+  }
+
   // ─── 5b. ROOF COMPLEXITY PREMIUM ───
   // Pent = baseline (simple rafters). Apex adds trusses. Hipped adds hip rafters + complex cuts.
   breakdown.roofComplexity = 0;
@@ -223,11 +261,11 @@ export function estimatePrice(state) {
   // Each attachment is priced as a mini-building: timber, cladding (3 walls), roof OSB, covering, grids, openings
   breakdown.attachments = 0;
   const attachments = state.sections?.attachments || [];
-  const attVis = vis.attachments || {};  // { base: bool, walls: bool, roof: bool, cladding: bool }
-  const attVisBase = attVis.base !== false;
-  const attVisWalls = attVis.walls !== false;
-  const attVisRoof = attVis.roof !== false;
-  const attVisCladding = attVis.cladding !== false;
+  const attBuild = (build.attachments) || {};  // { base: bool, walls: bool, roof: bool, cladding: bool }
+  const attVisBase = attBuild.base !== false;
+  const attVisWalls = attBuild.walls !== false;
+  const attVisRoof = attBuild.roof !== false;
+  const attVisCladding = attBuild.cladding !== false;
 
   for (const att of attachments) {
     if (!att || att.enabled === false) continue;
@@ -358,7 +396,9 @@ export function estimatePrice(state) {
     dividerCount: (state.dividers?.items || []).filter(d => d && d.enabled !== false).length,
     baseTypeLabel: baseType === 'concrete-timber' ? 'Concrete + Timber Floor' :
                    baseType === 'concrete-only' ? 'Concrete Only' :
-                   baseType === 'skids' ? 'Steel Galvanised Skids' : '',
+                   baseType === 'skids' ? 'Steel Galvanised Skids' :
+                   baseType === 'floor-only' ? 'Timber Floor Only (No Base)' :
+                   baseType === 'none' ? 'No Base or Floor' : '',
     breakdown: Object.fromEntries(
       Object.entries(breakdown).map(([k, v]) => [k, Math.round(v)])
     )
@@ -736,6 +776,7 @@ export function renderPricingBreakdown(state, containerId) {
           ${b.insulation ? `<tr><td>Insulation (PIR)</td><td class="pb-val">£${b.insulation.toLocaleString()}</td></tr>` : ''}
           ${b.plyLining ? `<tr><td>${b.liningLabel || 'Ply lining'}</td><td class="pb-val">£${b.plyLining.toLocaleString()}</td></tr>` : ''}
           <tr><td>Roof covering</td><td class="pb-val">£${b.roofCovering.toLocaleString()}</td></tr>
+          ${b.soffits ? `<tr><td>Soffits</td><td class="pb-val">£${b.soffits.toLocaleString()}</td></tr>` : ''}
           ${b.roofInsulation ? `<tr><td>Roof insulation (PIR)</td><td class="pb-val">£${b.roofInsulation.toLocaleString()}</td></tr>` : ''}
           ${b.roofPly ? `<tr><td>Roof interior plywood</td><td class="pb-val">£${b.roofPly.toLocaleString()}</td></tr>` : ''}
           ${b.roofComplexity ? `<tr><td>Roof complexity (${est.roofStyle})</td><td class="pb-val">£${b.roofComplexity.toLocaleString()}</td></tr>` : ''}

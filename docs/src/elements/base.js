@@ -26,7 +26,13 @@ export function build3D(state, ctx, sectionContext) {
   const L = getLayout(state, gauge);
   const yB = 25, yF = 50 + (frameH / 2), yI = 50 + frameH - 25, yD = 50 + frameH + 9;
 
-  if (state.vis.base) {
+  // Check baseType: 'floor-only' hides plastic grid base, 'none' hides grid + timber frame + deck
+  const baseType = state.base?.type || 'ecodeck';
+  const showGrid = state.vis.base && (baseType !== 'floor-only' && baseType !== 'none' && baseType !== 'concrete-timber' && baseType !== 'concrete-only' && baseType !== 'skids');
+  const showFrame = state.vis.frame && (baseType !== 'none' && baseType !== 'concrete-only');
+  const showDeck = state.vis.deck && (baseType !== 'none' && baseType !== 'concrete-only');
+
+  if (showGrid) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.1, 0.1, 0.1);
     for (let x = 0; x < state.w; x += 500) {
@@ -55,7 +61,40 @@ export function build3D(state, ctx, sectionContext) {
     }
   }
 
-  if (state.vis.frame) {
+  // Concrete base rendering for garage and concrete base types
+  const showConcrete = (state.vis.concrete !== false) && (baseType === 'concrete-only' || baseType === 'concrete-timber');
+  if (showConcrete) {
+    const concreteHeight = 150; // 150mm thick concrete slab
+    const concreteOverhang = 50; // 50mm overhang beyond building footprint
+    const concreteW = state.w + (concreteOverhang * 2);
+    const concreteD = state.d + (concreteOverhang * 2);
+    
+    const mat = new BABYLON.StandardMaterial('concreteMat', scene);
+    mat.diffuseColor = new BABYLON.Color3(0.7, 0.7, 0.7); // Light grey
+    
+    const concretePad = BABYLON.MeshBuilder.CreateBox('concrete-base', {
+      width: concreteW * 0.001,
+      height: concreteHeight * 0.001,
+      depth: concreteD * 0.001
+    }, scene);
+    
+    concretePad.position = new BABYLON.Vector3(
+      (state.w / 2) * 0.001,
+      (concreteHeight / 2) * 0.001,
+      (state.d / 2) * 0.001
+    );
+    concretePad.material = mat;
+    concretePad.parent = shedRoot;
+    concretePad.metadata = { dynamic: true, sectionId: sectionId || null, type: 'concrete-base' };
+    
+    concretePad.enableEdgesRendering();
+    concretePad.edgesWidth = 2;
+    concretePad.edgesColor = new BABYLON.Color4(0.5, 0.5, 0.5, 1);
+    
+    meshes.base.push(concretePad);
+  }
+
+  if (showFrame) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.5, 0.4, 0.3);
     [0, L.joistSpan - frameT].forEach(o => {
@@ -90,7 +129,10 @@ export function build3D(state, ctx, sectionContext) {
     });
   }
 
-  if (state.vis.ins) {
+  // Floor insulation: only for insulated variant, hide when base type is 'none' or 'concrete-only'
+  const isInsulated = state.walls?.variant === 'insulated';
+  const showInsulation = isInsulated && state.vis.ins && (baseType !== 'none' && baseType !== 'concrete-only');
+  if (showInsulation) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.9, 0.85, 0.7);
     for (let i = 0; i < L.positions.length - 1; i++) {
@@ -119,7 +161,7 @@ export function build3D(state, ctx, sectionContext) {
     }
   }
 
-  if (state.vis.deck) {
+  if (showDeck) {
     const mat = new BABYLON.StandardMaterial('m', scene);
     mat.diffuseColor = new BABYLON.Color3(0.8, 0.7, 0.6);
 
@@ -164,6 +206,12 @@ export function updateBOM(state) {
   const gauge = getFrameGauge(state);
   const L = getLayout(state, gauge);
 
+  // Check baseType to exclude components when customer supplies their own
+  const baseType = state.base?.type || 'ecodeck';
+  const includeTimber = (baseType !== 'none' && baseType !== 'concrete-only');
+  const includeOsb = (baseType !== 'none' && baseType !== 'concrete-only');
+  const includeGrid = (baseType !== 'floor-only' && baseType !== 'none' && baseType !== 'concrete-timber' && baseType !== 'concrete-only' && baseType !== 'skids');
+
   function mmToInFracStr(mm) {
     const inches = mm / 25.4;
     const whole = Math.floor(inches);
@@ -194,97 +242,128 @@ export function updateBOM(state) {
   let timberHtml = '';
   let timberCount = 0;
 
-  const secTxt = `Section ${gauge.thickness_mm}×${gauge.depth_mm}`;
+  if (includeTimber) {
+    const secTxt = `Section ${gauge.thickness_mm}×${gauge.depth_mm}`;
 
-  timberHtml += `<tr><td>Rim Joists</td><td>2</td><td class="highlight">${fmtLenOnly(L.rimLen)}</td><td>${secTxt}</td></tr>`;
-  pushCsv('Timber Frame', 'Rim Joist', 2, L.rimLen, '', `${gauge.thickness_mm}×${gauge.depth_mm} section`);
-  timberCount += 2;
+    timberHtml += `<tr><td>Rim Joists</td><td>2</td><td class="highlight">${fmtLenOnly(L.rimLen)}</td><td>${secTxt}</td></tr>`;
+    pushCsv('Timber Frame', 'Rim Joist', 2, L.rimLen, '', `${gauge.thickness_mm}×${gauge.depth_mm} section`);
+    timberCount += 2;
 
-  timberHtml += `<tr><td>Inner Joists</td><td>${L.positions.length}</td><td class="highlight">${fmtLenOnly(L.innerJoistLen)}</td><td>${secTxt}</td></tr>`;
-  pushCsv('Timber Frame', 'Inner Joist', L.positions.length, L.innerJoistLen, '', `${gauge.thickness_mm}×${gauge.depth_mm} section`);
-  timberCount += L.positions.length;
+    timberHtml += `<tr><td>Inner Joists</td><td>${L.positions.length}</td><td class="highlight">${fmtLenOnly(L.innerJoistLen)}</td><td>${secTxt}</td></tr>`;
+    pushCsv('Timber Frame', 'Inner Joist', L.positions.length, L.innerJoistLen, '', `${gauge.thickness_mm}×${gauge.depth_mm} section`);
+    timberCount += L.positions.length;
+  } else {
+    timberHtml = '<tr><td colspan="4">Base timber excluded (customer supplied)</td></tr>';
+  }
 
   document.getElementById('timberTableBody').innerHTML = timberHtml;
-  document.getElementById('timberTotals').textContent = `Total pieces: ${timberCount}`;
+  document.getElementById('timberTotals').textContent = includeTimber ? `Total pieces: ${timberCount}` : '';
 
   // ----- TOTAL FRAME Summary -----
-  const FRAME_STOCK_LENGTH = 6200;
-  let totalFrameLength_mm = 0;
-  totalFrameLength_mm += 2 * L.rimLen;                          // Rim Joists
-  totalFrameLength_mm += L.positions.length * L.innerJoistLen;  // Inner Joists
+  if (includeTimber) {
+    const FRAME_STOCK_LENGTH = 6200;
+    let totalFrameLength_mm = 0;
+    totalFrameLength_mm += 2 * L.rimLen;                          // Rim Joists
+    totalFrameLength_mm += L.positions.length * L.innerJoistLen;  // Inner Joists
 
-  const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
-  const totalFrameLinearM = Math.round(totalFrameLength_mm / 1000 * 10) / 10;
+    const totalFrameStockPieces = Math.ceil(totalFrameLength_mm / FRAME_STOCK_LENGTH);
+    const totalFrameLinearM = Math.round(totalFrameLength_mm / 1000 * 10) / 10;
 
-  // Add to timber table as summary row
-  const timberBody = document.getElementById('timberTableBody');
-  if (timberBody) {
-    timberBody.innerHTML += `<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">
-      <td>TOTAL FRAME</td>
-      <td>${totalFrameStockPieces}</td>
-      <td class="highlight">${FRAME_STOCK_LENGTH}mm</td>
-      <td>${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths</td>
-    </tr>`;
+    // Add to timber table as summary row
+    const timberBody = document.getElementById('timberTableBody');
+    if (timberBody) {
+      timberBody.innerHTML += `<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">
+        <td>TOTAL FRAME</td>
+        <td>${totalFrameStockPieces}</td>
+        <td class="highlight">${FRAME_STOCK_LENGTH}mm</td>
+        <td>${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths</td>
+      </tr>`;
+    }
+    pushCsv('Timber Frame', 'TOTAL FRAME', totalFrameStockPieces, FRAME_STOCK_LENGTH, '', `${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`);
   }
-  pushCsv('Timber Frame', 'TOTAL FRAME', totalFrameStockPieces, FRAME_STOCK_LENGTH, '', `${totalFrameLinearM}m linear; ${totalFrameStockPieces} × ${FRAME_STOCK_LENGTH}mm lengths`);
 
   // ----- OSB Decking (mirrors build3D; no stagger; rotation-invariant) -----
-  const extA = L.joistSpan;
-  const extB = L.rimLen;
-  const piecesAB = computeDeckPiecesAB_NoStagger(extA, extB);
+  if (includeOsb) {
+    const extA = L.joistSpan;
+    const extB = L.rimLen;
+    const piecesAB = computeDeckPiecesAB_NoStagger(extA, extB);
 
-  const osbMap = {};
-  for (const p of piecesAB) {
-    const mapped = mapABtoXZ(p, L.isWShort);
-    const sw = Math.round(mapped.wX);
-    const sh = Math.round(mapped.dZ);
-    if (sw > 10 && sh > 10) {
-      const key = `${sw}x${sh}`;
-      osbMap[key] = (osbMap[key] || 0) + 1;
+    const osbMap = {};
+    for (const p of piecesAB) {
+      const mapped = mapABtoXZ(p, L.isWShort);
+      const sw = Math.round(mapped.wX);
+      const sh = Math.round(mapped.dZ);
+      if (sw > 10 && sh > 10) {
+        const key = `${sw}x${sh}`;
+        osbMap[key] = (osbMap[key] || 0) + 1;
+      }
     }
-  }
 
-  const sheetShort = CONFIG.decking.w; // 1220
-  const sheetLong = CONFIG.decking.d;  // 2440
+    const sheetShort = CONFIG.decking.w; // 1220
+    const sheetLong = CONFIG.decking.d;  // 2440
 
-  const fullPieceXZ = mapABtoXZ({ a0: 0, b0: 0, aLen: sheetShort, bLen: sheetLong }, L.isWShort);
-  const fullKey = `${Math.round(fullPieceXZ.wX)}x${Math.round(fullPieceXZ.dZ)}`;
+    const fullPieceXZ = mapABtoXZ({ a0: 0, b0: 0, aLen: sheetShort, bLen: sheetLong }, L.isWShort);
+    const fullKey = `${Math.round(fullPieceXZ.wX)}x${Math.round(fullPieceXZ.dZ)}`;
 
-  const osbStd = {};
-  const osbRip = {};
-  Object.keys(osbMap).forEach(key => {
-    if (key === fullKey) osbStd[key] = (osbStd[key] || 0) + osbMap[key];
-    else osbRip[key] = (osbRip[key] || 0) + osbMap[key];
-  });
-
-  function renderOsbTable(map, bodyId, totalsId, label) {
-    let html = '';
-    let count = 0;
-    Object.keys(map).sort((a, b) => {
-      const [aw, ah] = a.split('x').map(Number), [bw, bh] = b.split('x').map(Number);
-      return ah - bh || aw - bw;
-    }).forEach(key => {
-      const [wStr, hStr] = key.split('x');
-      const w = parseInt(wStr, 10), h = parseInt(hStr, 10);
-      const qty = map[key];
-      const pieceName = `Piece ${w}x${h}`;
-      const notes = label;
-      html += `<tr><td>${pieceName}</td><td>${qty}</td><td class="highlight">${fmtSize(w, h)}</td><td>${notes}</td></tr>`;
-      pushCsv('OSB Decking', pieceName, qty, w, h, notes);
-      count += qty;
+    const osbStd = {};
+    const osbRip = {};
+    Object.keys(osbMap).forEach(key => {
+      if (key === fullKey) osbStd[key] = (osbStd[key] || 0) + osbMap[key];
+      else osbRip[key] = (osbRip[key] || 0) + osbMap[key];
     });
-    document.getElementById(bodyId).innerHTML = html || `<tr><td colspan="4">None</td></tr>`;
-    document.getElementById(totalsId).textContent = `Total ${label.toLowerCase()}: ${count}`;
-  }
-  renderOsbTable(osbStd, 'osbStdBody', 'osbStdTotals', 'Standard Sheet');
-  renderOsbTable(osbRip, 'osbRipBody', 'osbRipTotals', 'Rip/Trim Cut');
 
-  // ----- PIR Insulation — Rip Cuts Only (derived from placement) -----
+    function renderOsbTable(map, bodyId, totalsId, label) {
+      let html = '';
+      let count = 0;
+      Object.keys(map).sort((a, b) => {
+        const [aw, ah] = a.split('x').map(Number), [bw, bh] = b.split('x').map(Number);
+        return ah - bh || aw - bw;
+      }).forEach(key => {
+        const [wStr, hStr] = key.split('x');
+        const w = parseInt(wStr, 10), h = parseInt(hStr, 10);
+        const qty = map[key];
+        const pieceName = `Piece ${w}x${h}`;
+        const notes = label;
+        html += `<tr><td>${pieceName}</td><td>${qty}</td><td class="highlight">${fmtSize(w, h)}</td><td>${notes}</td></tr>`;
+        pushCsv('OSB Decking', pieceName, qty, w, h, notes);
+        count += qty;
+      });
+      document.getElementById(bodyId).innerHTML = html || `<tr><td colspan="4">None</td></tr>`;
+      document.getElementById(totalsId).textContent = `Total ${label.toLowerCase()}: ${count}`;
+    }
+    renderOsbTable(osbStd, 'osbStdBody', 'osbStdTotals', 'Standard Sheet');
+    renderOsbTable(osbRip, 'osbRipBody', 'osbRipTotals', 'Rip/Trim Cut');
+
+    // ----- OSB Minimum Sheet Summary (area-based) -----
+    let totalOSBArea = 0;
+    Object.keys(osbMap).forEach(key => {
+      const [wStr, hStr] = key.split('x');
+      const w = parseInt(wStr, 10);
+      const h = parseInt(hStr, 10);
+      const qty = osbMap[key];
+      totalOSBArea += qty * w * h;
+    });
+    const sheetArea = sheetShort * sheetLong;
+    const minSheets = sheetArea > 0 ? Math.ceil(totalOSBArea / sheetArea) : 0;
+    const osbSummaryEl = document.getElementById('osbSummary');
+    if (osbSummaryEl) osbSummaryEl.textContent = `Minimum full sheets required (by area): ${minSheets}`;
+  } else {
+    // OSB excluded for baseType 'none' or 'concrete-only'
+    document.getElementById('osbStdBody').innerHTML = '<tr><td colspan="4">Floor OSB excluded (customer supplied)</td></tr>';
+    document.getElementById('osbRipBody').innerHTML = '';
+    document.getElementById('osbStdTotals').textContent = '';
+    document.getElementById('osbRipTotals').textContent = '';
+    const osbSummaryEl = document.getElementById('osbSummary');
+    if (osbSummaryEl) osbSummaryEl.textContent = '';
+  }
+
+  // ----- PIR Insulation — Rip Cuts Only (insulated variant only) -----
+  const isInsulatedBOM = state.walls?.variant === 'insulated';
   const gW = CONFIG.insulation.w;
   const gL = CONFIG.insulation.d;
   const pirRipCuts = {};
   let totalPirArea = 0;
-  for (let i = 0; i < L.positions.length - 1; i++) {
+  for (let i = 0; isInsulatedBOM && i < L.positions.length - 1; i++) {
     const start = L.positions[i] + 25;
     const currentBayW = (L.positions[i + 1] - 25) - start;
     for (let z = 0; z < L.innerJoistLen; z += gL) {
@@ -316,6 +395,10 @@ export function updateBOM(state) {
   const pirSummaryEl = document.getElementById('pirSummary');
   if (pirSummaryEl) pirSummaryEl.textContent = `Minimum full sheets required (by area): ${pirMinSheets}`;
 
+  // Hide entire floor PIR section when not insulated variant
+  const floorPirSection = document.getElementById('floorPirSection');
+  if (floorPirSection) floorPirSection.style.display = isInsulatedBOM ? '' : 'none';
+
   // ----- Plastic Grid Tiles (mirror base grid placement) -----
   const g = CONFIG.grid.size;
   const gridCuts = {};
@@ -343,20 +426,6 @@ export function updateBOM(state) {
     </tr>`;
   });
   document.getElementById('gridBody').innerHTML = gridHtml || `<tr><td colspan="4">None</td></tr>`;
-
-  // ----- OSB Minimum Sheet Summary (area-based) -----
-  let totalOSBArea = 0;
-  Object.keys(osbMap).forEach(key => {
-    const [wStr, hStr] = key.split('x');
-    const w = parseInt(wStr, 10);
-    const h = parseInt(hStr, 10);
-    const qty = osbMap[key];
-    totalOSBArea += qty * w * h;
-  });
-  const sheetArea = sheetShort * sheetLong;
-  const minSheets = sheetArea > 0 ? Math.ceil(totalOSBArea / sheetArea) : 0;
-  const osbSummaryEl = document.getElementById('osbSummary');
-  if (osbSummaryEl) osbSummaryEl.textContent = `Minimum full sheets required (by area): ${minSheets}`;
 
   // NOTE: No plywood floor covering — floor is OSB decking only.
   // Hide the legacy ply floor BOM section if it still exists in HTML

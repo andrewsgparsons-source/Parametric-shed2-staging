@@ -2142,6 +2142,12 @@ function ensureCladdingMaterialOnMeshes() {
           if (!hasBudgetMat) mesh.material = mat;
           attachmentHits++;
         }
+
+        // Soffit boards: ensure they always have material
+        // (fixes initial-load timing bug where material gets stripped)
+        if (mesh.name.indexOf("roof-soffit") >= 0 || (mesh.metadata && mesh.metadata.part === "soffit")) {
+          if (!mesh.material) mesh.material = scene._soffitMat || mat;
+        }
       }
 
     } catch (e) {
@@ -2187,6 +2193,10 @@ function scheduleFollowUpFinalisers() {
                              (mesh.metadata && mesh.metadata.type === "cladding");
             if (isCladding && !mesh.material) {
               mesh.material = mat;
+            }
+            // Soffit boards: catch initial-load timing bug
+            if (!mesh.material && (mesh.name.indexOf("roof-soffit") >= 0 || (mesh.metadata && mesh.metadata.part === "soffit"))) {
+              mesh.material = scene._soffitMat || mat;
             }
           }
         } catch (e) {}

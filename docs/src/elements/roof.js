@@ -775,8 +775,130 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
       );
     }
   }
+
+  // ---- PENT SOFFIT BOARDS (horizontal cladding under roof overhang) ----
+  // Flat panels closing the underside of each overhang, from wall plate to fascia.
+  // Only built when state.roof.soffits !== false and there is overhang on that edge.
+  {
+    const showSoffits = (state?.roof?.soffits !== false);
+    if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
+      const SOFFIT_THK_MM = 12; // 12mm cladding board
+      // Use dedicated soffit material (higher emissive for downward-facing surfaces).
+      // Falls back to _claddingMatLight, then creates inline fallback.
+      if (!scene._soffitMat && !scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
+      }
+      const soffitMat = scene._soffitMat || scene._claddingMatLight;
+
+      // Soffit Y: sits at bottom of fascia (horizontal panel)
+      // fasciaBottomY_m was computed in the fascia section above; recalculate here
+      const _osbTopY_mm = data.rafterD_mm + data.osbThickness_mm;
+      const _FASCIA_DEPTH_MM = 135;
+      const soffitTopY_mm = _osbTopY_mm - _FASCIA_DEPTH_MM; // bottom of fascia in local mm
+      const soffitTopY_m = soffitTopY_mm / 1000;
+
+      // For pent, overhangs in roof-local coords:
+      // The roof plan spans [0..roofW_mm] x [0..roofD_mm] in local XZ
+      // The frame sits at [l_mm..l_mm+frameW_mm] x [f_mm..f_mm+frameD_mm]
+      // Each soffit panel spans from the frame edge outward to the roof edge.
+
+      if (data.isWShort) {
+        // Slope along X, ridge along Z
+        // Eaves soffit (low side, X: 0 to l_mm, Z: 0 to roofD_mm)
+        if (l_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-eaves`,
+            l_mm, SOFFIT_THK_MM, data.roofD_mm,
+            0, soffitTopY_m, 0,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "eaves" }
+          );
+        }
+        // Ridge soffit (high side, X: l_mm+frameW_mm to roofW_mm)
+        if (r_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-ridge`,
+            r_mm, SOFFIT_THK_MM, data.roofD_mm,
+            l_mm + frameW_mm, soffitTopY_m, 0,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "ridge" }
+          );
+        }
+        // Front verge soffit (Z: 0 to f_mm, X: l_mm to l_mm+frameW_mm)
+        if (f_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-front`,
+            frameW_mm, SOFFIT_THK_MM, f_mm,
+            l_mm, soffitTopY_m, 0,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "front" }
+          );
+        }
+        // Back verge soffit (Z: f_mm+frameD_mm to roofD_mm)
+        if (b_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-back`,
+            frameW_mm, SOFFIT_THK_MM, b_mm,
+            l_mm, soffitTopY_m, f_mm + frameD_mm,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "back" }
+          );
+        }
+      } else {
+        // Slope along Z, ridge along X
+        // Eaves soffit (low side, Z: 0 to f_mm, X: 0 to roofW_mm)
+        if (f_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-eaves`,
+            data.roofW_mm, SOFFIT_THK_MM, f_mm,
+            0, soffitTopY_m, 0,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "eaves" }
+          );
+        }
+        // Ridge soffit (high side, Z: f_mm+frameD_mm to roofD_mm)
+        if (b_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-ridge`,
+            data.roofW_mm, SOFFIT_THK_MM, b_mm,
+            0, soffitTopY_m, f_mm + frameD_mm,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "ridge" }
+          );
+        }
+        // Left verge soffit (X: 0 to l_mm, Z: f_mm to f_mm+frameD_mm)
+        if (l_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-front`,
+            l_mm, SOFFIT_THK_MM, frameD_mm,
+            0, soffitTopY_m, f_mm,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "front" }
+          );
+        }
+        // Right verge soffit (X: l_mm+frameW_mm to roofW_mm)
+        if (r_mm > 0) {
+          mkBoxBottomLocal(
+            `${meshPrefix}roof-soffit-back`,
+            r_mm, SOFFIT_THK_MM, frameD_mm,
+            l_mm + frameW_mm, soffitTopY_m, f_mm,
+            roofRoot, soffitMat,
+            { roof: "pent", part: "soffit", edge: "back" }
+          );
+        }
+      }
+      console.log('[SOFFIT] Built pent soffit boards - overhangs L:', l_mm, 'R:', r_mm, 'F:', f_mm, 'B:', b_mm);
+    }
+  }
+
   // ---- PENT ROOF INSULATION (PIR panels between rafters, interior side) ----
   // Only for insulated variant. Panels sit below rafters, between them.
+  // Skylight openings are cut out so you can see through the glass.
   if (roofParts.insulation && data.rafters.length >= 2) {
     const INS_THICKNESS_MM = 50; // 50mm PIR
     const insBottomY_m = -INS_THICKNESS_MM / 1000; // Below rafter underside (local y=0 is rafter bottom)
@@ -784,6 +906,11 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const insMat = new BABYLON.StandardMaterial(`${meshPrefix}roofInsMat-pent`, scene);
     insMat.diffuseColor = new BABYLON.Color3(0.75, 0.85, 0.45); // Green PIR
 
+    // Get skylight openings to cut through insulation (same coords as OSB)
+    let skyOpeningsIns = [];
+    try { skyOpeningsIns = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe */ }
+
+    let insIdx = 0;
     for (let i = 0; i < data.rafters.length - 1; i++) {
       const bayStart_b = data.rafters[i].b0_mm + data.rafterW_mm; // inside edge of rafter i
       const bayEnd_b = data.rafters[i + 1].b0_mm;                  // inside edge of rafter i+1
@@ -792,26 +919,35 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
 
       // Insulation panel runs along A (slope axis), same length as rafters but slope-scaled
       const insLen_a = A_phys_mm;
+      const bayRect = { a0_mm: 0, b0_mm: bayStart_b, aLen_mm: insLen_a, bLen_mm: bayWidth_b };
 
-      const m = mapABtoLocalXZ(0, bayStart_b, insLen_a, bayWidth_b, data.isWShort);
-      mkBoxBottomLocal(
-        `${meshPrefix}roof-ins-bay${i}`,
-        m.lenX,
-        INS_THICKNESS_MM,
-        m.lenZ,
-        m.x0,
-        insBottomY_m,
-        m.z0,
-        roofRoot,
-        insMat,
-        { roof: "pent", part: "insulation", bay: i }
-      );
+      // Split around skylight openings if any
+      const pieces = skyOpeningsIns.length > 0
+        ? splitRectAroundHoles(bayRect, skyOpeningsIns)
+        : [bayRect];
+
+      for (const sp of pieces) {
+        const m = mapABtoLocalXZ(sp.a0_mm, sp.b0_mm, sp.aLen_mm, sp.bLen_mm, data.isWShort);
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-ins-${insIdx++}`,
+          m.lenX,
+          INS_THICKNESS_MM,
+          m.lenZ,
+          m.x0,
+          insBottomY_m,
+          m.z0,
+          roofRoot,
+          insMat,
+          { roof: "pent", part: "insulation", bay: i }
+        );
+      }
     }
-    console.log('[ROOF_INS] Pent: Created insulation for', data.rafters.length - 1, 'bays');
+    console.log('[ROOF_INS] Pent: Created insulation pieces:', insIdx, '(with skylight cutouts:', skyOpeningsIns.length, ')');
   }
 
   // ---- PENT ROOF INTERIOR PLYWOOD (12mm lining below insulation) ----
   // Only for insulated variant. Continuous sheet below insulation.
+  // Skylight openings are cut out (same holes as insulation).
   if (roofParts.ply && data.rafters.length >= 2) {
     const INS_THICKNESS_MM = 50;
     const PLY_THICKNESS_MM = 12;
@@ -827,20 +963,46 @@ function buildPent(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 0 
     const plyWidth_b = plyEnd_b - plyStart_b;
     const plyLen_a = A_phys_mm;
 
-    const m = mapABtoLocalXZ(0, plyStart_b, plyLen_a, plyWidth_b, data.isWShort);
-    mkBoxBottomLocal(
-      `${meshPrefix}roof-ply`,
-      m.lenX,
-      PLY_THICKNESS_MM,
-      m.lenZ,
-      m.x0,
-      plyBottomY_m,
-      m.z0,
-      roofRoot,
-      plyMat,
-      { roof: "pent", part: "ply" }
-    );
-    console.log('[ROOF_PLY] Pent: Created interior plywood lining');
+    // Get skylight openings to cut through plywood (same coords as OSB/insulation)
+    let skyOpeningsPly = [];
+    try { skyOpeningsPly = getSkylightOpenings(state, "pent") || []; } catch(e) { /* safe */ }
+
+    const plyRect = { a0_mm: 0, b0_mm: plyStart_b, aLen_mm: plyLen_a, bLen_mm: plyWidth_b };
+
+    if (skyOpeningsPly.length > 0) {
+      const plyPieces = splitRectAroundHoles(plyRect, skyOpeningsPly);
+      for (let pi = 0; pi < plyPieces.length; pi++) {
+        const m = mapABtoLocalXZ(plyPieces[pi].a0_mm, plyPieces[pi].b0_mm, plyPieces[pi].aLen_mm, plyPieces[pi].bLen_mm, data.isWShort);
+        mkBoxBottomLocal(
+          `${meshPrefix}roof-ply-${pi}`,
+          m.lenX,
+          PLY_THICKNESS_MM,
+          m.lenZ,
+          m.x0,
+          plyBottomY_m,
+          m.z0,
+          roofRoot,
+          plyMat,
+          { roof: "pent", part: "ply" }
+        );
+      }
+    } else {
+      // No skylights — single panel as before
+      const m = mapABtoLocalXZ(0, plyStart_b, plyLen_a, plyWidth_b, data.isWShort);
+      mkBoxBottomLocal(
+        `${meshPrefix}roof-ply`,
+        m.lenX,
+        PLY_THICKNESS_MM,
+        m.lenZ,
+        m.x0,
+        plyBottomY_m,
+        m.z0,
+        roofRoot,
+        plyMat,
+        { roof: "pent", part: "ply" }
+      );
+    }
+    console.log('[ROOF_PLY] Pent: Created interior plywood lining (skylight cutouts:', (skyOpeningsPly.length > 0 ? 'yes' : 'none'), ')');
   }
 
   // ---- Analytic alignment (no wall mesh queries) ----
@@ -1092,6 +1254,35 @@ function updateBOM_Pent(state, tbody) {
       W: plyB,
       notes: "12mm plywood lining; full interior coverage",
     });
+  }
+
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits = (state?.roof?.soffits !== false);
+  if (showSoffits) {
+    const dims_pent = resolveDims(state);
+    const ovh = dims_pent?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+    const roofW_s = data.roofW_mm;
+    const roofD_s = data.roofD_mm;
+    const frameW_s = data.frameW_mm;
+    const frameD_s = data.frameD_mm;
+
+    // Eaves/ridge soffits (long sides)
+    if (data.isWShort) {
+      // Slope along X: eaves (low) = left overhang, ridge (high) = right overhang
+      if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofD_s, W: ol, notes: "12mm; eaves side (low)" });
+      if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofD_s, W: or_, notes: "12mm; ridge side (high)" });
+      if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameW_s, W: of_, notes: "12mm; front verge" });
+      if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameW_s, W: ob, notes: "12mm; back verge" });
+    } else {
+      if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofW_s, W: of_, notes: "12mm; eaves side (low)" });
+      if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: roofW_s, W: ob, notes: "12mm; ridge side (high)" });
+      if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameD_s, W: ol, notes: "12mm; left verge" });
+      if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: frameD_s, W: or_, notes: "12mm; right verge" });
+    }
   }
 
   rows.sort((a, b) => {
@@ -2591,9 +2782,114 @@ if (roofParts.osb) {
     }
   }
 
+  // ---- APEX SOFFIT BOARDS (horizontal cladding under roof overhang) ----
+  // Flat panels closing the underside of each overhang, from wall plate to fascia.
+  // Eaves soffits (left/right): horizontal panels under the eaves overhang on each slope side
+  // Gable soffits (front/back): horizontal panels under the gable/verge overhang
+  {
+    const showSoffits = (state?.roof?.soffits !== false);
+    if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
+      const SOFFIT_THK_MM = 12; // 12mm cladding board
+      // Use dedicated soffit material (higher emissive for downward-facing surfaces).
+      if (!scene._soffitMat && !scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
+      }
+      const soffitMat = scene._soffitMat || scene._claddingMatLight;
+
+      // Soffit Y position: bottom of fascia, in local roof coords
+      // Fascia depth = 135mm, top aligns with top of OSB
+      const _FASCIA_DEPTH_MM = 135;
+      const _osbTopY_mm = memberD_mm + OSB_THK_MM;
+      const soffitY_mm = _osbTopY_mm - _FASCIA_DEPTH_MM;
+      const soffitY_m = soffitY_mm / 1000;
+
+      // Roof plan: [0..A_mm] along X (span), [0..B_mm] along Z (ridge)
+      // Frame sits at [l_mm..l_mm+frameW_mm] x [f_mm..f_mm+frameD_mm]
+
+      // Left eaves soffit (X: 0 to l_mm, full depth Z: 0 to B_mm)
+      if (l_mm > 0) {
+        mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-eaves-L`,
+          l_mm, SOFFIT_THK_MM, B_mm,
+          l_mm / 2, soffitY_m, B_mm / 2,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: "eaves-L" }
+        );
+      }
+
+      // Right eaves soffit (X: A_mm - r_mm to A_mm, full depth Z: 0 to B_mm)
+      if (r_mm > 0) {
+        mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-eaves-R`,
+          r_mm, SOFFIT_THK_MM, B_mm,
+          A_mm - r_mm / 2, soffitY_m, B_mm / 2,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: "eaves-R" }
+        );
+      }
+
+      // Gable soffits (front/back): SLOPED panels following the roof pitch
+      // Each gable gets two panels — one per slope side (L and R of ridge)
+      // Panels are rotated to match the roof slope angle
+      const sinT = Math.sin(slopeAng);
+      const cosT = Math.cos(slopeAng);
+
+      function buildGableSoffitPair(label, zCenter_mm) {
+        // Each slope panel: length = rafterLen (along slope), width = overhang depth (f_mm or b_mm)
+        const ovhDepth_mm = (label === "front") ? f_mm : b_mm;
+        if (ovhDepth_mm <= 0) return;
+
+        // Left slope: from eaves (X=0) up to ridge (X=halfSpan_mm)
+        // Mid-slope position in local coords
+        const sMid_mm = rafterLen_mm / 2;
+        const runMid_mm = sMid_mm * cosT;
+        const riseMid_mm = sMid_mm * sinT;
+
+        // Left slope center
+        const lCenterX_mm = halfSpan_mm - runMid_mm;
+        const lCenterY_mm = memberD_mm + (rise_mm - riseMid_mm);
+
+        const soffitL = mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-gable-${label}-L`,
+          rafterLen_mm, SOFFIT_THK_MM, ovhDepth_mm,
+          lCenterX_mm, lCenterY_mm, zCenter_mm,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: `gable-${label}-L` }
+        );
+        soffitL.rotation = new BABYLON.Vector3(0, 0, slopeAng);
+
+        // Right slope center (mirror)
+        const rCenterX_mm = halfSpan_mm + runMid_mm;
+        const rCenterY_mm = lCenterY_mm; // symmetric
+
+        const soffitR = mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-gable-${label}-R`,
+          rafterLen_mm, SOFFIT_THK_MM, ovhDepth_mm,
+          rCenterX_mm, rCenterY_mm, zCenter_mm,
+          roofRoot, soffitMat,
+          { roof: "apex", part: "soffit", edge: `gable-${label}-R` }
+        );
+        soffitR.rotation = new BABYLON.Vector3(0, 0, -slopeAng);
+      }
+
+      // Front gable soffits (z center = f_mm / 2)
+      if (f_mm > 0) buildGableSoffitPair("front", f_mm / 2);
+
+      // Back gable soffits (z center = B_mm - b_mm / 2)
+      if (b_mm > 0) buildGableSoffitPair("back", B_mm - b_mm / 2);
+
+      console.log('[SOFFIT] Built apex soffit boards - overhangs L:', l_mm, 'R:', r_mm, 'F:', f_mm, 'B:', b_mm);
+    }
+  }
+
   // ---- ROOF INSULATION (PIR panels between rafters and tie beams) ----
-  // Only for raised tie beam configuration
-  const showRoofIns = (state.vis?.roofIns !== false) && (state.vis?.ins !== false);
+  // Only for raised tie beam configuration AND insulated variant
+  const showRoofIns = (state.vis?.roofIns !== false) && (state.vis?.ins !== false) && (state.walls?.variant === "insulated");
   
   if (showRoofIns && tieBeamSetting === "raised" && trussPos.length >= 2) {
     console.log('[ROOF_INS] Building roof insulation - trussCount:', trussPos.length, 'bays:', trussPos.length - 1);
@@ -3507,6 +3803,24 @@ function updateBOM_Apex(state, tbody) {
       W: g.W,
       notes: "18mm OSB; " + (isStd ? "standard sheet" : "rip/trim cut") + "; apex",
     });
+  }
+
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits_apex = (state?.roof?.soffits !== false);
+  if (showSoffits_apex) {
+    const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+
+    // Eaves soffits: run along ridge (B_mm depth), width = overhang
+    if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: ol, notes: "12mm; left eaves" });
+    if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: or_, notes: "12mm; right eaves" });
+    // Gable soffits: each gable has 2 sloped panels (L + R of ridge)
+    // Length along slope = rafterLen_mm, width = overhang depth
+    if (of_ > 0) rows.push({ item: "Soffit Board", qty: 2, L: rafterLen_mm, W: of_, notes: "12mm; front gable (L+R slopes)" });
+    if (ob > 0) rows.push({ item: "Soffit Board", qty: 2, L: rafterLen_mm, W: ob, notes: "12mm; back gable (L+R slopes)" });
   }
 
   rows.sort((a, b) => String(a.item).localeCompare(String(b.item)));
@@ -4548,6 +4862,79 @@ function buildHipped(state, ctx, meshPrefix = "", sectionPos = { x: 0, y: 0, z: 
     );
   }
 
+  // === HIPPED SOFFIT BOARDS (horizontal cladding under roof overhang) ===
+  {
+    const showSoffits = (state?.roof?.soffits !== false);
+    if (showSoffits && (l_mm > 0 || r_mm > 0 || f_mm > 0 || b_mm > 0)) {
+      const SOFFIT_THK_MM = 12;
+      // Use dedicated soffit material (higher emissive for downward-facing surfaces).
+      if (!scene._soffitMat && !scene._claddingMatLight) {
+        const m = new BABYLON.StandardMaterial("claddingMatLight", scene);
+        m.diffuseColor = new BABYLON.Color3(0.85, 0.72, 0.55);
+        m.emissiveColor = new BABYLON.Color3(0.17, 0.14, 0.11);
+        m.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+        m.specularPower = 16;
+        scene._claddingMatLight = m;
+      }
+      const soffitMat = scene._soffitMat || scene._claddingMatLight;
+      const _fasciaDepth = 135;
+      const _osbTop_mm = memberD_mm + 18 + 1;
+      const soffitY_mm = _osbTop_mm - _fasciaDepth;
+      const soffitY_m = soffitY_mm / 1000;
+
+      // Hipped roof: overhangs on all four sides, soffit panels fill underneath
+      // Roof plan: [0..A_mm] x [0..B_mm], frame at [l_mm..A_mm-r_mm] x [f_mm..B_mm-b_mm]
+
+      // Left soffit
+      if (l_mm > 0) {
+        mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-left`,
+          l_mm, SOFFIT_THK_MM, B_mm,
+          l_mm / 2, soffitY_m, B_mm / 2,
+          roofRoot, soffitMat,
+          { roof: "hipped", part: "soffit", edge: "left" }
+        );
+      }
+      // Right soffit
+      if (r_mm > 0) {
+        mkBoxCenteredLocal(
+          `${meshPrefix}roof-soffit-right`,
+          r_mm, SOFFIT_THK_MM, B_mm,
+          A_mm - r_mm / 2, soffitY_m, B_mm / 2,
+          roofRoot, soffitMat,
+          { roof: "hipped", part: "soffit", edge: "right" }
+        );
+      }
+      // Front soffit (between left/right soffits)
+      if (f_mm > 0) {
+        const innerW_mm = A_mm - l_mm - r_mm;
+        if (innerW_mm > 0) {
+          mkBoxCenteredLocal(
+            `${meshPrefix}roof-soffit-front`,
+            innerW_mm, SOFFIT_THK_MM, f_mm,
+            l_mm + innerW_mm / 2, soffitY_m, f_mm / 2,
+            roofRoot, soffitMat,
+            { roof: "hipped", part: "soffit", edge: "front" }
+          );
+        }
+      }
+      // Back soffit
+      if (b_mm > 0) {
+        const innerW_mm = A_mm - l_mm - r_mm;
+        if (innerW_mm > 0) {
+          mkBoxCenteredLocal(
+            `${meshPrefix}roof-soffit-back`,
+            innerW_mm, SOFFIT_THK_MM, b_mm,
+            l_mm + innerW_mm / 2, soffitY_m, B_mm - b_mm / 2,
+            roofRoot, soffitMat,
+            { roof: "hipped", part: "soffit", edge: "back" }
+          );
+        }
+      }
+      console.log('[SOFFIT] Built hipped soffit boards - overhangs L:', l_mm, 'R:', r_mm, 'F:', f_mm, 'B:', b_mm);
+    }
+  }
+
   // === FINAL POSITIONING ===
   // Align roof to wall plate level
   const targetMinX_m = (-l_mm) / 1000;
@@ -4660,6 +5047,24 @@ function updateBOM_Hipped(state, tbody) {
       W: memberW_mm,
       notes: "D (mm): " + String(memberD_mm) + "; varying lengths; hipped ends",
     });
+  }
+
+  // ---- Soffit boards (12mm cladding board under overhang) ----
+  const showSoffits_hipped = (state?.roof?.soffits !== false);
+  if (showSoffits_hipped) {
+    const ovh = dims?.overhang || { l_mm: 0, r_mm: 0, f_mm: 0, b_mm: 0 };
+    const ol = Math.max(0, Math.floor(Number(ovh.l_mm || 0)));
+    const or_ = Math.max(0, Math.floor(Number(ovh.r_mm || 0)));
+    const of_ = Math.max(0, Math.floor(Number(ovh.f_mm || 0)));
+    const ob = Math.max(0, Math.floor(Number(ovh.b_mm || 0)));
+
+    // Hipped roof: soffits run around all 4 sides
+    // Eaves soffits (left/right): full depth of roof
+    if (ol > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: ol, notes: "12mm; left eaves" });
+    if (or_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: B_mm, W: or_, notes: "12mm; right eaves" });
+    // Front/back soffits: full width of roof
+    if (of_ > 0) rows.push({ item: "Soffit Board", qty: 1, L: A_mm, W: of_, notes: "12mm; front" });
+    if (ob > 0) rows.push({ item: "Soffit Board", qty: 1, L: A_mm, W: ob, notes: "12mm; back" });
   }
 
   rows.sort((a, b) => String(a.item).localeCompare(String(b.item)));

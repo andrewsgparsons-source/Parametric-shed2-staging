@@ -2291,8 +2291,8 @@ if (roofParts.osb) {
   }
 
   // ---- ROOF INSULATION (PIR panels between rafters and tie beams) ----
-  // Only for raised tie beam configuration
-  const showRoofIns = (state.vis?.roofIns !== false) && (state.vis?.ins !== false);
+  // Only for raised tie beam configuration AND insulated variant
+  const showRoofIns = (state.vis?.roofIns !== false) && (state.vis?.ins !== false) && (state.walls?.variant === "insulated");
   
   if (showRoofIns && tieBeamSetting === "raised" && trussPos.length >= 2) {
     console.log('[ROOF_INS] Building roof insulation - trussCount:', trussPos.length, 'bays:', trussPos.length - 1);

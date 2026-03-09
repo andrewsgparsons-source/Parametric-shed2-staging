@@ -21,15 +21,23 @@
 
   var STEPS = [
     { label: 'Size',       section: 'Size & Shape',        profileKey: 'sizeShape' },
-    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
+    { label: 'Base',       section: 'Base',                profileKey: 'base' },
     { label: 'Walls',      section: 'Walls & Openings',    profileKey: 'wallsOpenings' },
+    { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
     { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
     { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
-    { label: 'Visibility', section: 'Visibility',           profileKey: 'visibility' },
-    { label: 'BOM',        section: '__bom__',              profileKey: 'display' },
+    { label: 'Customise View', section: 'Visibility',        profileKey: 'visibility' },
+    { label: 'BOM',        section: '__bom__',              profileKey: 'display', adminOnly: true },
     { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
-    { label: 'Dev',        section: 'Developer',            profileKey: 'developer' }
+    { label: 'Dev',        section: 'Developer',            profileKey: 'developer', adminOnly: true }
   ];
+
+  // Filter out admin-only steps for non-admin users
+  var urlParams = new URLSearchParams(window.location.search);
+  var isAdmin = urlParams.get('profile') === 'admin';
+  if (!isAdmin) {
+    STEPS = STEPS.filter(function(s) { return !s.adminOnly; });
+  }
 
   var activeStep = 0;
   var sections = [];
@@ -134,6 +142,24 @@
     dragHandle.innerHTML = '<div class="mc-handle-bar"></div>';
     container.appendChild(dragHandle);
 
+    // === BUILDING TYPE SELECTOR ===
+    var typeBar = document.createElement('div');
+    typeBar.id = 'mcTypeBar';
+    typeBar.innerHTML = '<span class="mc-type-label">Design Your</span>' +
+      '<select id="buildingTypeSelect" class="mc-type-select">' +
+        '<option value="shed">Shed</option>' +
+        '<option value="summerhouse">Summer House</option>' +
+        '<option value="gardenroom-pent">Garden Room (Pent)</option>' +
+        '<option value="gardenroom-apex">Garden Room (Apex)</option>' +
+        '<option value="garage">Garage</option>' +
+        '<option value="workshop">Workshop</option>' +
+        '<option value="leanto">Lean-to</option>' +
+        '<option value="fieldshelter">Field Shelter</option>' +
+        '<option value="gazebo">Gazebo</option>' +
+      '</select>';
+
+    container.appendChild(typeBar);
+
     // === STEP NAVIGATION ===
     var stepNav = document.createElement('div');
     stepNav.id = 'mcStepNav';
@@ -227,6 +253,15 @@
     });
 
     console.log('[mobile-configurator] Layout built! Steps:', sections.length);
+
+    // Hide pricing display dropdown for customer view
+    if (!isAdmin) {
+      var priceBadgeModeRow = document.getElementById('priceBadgeModeRow');
+      if (priceBadgeModeRow) {
+        priceBadgeModeRow.style.display = 'none';
+        console.log('[mobile-configurator] Hidden priceBadgeModeRow for customer view');
+      }
+    }
 
     // Check profile restrictions and update pill visibility
     // Runs after layout built, and again whenever profile changes
@@ -527,15 +562,21 @@
       var bomDiv = document.createElement('div');
       bomDiv.id = 'mcBomContent';
       bomDiv.style.cssText = 'padding: 16px; background: #fff; margin: 8px; border-radius: 12px; box-shadow: 0 2px 12px rgba(45,80,22,0.08);';
-      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+      // Build BOM buttons HTML - hide Pricing button in customer view
+      var bomButtonsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<button class="mc-bom-btn" data-view="base" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏗️ Base</button>' +
         '<button class="mc-bom-btn" data-view="walls" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🧱 Walls</button>' +
         '<button class="mc-bom-btn" data-view="roof" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🏚️ Roof</button>' +
         '<button class="mc-bom-btn" data-view="openings" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">🚪 Openings</button>' +
-        '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>' +
-        '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>' +
-        '</div>';
+        '<button class="mc-bom-btn" data-view="shelving" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">📐 Shelving</button>';
+      
+      // Only show Pricing button in admin view
+      if (isAdmin) {
+        bomButtonsHtml += '<button class="mc-bom-btn mc-bom-pricing" data-view="pricing" style="padding:10px;border:1px solid #E0D5C8;border-radius:8px;background:#fff;font-size:11px;font-weight:600;cursor:pointer;">💰 Pricing</button>';
+      }
+      bomButtonsHtml += '</div>';
+      
+      bomDiv.innerHTML = '<p style="font-size:10px;color:#5C5C5C;margin:0 0 10px 0;">View detailed cutting lists and material schedules for your shed design.</p>' + bomButtonsHtml;
       var controls = document.getElementById('mcControls');
       if (controls) controls.appendChild(bomDiv);
 
