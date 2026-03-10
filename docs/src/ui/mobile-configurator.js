@@ -733,6 +733,7 @@
 
     // Preset heights for arrow buttons (vh)
     var presets = [20, 40, 55, 70];
+    var presetIdx = 2; // start at 55vh
 
     function setPreviewVh(vh) {
       preview.style.height = vh + 'vh';
@@ -743,35 +744,18 @@
       setTimeout(resizeEngine, 300);
     }
 
-    function getCurrentVh() {
-      return (preview.offsetHeight / window.innerHeight) * 100;
-    }
-
-    // Arrow buttons: step through presets
+    // Arrow buttons: step through presets by index
     handle.querySelectorAll('.mc-handle-arrow').forEach(function(arrow) {
       arrow.addEventListener('click', function(e) {
         e.stopPropagation();
         var dir = arrow.dataset.dir;
-        var curVh = getCurrentVh();
 
-        if (dir === 'up') {
-          // ▲ = move bar up = preview smaller, more controls visible
-          for (var j = presets.length - 1; j >= 0; j--) {
-            if (presets[j] < curVh - 3) {
-              setPreviewVh(presets[j]);
-              return;
-            }
-          }
-          setPreviewVh(presets[0]);
-        } else {
-          // ▼ = move bar down = preview bigger, more 3D visible
-          for (var i = 0; i < presets.length; i++) {
-            if (presets[i] > curVh + 3) {
-              setPreviewVh(presets[i]);
-              return;
-            }
-          }
-          setPreviewVh(presets[presets.length - 1]);
+        if (dir === 'up' && presetIdx > 0) {
+          presetIdx--;
+          setPreviewVh(presets[presetIdx]);
+        } else if (dir === 'down' && presetIdx < presets.length - 1) {
+          presetIdx++;
+          setPreviewVh(presets[presetIdx]);
         }
       });
       // Prevent touch from triggering drag
@@ -814,9 +798,12 @@
     handle.querySelector('.mc-handle-bar').addEventListener('touchend', function() {
       var now = Date.now();
       if (now - lastTap < 300) {
-        var currentRatio = getCurrentVh();
-        var targetVh = currentRatio > 35 ? 20 : 55;
-        setPreviewVh(targetVh);
+        if (presetIdx > 1) {
+          presetIdx = 0;
+        } else {
+          presetIdx = 2;
+        }
+        setPreviewVh(presets[presetIdx]);
       }
       lastTap = now;
     });
