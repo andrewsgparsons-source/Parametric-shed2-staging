@@ -834,3 +834,12 @@ export function renderPricingBreakdown(state, containerId) {
     document.head.appendChild(style);
   }
 }
+
+// Expose showDesignSummary globally for non-module scripts (e.g. mobile-configurator)
+window.__showDesignSummary = function() {
+  import('./ui/design-summary.js').then(function(mod) {
+    mod.showDesignSummary();
+  }).catch(function(err) {
+    console.error('[pricing] Failed to load design summary:', err);
+  });
+};

@@ -20,7 +20,7 @@
     polished: { css: './src/ui/polished-theme.css' },
     wild:     { css: './src/ui/wild-theme.css' },
     sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=2' },
-    mobile:   { css: './src/ui/mobile-configurator.css?_v=7', js: './src/ui/mobile-configurator.js?_v=9' }
+    mobile:   { css: './src/ui/mobile-configurator.css?_v=7', js: './src/ui/mobile-configurator.js?_v=10' }
   };
 
   // Mobile auto-selects 'mobile' theme (unless user explicitly chose something)
