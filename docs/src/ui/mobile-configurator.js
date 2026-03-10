@@ -147,7 +147,7 @@
 
     // Wire price strip CTA
     priceStrip.querySelector('.mc-price-cta').addEventListener('click', function() {
-      import('./ui/design-summary.js').then(function(mod) {
+      import('./src/ui/design-summary.js').then(function(mod) {
         mod.showDesignSummary();
       }).catch(function(err) {
         console.error('[mobile] Failed to load design summary:', err);
