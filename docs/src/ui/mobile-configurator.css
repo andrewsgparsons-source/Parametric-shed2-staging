@@ -109,10 +109,8 @@ body.mobile-configurator #controls {
 #mcPriceStrip {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 6px 16px;
+  flex-direction: column;
+  padding: 0;
   background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
   border-top: 1px solid #c8e6c9;
   font-family: inherit;
@@ -120,23 +118,39 @@ body.mobile-configurator #controls {
   min-height: 0;
 }
 
-#mcPriceStrip .mc-price-range {
-  font-weight: 700;
-  color: #4a3728;
-  letter-spacing: 0.01em;
+#mcPriceStrip .mc-price-cta-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px 0;
 }
 
 #mcPriceStrip .mc-price-cta {
+  font-size: 12px;
   font-weight: 600;
   color: #4a7c3f;
   cursor: pointer;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 4px;
+  background: rgba(74, 124, 63, 0.08);
   transition: background 0.2s;
 }
 
 #mcPriceStrip .mc-price-cta:active {
-  background: rgba(74, 124, 63, 0.12);
+  background: rgba(74, 124, 63, 0.2);
+}
+
+#mcPriceStrip .mc-price-range-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 12px 5px;
+}
+
+#mcPriceStrip .mc-price-range {
+  font-weight: 700;
+  color: #4a3728;
+  font-size: 14px;
+  letter-spacing: 0.01em;
 }
 
 /* ===== DRAG HANDLE ===== */
