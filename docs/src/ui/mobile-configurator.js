@@ -793,6 +793,23 @@
     }
   }
 
+  // === Expose API for tour/demo scripts ===
+  window.__mobileConfigurator = {
+    goToStep: function(idx) { goToStep(idx); },
+    getActiveStep: function() { return activeStep; },
+    getSteps: function() { return STEPS.filter(function(s, i) { return hiddenSteps.indexOf(i) < 0 && !s.adminOnly; }); },
+    getStepCount: function() { return STEPS.filter(function(s, i) { return hiddenSteps.indexOf(i) < 0 && !s.adminOnly; }).length; },
+    setPreviewHeight: function(vh) {
+      var preview = document.getElementById('mcPreview');
+      if (preview) {
+        preview.style.height = vh + 'vh';
+        preview.style.flex = '0 0 ' + vh + 'vh';
+        setTimeout(resizeEngine, 50);
+        setTimeout(resizeEngine, 300);
+      }
+    }
+  };
+
   // Start
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 1500); });

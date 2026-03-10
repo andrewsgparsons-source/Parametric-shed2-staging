@@ -1229,6 +1229,16 @@
       });
     }
   </script>
+  <!-- Guided tour: add ?tour to URL to trigger -->
+  <script>
+    if (new URLSearchParams(window.location.search).has('tour')) {
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          fetch('./tour-runner.js?_v=1').then(function(r){return r.text()}).then(function(code){eval(code)});
+        }, 3000); // 3s after load — needs mobile-configurator to init first
+      });
+    }
+  </script>
 </body>
 </html>
 <!-- cache nudge 1769518008 -->
