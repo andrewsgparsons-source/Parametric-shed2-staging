@@ -105,6 +105,41 @@ body.mobile-configurator #controls {
 }
 
 /* ===== DRAG HANDLE (DIVIDER) ===== */
+/* ===== COMPACT PRICE STRIP ===== */
+#mcPriceStrip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+  border-top: 1px solid #c8e6c9;
+  font-family: inherit;
+  font-size: 13px;
+  min-height: 0;
+}
+
+#mcPriceStrip .mc-price-range {
+  font-weight: 700;
+  color: #4a3728;
+  letter-spacing: 0.01em;
+}
+
+#mcPriceStrip .mc-price-cta {
+  font-weight: 600;
+  color: #4a7c3f;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+#mcPriceStrip .mc-price-cta:active {
+  background: rgba(74, 124, 63, 0.12);
+}
+
+/* ===== DRAG HANDLE ===== */
 #mcDragHandle {
   flex: 0 0 auto;
   height: 32px;

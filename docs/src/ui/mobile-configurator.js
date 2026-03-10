@@ -136,6 +136,46 @@
 
     container.appendChild(preview);
 
+    // === PRICE STRIP (compact, above drag handle) ===
+    var priceStrip = document.createElement('div');
+    priceStrip.id = 'mcPriceStrip';
+    priceStrip.innerHTML = '<span class="mc-price-range"></span><span class="mc-price-cta">💬 Get a Quote</span>';
+    container.appendChild(priceStrip);
+
+    // Wire price strip CTA
+    priceStrip.querySelector('.mc-price-cta').addEventListener('click', function() {
+      import('./ui/design-summary.js').then(function(mod) {
+        mod.showDesignSummary();
+      }).catch(function(err) {
+        console.error('[mobile] Failed to load design summary:', err);
+      });
+    });
+
+    // Update price strip when pricing changes
+    function updatePriceStrip() {
+      var rangeEl = priceStrip.querySelector('.mc-price-range');
+      if (!rangeEl) return;
+      try {
+        var badge = document.getElementById('priceBadge');
+        if (badge) {
+          // Extract from the hidden badge
+          var nums = badge.textContent.match(/£[\d,]+/g);
+          if (nums && nums.length >= 2) {
+            rangeEl.textContent = nums[0] + ' — ' + nums[1];
+            return;
+          } else if (nums && nums.length === 1) {
+            rangeEl.textContent = nums[0];
+            return;
+          }
+        }
+        rangeEl.textContent = '';
+      } catch(e) { rangeEl.textContent = ''; }
+    }
+    // Poll for price updates (pricing module loads async)
+    setInterval(updatePriceStrip, 2000);
+    setTimeout(updatePriceStrip, 1500);
+    setTimeout(updatePriceStrip, 3000);
+
     // === DRAG HANDLE ===
     var dragHandle = document.createElement('div');
     dragHandle.id = 'mcDragHandle';
@@ -712,16 +752,7 @@
         var curVh = getCurrentVh();
 
         if (dir === 'up') {
-          // Make preview bigger (push controls down)
-          for (var i = 0; i < presets.length; i++) {
-            if (presets[i] > curVh + 3) {
-              setPreviewVh(presets[i]);
-              return;
-            }
-          }
-          setPreviewVh(presets[presets.length - 1]);
-        } else {
-          // Make preview smaller (pull controls up)
+          // ▲ = move bar up = preview smaller, more controls visible
           for (var j = presets.length - 1; j >= 0; j--) {
             if (presets[j] < curVh - 3) {
               setPreviewVh(presets[j]);
@@ -729,6 +760,15 @@
             }
           }
           setPreviewVh(presets[0]);
+        } else {
+          // ▼ = move bar down = preview bigger, more 3D visible
+          for (var i = 0; i < presets.length; i++) {
+            if (presets[i] > curVh + 3) {
+              setPreviewVh(presets[i]);
+              return;
+            }
+          }
+          setPreviewVh(presets[presets.length - 1]);
         }
       });
       // Prevent touch from triggering drag
