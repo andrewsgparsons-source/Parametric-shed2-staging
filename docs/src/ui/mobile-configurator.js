@@ -240,8 +240,39 @@
     setTimeout(resizeEngine, 500);
     setTimeout(resizeEngine, 1500);
 
+    // Center camera on model after mobile layout is built
+    setTimeout(function() {
+      if (typeof window.__centerCameraOnModel === 'function') {
+        window.__centerCameraOnModel();
+      }
+    }, 2000);
+    setTimeout(function() {
+      if (typeof window.__centerCameraOnModel === 'function') {
+        window.__centerCameraOnModel();
+      }
+    }, 3500);
+
     // === DRAG HANDLE LOGIC ===
     initDragHandle(dragHandle, preview);
+
+    // === SCROLL HINT: show arrow when controls overflow ===
+    var scrollHint = document.createElement('div');
+    scrollHint.className = 'mc-scroll-hint';
+    scrollHint.textContent = '▼ scroll';
+    controls.style.position = 'relative';
+    controls.appendChild(scrollHint);
+
+    function updateScrollHint() {
+      var atBottom = controls.scrollHeight - controls.scrollTop - controls.clientHeight < 20;
+      var hasOverflow = controls.scrollHeight > controls.clientHeight + 10;
+      scrollHint.style.display = (hasOverflow && !atBottom) ? 'block' : 'none';
+    }
+    controls.addEventListener('scroll', updateScrollHint);
+    setTimeout(updateScrollHint, 500);
+    setTimeout(updateScrollHint, 2000);
+
+    // Also update scroll hint when switching steps
+    var _origGoToStep = goToStep;
 
     // === KEYBOARD: scroll controls into view when input focused ===
     controls.addEventListener('focusin', function(e) {
@@ -627,7 +658,17 @@
 
     // Scroll controls to top
     var controls = document.getElementById('mcControls');
-    if (controls) controls.scrollTop = 0;
+    if (controls) {
+      controls.scrollTop = 0;
+      // Update scroll hint after step change
+      setTimeout(function() {
+        var hint = controls.querySelector('.mc-scroll-hint');
+        if (hint) {
+          var hasOverflow = controls.scrollHeight > controls.clientHeight + 10;
+          hint.style.display = hasOverflow ? 'block' : 'none';
+        }
+      }, 100);
+    }
 
     // Update footer buttons
     var prevBtn = document.querySelector('.mc-prev');

@@ -1917,6 +1917,46 @@ function applyOpeningsVisibility(scene, on) {
       return { min: min, max: max, center: center, extents: ext };
     }
 
+    /**
+     * Center the camera on the model after initial render.
+     * On mobile the small viewport makes the hardcoded target look off-centre.
+     */
+    function centerCameraOnModel() {
+      var sc = getActiveSceneCamera();
+      if (!sc.scene || !sc.camera) return false;
+      var bounds = computeModelBoundsWorld(sc.scene);
+      if (!bounds || !bounds.center) return false;
+
+      var cam = sc.camera;
+      // Set target to model centre (slight Y lift to frame nicely)
+      var targetY = bounds.center.y * 0.45; // Aim slightly below centre for a natural look
+      try {
+        if (typeof cam.setTarget === "function") {
+          cam.setTarget(new BABYLON.Vector3(bounds.center.x, targetY, bounds.center.z));
+        } else if (cam.target) {
+          cam.target = new BABYLON.Vector3(bounds.center.x, targetY, bounds.center.z);
+        }
+      } catch (e) {}
+
+      // On mobile, pull the camera in a bit for a tighter framing
+      var isMobile = !!document.getElementById('mobileConfigurator');
+      if (isMobile && cam.radius != null) {
+        // Calculate a radius that frames the model well
+        var maxExtent = Math.max(bounds.extents.x, bounds.extents.y, bounds.extents.z);
+        var idealRadius = maxExtent * 4.5; // Tighter framing for mobile
+        if (idealRadius > 3 && idealRadius < 20) {
+          cam.radius = idealRadius;
+        }
+      }
+
+      console.log('[camera] Centered on model:', bounds.center.x.toFixed(1), targetY.toFixed(1), bounds.center.z.toFixed(1),
+        isMobile ? '(mobile, r=' + (cam.radius || '?') + ')' : '(desktop)');
+      return true;
+    }
+
+    // Expose for mobile-configurator to call after layout
+    window.__centerCameraOnModel = centerCameraOnModel;
+
    function setOrthoForView(camera, viewName, bounds) {
       var BAB = window.BABYLON;
       if (!BAB || !camera || !bounds) return;
@@ -8285,6 +8325,10 @@ function parseOverhangInput(val) {
       }
 
       window.__dbg.initFinished = true;
+
+      // Center camera on model after first render (especially important on mobile)
+      setTimeout(function() { centerCameraOnModel(); }, 200);
+      setTimeout(function() { centerCameraOnModel(); }, 1500);
     }
 
     // Wait for profile to load before completing init (so controls are properly visible/enabled)
