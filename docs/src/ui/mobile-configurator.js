@@ -139,7 +139,9 @@
     // === DRAG HANDLE ===
     var dragHandle = document.createElement('div');
     dragHandle.id = 'mcDragHandle';
-    dragHandle.innerHTML = '<div class="mc-handle-bar"></div>';
+    dragHandle.innerHTML = '<span class="mc-handle-arrow" data-dir="up">▲</span>' +
+      '<div class="mc-handle-bar"></div>' +
+      '<span class="mc-handle-arrow" data-dir="down">▼</span>';
     container.appendChild(dragHandle);
 
     // === BUILDING TYPE SELECTOR ===
@@ -686,7 +688,56 @@
     var startHeight = 0;
     var isDragging = false;
 
+    // Preset heights for arrow buttons (vh)
+    var presets = [20, 40, 55, 70];
+
+    function setPreviewVh(vh) {
+      preview.style.height = vh + 'vh';
+      preview.style.flex = '0 0 ' + vh + 'vh';
+      preview.style.transition = 'height 0.25s ease, flex 0.25s ease';
+      setTimeout(function() { preview.style.transition = ''; }, 300);
+      setTimeout(resizeEngine, 50);
+      setTimeout(resizeEngine, 300);
+    }
+
+    function getCurrentVh() {
+      return (preview.offsetHeight / window.innerHeight) * 100;
+    }
+
+    // Arrow buttons: step through presets
+    handle.querySelectorAll('.mc-handle-arrow').forEach(function(arrow) {
+      arrow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var dir = arrow.dataset.dir;
+        var curVh = getCurrentVh();
+
+        if (dir === 'up') {
+          // Make preview bigger (push controls down)
+          for (var i = 0; i < presets.length; i++) {
+            if (presets[i] > curVh + 3) {
+              setPreviewVh(presets[i]);
+              return;
+            }
+          }
+          setPreviewVh(presets[presets.length - 1]);
+        } else {
+          // Make preview smaller (pull controls up)
+          for (var j = presets.length - 1; j >= 0; j--) {
+            if (presets[j] < curVh - 3) {
+              setPreviewVh(presets[j]);
+              return;
+            }
+          }
+          setPreviewVh(presets[0]);
+        }
+      });
+      // Prevent touch from triggering drag
+      arrow.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+    });
+
+    // Drag to resize
     handle.addEventListener('touchstart', function(e) {
+      if (e.target.classList.contains('mc-handle-arrow')) return;
       isDragging = true;
       startY = e.touches[0].clientY;
       startHeight = preview.offsetHeight;
@@ -699,7 +750,7 @@
       var newHeight = Math.max(
         window.innerHeight * 0.15,  // min 15vh
         Math.min(
-          window.innerHeight * 0.70, // max 70vh
+          window.innerHeight * 0.80, // max 80vh
           startHeight + dy
         )
       );
@@ -711,23 +762,18 @@
     document.addEventListener('touchend', function() {
       if (!isDragging) return;
       isDragging = false;
-      // Resize engine to match new canvas size
       resizeEngine();
       setTimeout(resizeEngine, 100);
     });
 
-    // Double-tap to toggle between 40% and 15%
+    // Double-tap bar to toggle between 55% and 20%
     var lastTap = 0;
-    handle.addEventListener('touchend', function() {
+    handle.querySelector('.mc-handle-bar').addEventListener('touchend', function() {
       var now = Date.now();
       if (now - lastTap < 300) {
-        // Double tap
-        var currentRatio = preview.offsetHeight / window.innerHeight;
-        var targetVh = currentRatio > 0.3 ? 15 : 40;
-        preview.style.height = targetVh + 'vh';
-        preview.style.flex = '0 0 ' + targetVh + 'vh';
-        setTimeout(resizeEngine, 50);
-        setTimeout(resizeEngine, 300);
+        var currentRatio = getCurrentVh();
+        var targetVh = currentRatio > 35 ? 20 : 55;
+        setPreviewVh(targetVh);
       }
       lastTap = now;
     });
