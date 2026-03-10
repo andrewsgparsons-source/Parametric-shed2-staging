@@ -139,8 +139,10 @@
     // === PRICE STRIP (compact, above drag handle) ===
     var priceStrip = document.createElement('div');
     priceStrip.id = 'mcPriceStrip';
-    priceStrip.innerHTML = '<div class="mc-price-cta-row"><span class="mc-price-cta">💬 Get a Quote</span></div>' +
-      '<div class="mc-price-range-row"><span class="mc-price-range"></span></div>';
+    priceStrip.innerHTML = '<div class="mc-price-tab">' +
+      '<span class="mc-price-range"></span>' +
+      '<span class="mc-price-cta">💬 Get a Quote</span>' +
+      '</div>';
     container.appendChild(priceStrip);
 
     // Wire price strip CTA
