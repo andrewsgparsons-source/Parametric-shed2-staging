@@ -46,8 +46,6 @@
       '#mobileCloseBtn { display: none !important; }',
       '#statusOverlay { display: none !important; }',
       '#ui-layer { display: none !important; }',
-      '#renderCanvas { opacity: 0; transition: opacity 0.3s ease; }',
-      'body.mobile-configurator #renderCanvas { opacity: 1; }',
       // Loading spinner while mobile configurator builds
       '#mc-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f5f0eb; z-index: 9999; flex-direction: column; gap: 12px; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }',
       '#mc-loading .mc-spinner { width: 36px; height: 36px; border: 3px solid #e0d8cf; border-top-color: #6b8f71; border-radius: 50%; animation: mc-spin 0.8s linear infinite; }',
