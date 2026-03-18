@@ -4985,10 +4985,13 @@ if (state && state.overhang) {
           }
         };
 
-        // Default visibility — applied on every building type switch
+        // Default visibility — applied on every building type switch.
+        // Everything visible so switching type gives a clean, fully-rendered building.
         var defaultVis = {
-          base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true,
-          wallIns: true, wallPly: true, frame: false, ins: false, deck: false,
+          base: true, baseAll: true, concrete: true,
+          frame: true, deck: true, ins: true,
+          wallsEnabled: true, wallIns: true, wallPly: true,
+          cladding: true, roof: true,
           cladParts: { front: true, back: true, left: true, right: true }
         };
 
