@@ -754,19 +754,42 @@
       caption: 'Window Size',
       sub: 'Setting to 700 × 500mm at Y=1000',
       action: async () => {
-        // Update window via the state store directly — cleaner than fighting DOM inputs
-        const store = window.__dbg && window.__dbg.store;
-        if (!store) return;
-        const s = store.getState();
-        const openings = s.walls && s.walls.openings ? s.walls.openings : [];
-        const updated = openings.map(o => {
-          if (o.type === 'window') {
-            return Object.assign({}, o, { width_mm: 700, height_mm: 500, y_mm: 1000 });
+        // Find inputs inside the window form by label text
+        const winItems = document.querySelectorAll('.windowItem');
+        if (!winItems.length) return;
+        const winItem = winItems[winItems.length - 1]; // oldest window (bottom, since newest is top)
+
+        function findInput(container, labelText) {
+          const labels = container.querySelectorAll('label');
+          for (const lab of labels) {
+            // Check the label's own text (not child input values)
+            const nodes = Array.from(lab.childNodes).filter(n => n.nodeType === 3);
+            const txt = nodes.map(n => n.textContent).join('').toLowerCase();
+            if (txt.includes(labelText)) return lab.querySelector('input[type="number"]');
           }
-          return o;
-        });
-        store.setState({ walls: { openings: updated } });
-        await wait(800);
+          return null;
+        }
+
+        async function tourSetInput(inp, val) {
+          if (!inp) return;
+          inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          await wait(200);
+          await moveAndClick(inp, 500);
+          highlight(inp);
+          inp.focus();
+          inp.select();
+          await wait(300);
+          inp.value = String(val);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          inp.blur();
+          await wait(400);
+          unhighlightAll();
+        }
+
+        await tourSetInput(findInput(winItem, 'win w'), 700);
+        await tourSetInput(findInput(winItem, 'win h'), 500);
+        await tourSetInput(findInput(winItem, 'win y'), 1000);
       },
       admire: 1500
     },
