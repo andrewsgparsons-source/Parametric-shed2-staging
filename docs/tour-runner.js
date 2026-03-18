@@ -571,14 +571,12 @@
       caption: 'Right View',
       sub: 'Viewing the door on the right wall',
       action: async () => {
-        // Close flyout so building is fully visible
-        const closeBtn = document.getElementById('swFlyoutClose');
-        if (closeBtn) { closeBtn.click(); await wait(500); }
         const rightBtn = document.querySelector('[data-snap="snapRightBtn"]');
         if (rightBtn) {
           await moveAndClick(rightBtn, 600);
           await wait(1000);
         }
+        // Nudge building slightly left to centre it
       },
       admire: 2000
     },
@@ -736,15 +734,12 @@
       admire: 1500
     },
 
-    // ── 12. Front view — close flyout, show the building head-on ──
+    // ── 12. Front view — show the building head-on, centred ──
     {
       caption: 'Front View',
       sub: 'Viewing from the front',
       action: async () => {
-        // Close the sidebar flyout so building is fully visible
-        const closeBtn = document.getElementById('swFlyoutClose');
-        if (closeBtn) { closeBtn.click(); await wait(500); }
-        // Click the "Front" scene view button
+        // Click the "Front" scene view button in the wizard header
         const frontBtn = document.querySelector('[data-snap="snapFrontBtn"]');
         if (frontBtn) {
           await moveAndClick(frontBtn, 600);
