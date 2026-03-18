@@ -4985,10 +4985,19 @@ if (state && state.overhang) {
           }
         };
 
+        // Default visibility — applied on every building type switch
+        var defaultVis = {
+          base: true, baseAll: true, wallsEnabled: true, cladding: true, roof: true,
+          wallIns: true, wallPly: true, frame: false, ins: false, deck: false,
+          cladParts: { front: true, back: true, left: true, right: true }
+        };
+
         var typeDefault = buildingTypeDefaults[newType];
         if (typeDefault) {
           // Apply building-type-specific defaults
           Object.keys(typeDefault).forEach(function(k) { patch[k] = typeDefault[k]; });
+          // Merge preset vis on top of defaults (preset can override)
+          patch.vis = Object.assign({}, defaultVis, patch.vis || {});
         } else {
           // All other types: reset to default shed preset
           var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
@@ -4997,8 +5006,7 @@ if (state && state.overhang) {
             Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
           }
           if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
-          if (!patch.vis) patch.vis = {};
-          patch.vis.baseAll = true;
+          patch.vis = Object.assign({}, defaultVis, patch.vis || {});
           if (!patch.shelving) patch.shelving = [];
         }
 
