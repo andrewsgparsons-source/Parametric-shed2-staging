@@ -192,6 +192,13 @@
     setTimeout(resizeEngine, 100);
     setTimeout(resizeEngine, 1000);
 
+    // Re-centre camera now that the sidebar exists (applies screen offset)
+    setTimeout(function() {
+      if (typeof window.__centerCameraOnModel === 'function') {
+        window.__centerCameraOnModel();
+      }
+    }, 200);
+
     // (mobile resize not needed — sidebar wizard is desktop-only)
 
     // Live update dashboard on changes
@@ -287,6 +294,17 @@
     } catch (e) {}
   }
 
+  /** Shift the camera target right when flyout is open so the building stays fully visible */
+  function nudgeCameraForFlyout(flyoutOpen) {
+    try {
+      const engine = window.__dbg && window.__dbg.engine;
+      const cam = engine && engine.scenes && engine.scenes[0] && engine.scenes[0].activeCamera;
+      if (!cam || !cam.targetScreenOffset) return;
+      // Sidebar-only = 1.2, flyout open = 1.8
+      cam.targetScreenOffset.x = flyoutOpen ? 1.8 : 1.2;
+    } catch (e) {}
+  }
+
   function openFlyout(idx) {
     if (idx < 0 || idx >= sections.length) return;
 
@@ -373,6 +391,9 @@
       btn.classList.toggle('active', j === idx);
     });
 
+    // Nudge camera right so building isn't hidden behind the flyout
+    nudgeCameraForFlyout(true);
+
     // Resize engine after flyout animation
     setTimeout(resizeEngine, 350);
   }
@@ -390,6 +411,9 @@
     // Hide flyout
     const flyout = document.getElementById('swFlyout');
     flyout.classList.remove('open');
+
+    // Restore camera to sidebar-only offset
+    nudgeCameraForFlyout(false);
 
     // Update step buttons
     document.querySelectorAll('.sw-step').forEach(btn => {

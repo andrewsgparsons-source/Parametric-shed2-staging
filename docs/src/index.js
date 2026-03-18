@@ -1949,6 +1949,13 @@ function applyOpeningsVisibility(scene, on) {
         }
       }
 
+      // On desktop with sidebar, nudge the view right so the building
+      // appears centred in the visible canvas area (not behind the sidebar)
+      if (!isMobile && cam.targetScreenOffset != null) {
+        var hasSidebar = !!document.getElementById('sidebarWizard');
+        cam.targetScreenOffset.x = hasSidebar ? 0.9 : 0;
+      }
+
       console.log('[camera] Centered on model:', bounds.center.x.toFixed(1), targetY.toFixed(1), bounds.center.z.toFixed(1),
         isMobile ? '(mobile, r=' + (cam.radius || '?') + ')' : '(desktop)');
       return true;
@@ -3758,9 +3765,13 @@ function wireCommitOnly(inputEl, onCommit) {
           var snapPositions = computeEvenSnapPositions(state, doorWall);
           var snapHtml = '<option value="">—</option>';
           var currentSnapIdx = -1;
+          var doorActualX = Math.floor(Number(door.x_mm || 0));
           for (var sp = 0; sp < snapPositions.length; sp++) {
             snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
-            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+            // Only match if the opening is actually near the snap position (within 30mm tolerance)
+            if (snapPositions[sp].openingId === id && Math.abs(doorActualX - snapPositions[sp].x_mm) <= 30) {
+              currentSnapIdx = sp;
+            }
           }
           snapPosSel.innerHTML = snapHtml;
           if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
@@ -4037,9 +4048,13 @@ function parseOpeningDim(val, defaultMm) {
           var snapPositions = computeEvenSnapPositions(state, winWall);
           var snapHtml = '<option value="">—</option>';
           var currentSnapIdx = -1;
+          var winActualX = Math.floor(Number(win.x_mm || 0));
           for (var sp = 0; sp < snapPositions.length; sp++) {
             snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
-            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+            // Only match if the opening is actually near the snap position (within 30mm tolerance)
+            if (snapPositions[sp].openingId === id && Math.abs(winActualX - snapPositions[sp].x_mm) <= 30) {
+              currentSnapIdx = sp;
+            }
           }
           snapPosSel.innerHTML = snapHtml;
           if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
@@ -8123,21 +8138,27 @@ function parseOverhangInput(val) {
         return;
       }
       
-      var updatedOpenings = openings.map(function(o) {
-        var newO = Object.assign({}, o);
-        // Front/back walls: x position scales with width
-        // Left/right walls: x position scales with depth
-        if (o.wall === 'front' || o.wall === 'back') {
-          if (o.x_mm != null) {
-            newO.x_mm = Math.round(o.x_mm * widthRatio);
-          }
-        } else if (o.wall === 'left' || o.wall === 'right') {
-          if (o.x_mm != null) {
-            newO.x_mm = Math.round(o.x_mm * depthRatio);
+      // Instead of proportional scaling, recalculate snap positions at new dimensions.
+      // This keeps openings at their intended positions (e.g. "Centre" stays centred).
+      var walls = ['front', 'back', 'left', 'right'];
+      var tempState = Object.assign({}, s);
+      var updatedOpenings = openings.slice(); // shallow copy
+
+      for (var wi = 0; wi < walls.length; wi++) {
+        var wall = walls[wi];
+        var newPositions = computeEvenSnapPositions(tempState, wall);
+        // Assign each opening on this wall to its snap slot (by sorted order)
+        for (var pi = 0; pi < newPositions.length; pi++) {
+          var slot = newPositions[pi];
+          if (!slot.openingId) continue;
+          for (var oi = 0; oi < updatedOpenings.length; oi++) {
+            if (String(updatedOpenings[oi].id || '') === slot.openingId) {
+              updatedOpenings[oi] = Object.assign({}, updatedOpenings[oi], { x_mm: slot.x_mm });
+              break;
+            }
           }
         }
-        return newO;
-      });
+      }
       
       console.log("[repositionOpenings] Dimension change detected - widthRatio:", widthRatio.toFixed(3), "depthRatio:", depthRatio.toFixed(3));
       

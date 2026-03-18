@@ -19,7 +19,10 @@
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
     polished: { css: './src/ui/polished-theme.css' },
     wild:     { css: './src/ui/wild-theme.css' },
-    sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=2' },
+    sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=2',
+                extra: [
+                  { css: './src/ui/custom-select.css?_v=1', js: './src/ui/custom-select.js?_v=2' }
+                ] },
     mobile:   { css: './src/ui/mobile-configurator.css?_v=7', js: './src/ui/mobile-configurator.js?_v=10' }
   };
 
@@ -92,5 +95,26 @@
     } else {
       document.addEventListener('DOMContentLoaded', loadScript);
     }
+  }
+
+  // Load extra assets (CSS + JS) — for plugins like custom-select
+  if (chosen.extra && Array.isArray(chosen.extra)) {
+    chosen.extra.forEach(function(asset) {
+      if (asset.css) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = asset.css + (asset.css.indexOf('?') > -1 ? '&' : '?') + 'v=' + bust;
+        document.head.appendChild(link);
+      }
+      if (asset.js) {
+        var loadExtra = function() {
+          var s = document.createElement('script');
+          s.src = asset.js + (asset.js.indexOf('?') > -1 ? '&' : '?') + 'v=' + bust;
+          (document.body || document.documentElement).appendChild(s);
+        };
+        if (document.body) { loadExtra(); }
+        else { document.addEventListener('DOMContentLoaded', loadExtra); }
+      }
+    });
   }
 })();
