@@ -752,42 +752,21 @@
     // ── 13. Resize existing window to 700×500, Y=1000 ──
     {
       caption: 'Window Size',
-      sub: 'Adjusting the window dimensions',
+      sub: 'Setting to 700 × 500mm at Y=1000',
       action: async () => {
-        // Find window dimension inputs — look for the windowItem section
-        const winItems = document.querySelectorAll('.windowItem');
-        if (winItems.length === 0) return;
-        // Get the first (newest at top, but we want the only existing window)
-        const winItem = winItems[winItems.length - 1] || winItems[0];
-        const numInputs = winItem.querySelectorAll('input[type="number"]');
-        // Window inputs: X, W, H, Y (in row3 order)
-        // Find by label text
-        const labels = winItem.querySelectorAll('label');
-        let wInput = null, hInput = null, yInput = null;
-        for (const lab of labels) {
-          const txt = lab.textContent.toLowerCase();
-          const inp = lab.querySelector('input[type="number"]');
-          if (!inp) continue;
-          if (txt.includes('win w') || txt.includes('w (')) wInput = inp;
-          else if (txt.includes('win h') || txt.includes('h (')) hInput = inp;
-          else if (txt.includes('win y') || txt.includes('y (')) yInput = inp;
-        }
-
-        async function setInput(inp, val) {
-          if (!inp) return;
-          await moveAndClick(inp, 400);
-          highlight(inp);
-          inp.value = String(val);
-          inp.dispatchEvent(new Event('input', { bubbles: true }));
-          inp.dispatchEvent(new Event('change', { bubbles: true }));
-          inp.dispatchEvent(new Event('blur', { bubbles: true }));
-          await wait(500);
-          unhighlightAll();
-        }
-
-        await setInput(wInput, 700);
-        await setInput(hInput, 500);
-        await setInput(yInput, 1000);
+        // Update window via the state store directly — cleaner than fighting DOM inputs
+        const store = window.__dbg && window.__dbg.store;
+        if (!store) return;
+        const s = store.getState();
+        const openings = s.walls && s.walls.openings ? s.walls.openings : [];
+        const updated = openings.map(o => {
+          if (o.type === 'window') {
+            return Object.assign({}, o, { width_mm: 700, height_mm: 500, y_mm: 1000 });
+          }
+          return o;
+        });
+        store.setState({ walls: { openings: updated } });
+        await wait(800);
       },
       admire: 1500
     },
@@ -797,10 +776,14 @@
       caption: 'Add Window',
       sub: 'Adding a second window',
       action: async () => {
+        // Click the Add Window button in the sidebar
         const addWinBtn = document.getElementById('addWindowBtn');
         if (addWinBtn) {
+          // Scroll it into view first
+          addWinBtn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          await wait(300);
           highlight(addWinBtn);
-          await moveAndClick(addWinBtn, 600);
+          addWinBtn.click();
           await wait(800);
           unhighlightAll();
         }
