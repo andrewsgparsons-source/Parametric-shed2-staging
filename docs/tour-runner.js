@@ -770,7 +770,12 @@
           return null;
         }
 
-        async function tourSetInput(inp, val) {
+        async function tourSetInput(labelText, val) {
+          // Re-find the input each time (form re-renders after each change)
+          const items = document.querySelectorAll('.windowItem');
+          if (!items.length) return;
+          const item = items[items.length - 1];
+          const inp = findInput(item, labelText);
           if (!inp) return;
           inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
           await wait(200);
@@ -787,9 +792,9 @@
           unhighlightAll();
         }
 
-        await tourSetInput(findInput(winItem, 'win w'), 700);
-        await tourSetInput(findInput(winItem, 'win h'), 500);
-        await tourSetInput(findInput(winItem, 'win y'), 1000);
+        await tourSetInput('win w', 700);
+        await tourSetInput('win h', 500);
+        await tourSetInput('win y', 1000);
       },
       admire: 1500
     },

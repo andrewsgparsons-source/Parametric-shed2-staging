@@ -1242,7 +1242,7 @@
     if (new URLSearchParams(window.location.search).has('tour')) {
       window.addEventListener('load', function() {
         setTimeout(function() {
-          fetch('./tour-runner.js?_v=20').then(function(r){return r.text()}).then(function(code){eval(code)});
+          fetch('./tour-runner.js?_v=21').then(function(r){return r.text()}).then(function(code){eval(code)});
         }, 3000); // 3s after load — needs mobile-configurator to init first
       });
     }
