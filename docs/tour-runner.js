@@ -581,27 +581,122 @@
       admire: 2000
     },
 
-    // ── 10. Change door style to Stable ──
+    // ── 10a. Centre the door ──
+    {
+      caption: 'Door Position',
+      sub: 'Centring the door on the wall',
+      action: async () => {
+        // Find the door position select (has "Centre" option)
+        const allSelects = document.querySelectorAll('#controlPanel select');
+        let posSel = null;
+        for (const sel of allSelects) {
+          const opts = Array.from(sel.options).map(o => o.text);
+          if (opts.includes('Centre') && !sel.id.includes('attachment')) {
+            posSel = sel;
+            break;
+          }
+        }
+        if (posSel) {
+          if (!posSel.id) posSel.id = 'tour-door-pos-' + Date.now();
+          await tourDropdownSelect(posSel.id, '0', 1500);
+          await wait(500);
+        }
+      },
+      admire: 1000
+    },
+
+    // ── 10b. Widen the door to 1300mm ──
+    {
+      caption: 'Door Width',
+      sub: 'Setting width to 1300mm for double doors',
+      action: async () => {
+        // Find the door width input (number input with value ~800)
+        const doorInputs = document.querySelectorAll('#controlPanel input[type="number"]');
+        let widthInput = null;
+        for (const inp of doorInputs) {
+          const v = parseInt(inp.value);
+          if (v >= 600 && v <= 1000) {
+            // Check if nearby label or preceding text says "width" or "W"
+            const parent = inp.closest('.field-row, .input-group, div');
+            const txt = parent ? parent.textContent.toLowerCase() : '';
+            if (txt.includes('width') || txt.includes('w')) {
+              widthInput = inp;
+              break;
+            }
+          }
+        }
+        // Fallback: find by door section context
+        if (!widthInput) {
+          for (const inp of doorInputs) {
+            const v = parseInt(inp.value);
+            if (v >= 600 && v <= 1000) { widthInput = inp; break; }
+          }
+        }
+        if (widthInput) {
+          await moveAndClick(widthInput, 600);
+          highlight(widthInput);
+          // Clear and type new value
+          widthInput.value = '1300';
+          widthInput.dispatchEvent(new Event('input', { bubbles: true }));
+          widthInput.dispatchEvent(new Event('change', { bubbles: true }));
+          widthInput.dispatchEvent(new Event('blur', { bubbles: true }));
+          await wait(800);
+          unhighlightAll();
+        }
+      },
+      admire: 1500
+    },
+
+    // ── 10c. Select Double Mortise & Tenon door style ──
     {
       caption: 'Door Style',
-      sub: 'Choosing Stable door',
+      sub: 'Double Mortise & Tenon',
       action: async () => {
-        const doorStyleSelects = document.querySelectorAll('#controlPanel select');
+        const allSelects = document.querySelectorAll('#controlPanel select');
         let doorStyleSel = null;
-        for (const sel of doorStyleSelects) {
+        for (const sel of allSelects) {
           const opts = Array.from(sel.options).map(o => o.value);
-          if (opts.includes('standard') && opts.includes('stable')) {
+          if (opts.includes('standard') && (opts.includes('mortise-tenon') || opts.includes('double-mortise-tenon'))) {
             doorStyleSel = sel;
             break;
           }
         }
         if (doorStyleSel) {
           if (!doorStyleSel.id) doorStyleSel.id = 'tour-door-style-' + Date.now();
-          await tourDropdownSelect(doorStyleSel.id, 'stable', 1500);
+          await tourDropdownSelect(doorStyleSel.id, 'double-mortise-tenon', 1500);
           await wait(500);
         }
       },
       admire: 1500
+    },
+
+    // ── 10d. Check the Open checkbox ──
+    {
+      caption: 'Open Doors',
+      sub: 'See the doors swing open',
+      action: async () => {
+        // The "Open" checkbox is the first checkbox in the doors area
+        const checkboxes = document.querySelectorAll('#controlPanel input[type="checkbox"]');
+        let openCb = null;
+        for (const cb of checkboxes) {
+          const label = cb.closest('label');
+          const txt = label ? label.textContent.trim() : (cb.parentElement ? cb.parentElement.textContent.trim() : '');
+          if (txt === 'Open') {
+            openCb = cb;
+            break;
+          }
+        }
+        if (openCb) {
+          const target = openCb.closest('label') || openCb.parentElement || openCb;
+          highlight(target);
+          await moveAndClick(target, 600);
+          await wait(300);
+          if (!openCb.checked) openCb.click();
+          await wait(500);
+          unhighlightAll();
+        }
+      },
+      admire: 2000
     },
 
     // ── 11. Expand Windows, move window to front ──
