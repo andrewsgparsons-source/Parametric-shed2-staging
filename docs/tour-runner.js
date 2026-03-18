@@ -804,13 +804,13 @@
       caption: 'Add Window',
       sub: 'Adding a second window',
       action: async () => {
-        // Click the Add Window button in the sidebar
         const addWinBtn = document.getElementById('addWindowBtn');
         if (addWinBtn) {
-          // Scroll it into view first
           addWinBtn.scrollIntoView({ block: 'center', behavior: 'smooth' });
           await wait(300);
+          await moveAndClick(addWinBtn, 600);
           highlight(addWinBtn);
+          await wait(300);
           addWinBtn.click();
           await wait(800);
           unhighlightAll();
