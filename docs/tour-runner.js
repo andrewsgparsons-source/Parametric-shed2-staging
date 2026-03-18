@@ -49,20 +49,9 @@
     ]);
   }
 
-  // ── Cartoon Hand ────────────────────────────────────────────
-  // SVG pointing hand — simple, friendly, works at any size
-  const HAND_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="56" height="56">
-    <g transform="rotate(-15 32 32)">
-      <!-- Finger -->
-      <rect x="26" y="4" width="12" height="32" rx="6" fill="#FFD93D" stroke="#E8A800" stroke-width="1.5"/>
-      <!-- Palm -->
-      <rect x="16" y="30" width="32" height="22" rx="8" fill="#FFD93D" stroke="#E8A800" stroke-width="1.5"/>
-      <!-- Thumb -->
-      <rect x="8" y="28" width="14" height="10" rx="5" fill="#FFD93D" stroke="#E8A800" stroke-width="1.5"/>
-      <!-- Fingernail -->
-      <rect x="28" y="5" width="8" height="6" rx="4" fill="#FFF3B0" opacity="0.7"/>
-    </g>
-  </svg>`;
+  // ── Pointing Hand ────────────────────────────────────────────
+  // Use native emoji — universally recognisable, no ambiguity
+  const HAND_HTML = `<span style="font-size:48px;line-height:1;">👆</span>`;
 
   let handEl = null;
 
@@ -70,7 +59,7 @@
     if (handEl) handEl.remove();
     handEl = document.createElement('div');
     handEl.id = 'tourHand';
-    handEl.innerHTML = HAND_SVG;
+    handEl.innerHTML = HAND_HTML;
     handEl.style.cssText = `
       position: fixed;
       z-index: 999990;
@@ -297,249 +286,66 @@
     document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
   }
 
+  // ── Sidebar control (desktop) ─────────────────────────────────
+  // The sidebar wizard exposes openFlyout(idx) for each section:
+  // 0=Size&Shape, 1=Base, 2=Walls&Openings, 3=Roof, 4=Appearance, 5=Attachments, 6=Customise View, 7=Save&Share
+  function openSidebarSection(idx) {
+    // Click the step button in the sidebar wizard
+    const stepBtns = document.querySelectorAll('.sw-step');
+    if (stepBtns[idx]) {
+      stepBtns[idx].click();
+    }
+  }
+
+  function closeSidebar() {
+    // Click the active step to toggle it closed, or click the X
+    const closeBtn = document.querySelector('#swFlyout .sw-flyout-close, .sw-close');
+    if (closeBtn) { closeBtn.click(); return; }
+    const active = document.querySelector('.sw-step.active');
+    if (active) active.click();
+  }
+
   // ── TOUR STEP DEFINITIONS ────────────────────────────────────
-  // Each step: { caption, sub?, mobileStep (index), target (selector), action (async fn), cameraAfter? }
+  // Built step-by-step from Andrew's screenshots.
+  // Default camera: alpha=-PI/4, beta=PI/3, radius=8, target=(1.5,0,2)
   const tourSteps = [
-    // === STEP 0: INTRO ===
+
+    // === STEP 1: LIFT & ROTATE ===
+    // From default view, smooth rotate left and lift to show back-left corner at eye level
     {
       caption: 'Welcome to My3DBuild',
       sub: 'Design your own garden building in minutes',
       action: async () => {
         hideHand();
-        // Set initial state: basic shed
+        // Ensure we start on shed with default state
         setSelectValue('buildingTypeSelect', 'shed');
         await wait(500);
-        // Nice starting angle
-        await moveCamera(-PI * 0.45, PI * 0.35, 7, 1500);
+        // Smooth lift & rotate left — show back-left corner, eye level
+        // Default is alpha=-PI/4 (~-0.785), beta=PI/3 (~1.047), radius=8
+        // Target: rotated left to see side/back, slightly lower beta for eye level
+        await moveCamera(-PI * 0.15, PI * 0.38, 7.5, 2000);
       },
-      admire: 2000
+      admire: 2500
     },
 
-    // === SIZE & SHAPE (Mobile step 0) ===
+    // === STEP 2: OPEN SIZE & SHAPE, ZOOM IN ===
+    // Open the sidebar section, rotate back to front-right, zoom in so shed fills screen
     {
-      caption: 'Choose your building type',
-      sub: 'Start with a shed, garden room, workshop or more',
-      mobileStep: 0,
-      target: '#buildingTypeSelect, .mc-type-select',
-      action: async () => {
-        const sel = document.querySelector('#buildingTypeSelect, .mc-type-select');
-        highlight(sel);
-        pointAt(sel);
-        await wait(2000);
-        // Change to garden room
-        setSelectValue('buildingTypeSelect', 'gardenroom-pent');
-        if (sel) sel.value = 'gardenroom-pent';
-        await wait(1500);
-        unhighlight(sel);
-      },
-      admire: 2500,
-      cameraAfter: [-PI * 0.5, PI * 0.32, 7.5]
-    },
-    {
-      caption: 'Set your width',
-      sub: 'Drag or type to resize',
-      mobileStep: 0,
-      target: '#wInput',
-      action: async () => {
-        const el = document.getElementById('wInput');
-        highlight(el);
-        pointAt(el);
-        await wait(1000);
-        const s = store.getState();
-        const w0 = s.dim?.frameW_mm || 3000;
-        const d0 = s.dim?.frameD_mm || 4000;
-        await animateDimensions(w0, d0, 4000, d0, 2000);
-        await wait(500);
-        unhighlight(el);
-      },
-      admire: 2000,
-      cameraAfter: [-PI * 0.55, PI * 0.3, 8]
-    },
-    {
-      caption: 'Set your depth',
-      sub: 'The building stretches in real time',
-      mobileStep: 0,
-      target: '#dInput',
-      action: async () => {
-        const el = document.getElementById('dInput');
-        highlight(el);
-        pointAt(el);
-        await wait(1000);
-        const s = store.getState();
-        const w0 = s.dim?.frameW_mm || 4000;
-        const d0 = s.dim?.frameD_mm || 4000;
-        await animateDimensions(w0, d0, w0, 5000, 2000);
-        await wait(500);
-        unhighlight(el);
-      },
-      admire: 2000,
-      cameraAfter: [-PI * 0.4, PI * 0.28, 8.5]
-    },
-
-    // === WALLS & OPENINGS (Mobile step 2) ===
-    {
-      caption: 'Add doors to your building',
-      sub: 'Tap to add and position them on any wall',
-      mobileStep: 2,
-      target: '#doorsGroup',
-      action: async () => {
-        // Open the doors group
-        const doorsGroup = document.getElementById('doorsGroup');
-        if (doorsGroup && !doorsGroup.open) doorsGroup.setAttribute('open', '');
-        await wait(300);
-        // Find and click "Add Door" button
-        const addBtn = doorsGroup?.querySelector('button, .openings-add-btn, [data-action="add"]');
-        highlight(doorsGroup);
-        pointAt(addBtn || doorsGroup);
-        await wait(1500);
-        if (addBtn) addBtn.click();
-        await wait(1000);
-        unhighlight(doorsGroup);
-      },
-      admire: 2500,
-      cameraAfter: [-PI * 0.25, PI * 0.35, 6]
-    },
-    {
-      caption: 'Add windows for natural light',
-      sub: 'Position and size them freely',
-      mobileStep: 2,
-      target: '#windowsGroup',
-      action: async () => {
-        const winGroup = document.getElementById('windowsGroup');
-        if (winGroup && !winGroup.open) winGroup.setAttribute('open', '');
-        await wait(300);
-        const addBtn = winGroup?.querySelector('button, .openings-add-btn, [data-action="add"]');
-        highlight(winGroup);
-        pointAt(addBtn || winGroup);
-        await wait(1500);
-        if (addBtn) addBtn.click();
-        await wait(1000);
-        unhighlight(winGroup);
-      },
-      admire: 2500,
-      cameraAfter: [-PI * 0.1, PI * 0.35, 6]
-    },
-
-    // === ROOF (Mobile step 3) ===
-    {
-      caption: 'Roof options',
-      sub: 'Adjust height, overhangs and skylights',
-      mobileStep: 3,
-      target: '#roofHeightsGroup',
-      action: async () => {
-        const group = document.getElementById('roofHeightsGroup');
-        if (group && !group.open) group.setAttribute('open', '');
-        highlight(group);
-        pointAt(group);
-        await wait(2500);
-        unhighlight(group);
-      },
-      admire: 2000,
-      cameraAfter: [-PI * 0.4, PI * 0.18, 8]
-    },
-    {
-      caption: 'Add skylights',
-      sub: 'Let in overhead light',
-      mobileStep: 3,
-      target: '#skylightsGroupRoof',
-      action: async () => {
-        const group = document.getElementById('skylightsGroupRoof');
-        if (group && !group.open) group.setAttribute('open', '');
-        await wait(300);
-        const addBtn = group?.querySelector('button, .openings-add-btn, [data-action="add"]');
-        highlight(group);
-        pointAt(addBtn || group);
-        await wait(1500);
-        if (addBtn) addBtn.click();
-        await wait(1000);
-        unhighlight(group);
-      },
-      admire: 2500,
-      cameraAfter: [-PI * 0.35, PI * 0.15, 7]
-    },
-
-    // === APPEARANCE (Mobile step 4) ===
-    {
-      caption: 'Choose your cladding style',
-      sub: 'Shiplap, featheredge, tongue & groove and more',
-      mobileStep: 4,
-      target: '#claddingStyle',
-      action: async () => {
-        const el = document.getElementById('claddingStyle');
-        highlight(el);
-        pointAt(el);
-        await wait(1500);
-        // Cycle through a couple of cladding options
-        const options = el ? Array.from(el.options) : [];
-        if (options.length > 1) {
-          setSelectValue('claddingStyle', options[1].value);
-          await wait(1200);
-          if (options.length > 2) {
-            setSelectValue('claddingStyle', options[2].value);
-            await wait(1200);
-          }
-        }
-        unhighlight(el);
-      },
-      admire: 2000,
-      cameraAfter: [-PI * 0.3, PI * 0.35, 6.5]
-    },
-    {
-      caption: 'Pick your colour',
-      sub: 'See it change instantly on the 3D model',
-      mobileStep: 4,
-      target: '#claddingColour',
-      action: async () => {
-        const el = document.getElementById('claddingColour');
-        highlight(el);
-        pointAt(el);
-        await wait(1500);
-        const options = el ? Array.from(el.options) : [];
-        // Cycle a few colours
-        for (let i = 1; i < Math.min(4, options.length); i++) {
-          setSelectValue('claddingColour', options[i].value);
-          await wait(800);
-        }
-        unhighlight(el);
-      },
-      admire: 2500,
-      cameraAfter: [-PI * 0.5, PI * 0.3, 7]
-    },
-    {
-      caption: 'Roof covering',
-      sub: 'Felt, tiles, or metal roofing',
-      mobileStep: 4,
-      target: '#roofCovering',
-      action: async () => {
-        const el = document.getElementById('roofCovering');
-        if (!el) return;
-        highlight(el);
-        pointAt(el);
-        await wait(1500);
-        const options = Array.from(el.options);
-        if (options.length > 1) {
-          setSelectValue('roofCovering', options[1].value);
-          await wait(1000);
-        }
-        unhighlight(el);
-      },
-      admire: 2000,
-      cameraAfter: [-PI * 0.4, PI * 0.2, 7.5]
-    },
-
-    // === FINAL ORBIT ===
-    {
-      caption: 'Your design is ready',
-      sub: 'Rotate to see it from every angle, then get a quote',
+      caption: 'Size & Shape',
+      sub: 'Set your dimensions, roof type and frame',
       action: async () => {
         hideHand();
-        // Cinematic orbit
-        await moveCamera(-PI * 0.5, PI * 0.3, 7, 1500);
-        await wait(300);
-        await moveCamera(-PI * 0.5 - PI * 1.2, PI * 0.28, 7, 5000);
+        // Open Size & Shape section in sidebar
+        if (!isMobile) openSidebarSection(0);
+        await wait(600);
+        // Rotate to front-right view and zoom in — shed fills more screen
+        await moveCamera(-PI * 0.28, PI * 0.35, 6, 2000);
       },
-      admire: 1000
-    }
+      admire: 3000
+    },
+
+    // === MORE STEPS TO COME ===
+    // (Waiting for Andrew's screenshots for each subsequent stage)
   ];
 
   // ── MAIN TOUR LOOP ──────────────────────────────────────────
