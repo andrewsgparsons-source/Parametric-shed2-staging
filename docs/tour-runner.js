@@ -389,6 +389,8 @@
       sub: 'Design your own garden building in minutes',
       action: async () => {
         hideHand();
+        // Set building position once — centred in available viewport (right of sidebar)
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.65;
         setSelectValue('buildingTypeSelect', 'shed');
         await wait(500);
         await moveCamera(-PI * 0.18, PI * 0.34, 7.5, 2000);
@@ -470,7 +472,6 @@
       caption: 'Pent Roof',
       sub: 'Getting a better angle on the single-pitch roof',
       action: async () => {
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(-PI * 0.22, PI * 0.38, 7, 1200);
       },
       admire: 1500
@@ -494,7 +495,6 @@
           unhighlightAll();
         }
         // Orbit to show exposed frame — keep building shifted left
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(-PI * 0.2, PI * 0.4, 7, 1500);
       },
       admire: 2000
@@ -560,7 +560,6 @@
           await tourDropdownSelect(doorWallSel.id, 'right', 1500);
           await wait(500);
         }
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(PI * 0.7, PI * 0.38, 7, 1500);
       },
       admire: 1500
@@ -577,7 +576,6 @@
           await wait(1000);
         }
         // Nudge building slightly left to centre it
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.6;
       },
       admire: 2000
     },
@@ -635,7 +633,6 @@
           await tourDropdownSelect(winWallSel.id, 'front', 1500);
           await wait(500);
         }
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(-PI * 0.15, PI * 0.4, 7, 1500);
       },
       admire: 1500
@@ -653,7 +650,6 @@
           await wait(1000);
         }
         // Nudge camera target left so the building appears more central
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.6;
       },
       admire: 2500
     },
