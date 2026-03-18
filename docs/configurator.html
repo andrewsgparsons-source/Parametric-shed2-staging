@@ -1056,7 +1056,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=49"></script>
+  <script type="module" src="./src/index.js?_v=50"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->
@@ -1242,7 +1242,7 @@
     if (new URLSearchParams(window.location.search).has('tour')) {
       window.addEventListener('load', function() {
         setTimeout(function() {
-          fetch('./tour-runner.js?_v=9').then(function(r){return r.text()}).then(function(code){eval(code)});
+          fetch('./tour-runner.js?_v=10').then(function(r){return r.text()}).then(function(code){eval(code)});
         }, 3000); // 3s after load — needs mobile-configurator to init first
       });
     }

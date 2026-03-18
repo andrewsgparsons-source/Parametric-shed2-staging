@@ -390,7 +390,7 @@
       action: async () => {
         hideHand();
         // Set building position once — centred in available viewport (right of sidebar)
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.65;
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.35;
         setSelectValue('buildingTypeSelect', 'shed');
         await wait(500);
         await moveCamera(-PI * 0.18, PI * 0.34, 7.5, 2000);
@@ -661,6 +661,9 @@
   // ══════════════════════════════════════════════════════════════
   console.log('[TOUR] Starting guided tour — ' + tourSteps.length + ' steps');
 
+  // Prevent centerCameraOnModel from overriding our offset during the tour
+  window.__tourActive = true;
+
   createCursor();
   const skipBtn = createSkipButton();
   createProgress(tourSteps.length);
@@ -705,6 +708,7 @@
   }
 
   // ── CLEANUP ─────────────────────────────────────────────────
+  window.__tourActive = false; // Let centerCameraOnModel control offset again
   updateProgress(tourSteps.length, tourSteps.length);
   hideCaption();
   hideHand();

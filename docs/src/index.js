@@ -1950,8 +1950,9 @@ function applyOpeningsVisibility(scene, on) {
       }
 
       // On desktop with sidebar, nudge the view right so the building
-      // appears centred in the visible canvas area (not behind the sidebar)
-      if (!isMobile && cam.targetScreenOffset != null) {
+      // appears centred in the visible canvas area (not behind the sidebar).
+      // During guided tour, the tour controls the offset — don't override it.
+      if (!isMobile && cam.targetScreenOffset != null && !window.__tourActive) {
         var hasSidebar = !!document.getElementById('sidebarWizard');
         cam.targetScreenOffset.x = hasSidebar ? 0.9 : 0;
       }
