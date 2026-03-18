@@ -389,8 +389,9 @@
       sub: 'Design your own garden building in minutes',
       action: async () => {
         hideHand();
-        // Set building position once — centred in available viewport (right of sidebar)
-        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.35;
+        // Set building position once — centred in available viewport (right of sidebar).
+        // Sidebar ~300px, canvas ~1300px → offset ≈ 0.23 centres in the visible area.
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.23;
         setSelectValue('buildingTypeSelect', 'shed');
         await wait(500);
         await moveCamera(-PI * 0.18, PI * 0.34, 7.5, 2000);
