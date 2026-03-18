@@ -6089,9 +6089,9 @@ function parseOverhangInput(val) {
 
         var id = "win" + String(window.__dbg.windowSeq++);
         var wall = "front";
-        var w = 900;
-        var h = 600;
-        var y = 900;
+        var w = 700;
+        var h = 500;
+        var y = 1000;
         var L = lens[wall] || 1000;
         
         // Find a free spot instead of just centering
