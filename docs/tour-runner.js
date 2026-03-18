@@ -561,9 +561,9 @@
           await tourDropdownSelect(doorWallSel.id, 'right', 1500);
           await wait(500);
         }
-        await moveCamera(PI * 0.7, PI * 0.38, 7, 1500);
+        // No camera orbit here — step 9b clicks the Right view button
       },
-      admire: 1500
+      admire: 1000
     },
 
     // ── 9b. Right view — show the door on the right wall ──
