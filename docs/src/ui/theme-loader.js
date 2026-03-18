@@ -19,7 +19,7 @@
     wizard:   { css: './src/ui/wizard-theme.css', js: './src/ui/wizard-mode.js' },
     polished: { css: './src/ui/polished-theme.css' },
     wild:     { css: './src/ui/wild-theme.css' },
-    sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=2',
+    sidebar:  { css: './src/ui/sidebar-wizard.css?_v=2', js: './src/ui/sidebar-wizard.js?_v=3',
                 extra: [
                   { css: './src/ui/custom-select.css?_v=1', js: './src/ui/custom-select.js?_v=2' }
                 ] },

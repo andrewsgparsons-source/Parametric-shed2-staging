@@ -297,6 +297,8 @@
   /** Shift the camera target right when flyout is open so the building stays fully visible */
   function nudgeCameraForFlyout(flyoutOpen) {
     try {
+      // During guided tour, the tour controls the offset — don't override
+      if (window.__tourActive) return;
       const engine = window.__dbg && window.__dbg.engine;
       const cam = engine && engine.scenes && engine.scenes[0] && engine.scenes[0].activeCamera;
       if (!cam || !cam.targetScreenOffset) return;
