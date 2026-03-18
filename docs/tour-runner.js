@@ -662,8 +662,9 @@
   // ══════════════════════════════════════════════════════════════
   console.log('[TOUR] Starting guided tour — ' + tourSteps.length + ' steps');
 
-  // Prevent centerCameraOnModel from overriding our offset during the tour
+  // Tell centerCameraOnModel to use our offset instead of the default 0.9
   window.__tourActive = true;
+  window.__tourOffsetX = 0.23;
 
   createCursor();
   const skipBtn = createSkipButton();
@@ -710,6 +711,7 @@
 
   // ── CLEANUP ─────────────────────────────────────────────────
   window.__tourActive = false; // Let centerCameraOnModel control offset again
+  delete window.__tourOffsetX;
   updateProgress(tourSteps.length, tourSteps.length);
   hideCaption();
   hideHand();

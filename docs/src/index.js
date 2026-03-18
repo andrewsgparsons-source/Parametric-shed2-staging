@@ -1951,10 +1951,14 @@ function applyOpeningsVisibility(scene, on) {
 
       // On desktop with sidebar, nudge the view right so the building
       // appears centred in the visible canvas area (not behind the sidebar).
-      // During guided tour, the tour controls the offset — don't override it.
-      if (!isMobile && cam.targetScreenOffset != null && !window.__tourActive) {
-        var hasSidebar = !!document.getElementById('sidebarWizard');
-        cam.targetScreenOffset.x = hasSidebar ? 0.9 : 0;
+      // During guided tour, use the tour offset so the building stays centred.
+      if (!isMobile && cam.targetScreenOffset != null) {
+        if (window.__tourActive) {
+          cam.targetScreenOffset.x = window.__tourOffsetX != null ? window.__tourOffsetX : 0.23;
+        } else {
+          var hasSidebar = !!document.getElementById('sidebarWizard');
+          cam.targetScreenOffset.x = hasSidebar ? 0.9 : 0;
+        }
       }
 
       console.log('[camera] Centered on model:', bounds.center.x.toFixed(1), targetY.toFixed(1), bounds.center.z.toFixed(1),
