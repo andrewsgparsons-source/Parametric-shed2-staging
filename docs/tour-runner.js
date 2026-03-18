@@ -745,9 +745,67 @@
           await moveAndClick(frontBtn, 600);
           await wait(1000);
         }
-        // Nudge camera target left so the building appears more central
       },
-      admire: 2500
+      admire: 2000
+    },
+
+    // ── 13. Resize existing window to 700×500, Y=1000 ──
+    {
+      caption: 'Window Size',
+      sub: 'Adjusting the window dimensions',
+      action: async () => {
+        // Find window dimension inputs — look for the windowItem section
+        const winItems = document.querySelectorAll('.windowItem');
+        if (winItems.length === 0) return;
+        // Get the first (newest at top, but we want the only existing window)
+        const winItem = winItems[winItems.length - 1] || winItems[0];
+        const numInputs = winItem.querySelectorAll('input[type="number"]');
+        // Window inputs: X, W, H, Y (in row3 order)
+        // Find by label text
+        const labels = winItem.querySelectorAll('label');
+        let wInput = null, hInput = null, yInput = null;
+        for (const lab of labels) {
+          const txt = lab.textContent.toLowerCase();
+          const inp = lab.querySelector('input[type="number"]');
+          if (!inp) continue;
+          if (txt.includes('win w') || txt.includes('w (')) wInput = inp;
+          else if (txt.includes('win h') || txt.includes('h (')) hInput = inp;
+          else if (txt.includes('win y') || txt.includes('y (')) yInput = inp;
+        }
+
+        async function setInput(inp, val) {
+          if (!inp) return;
+          await moveAndClick(inp, 400);
+          highlight(inp);
+          inp.value = String(val);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          inp.dispatchEvent(new Event('blur', { bubbles: true }));
+          await wait(500);
+          unhighlightAll();
+        }
+
+        await setInput(wInput, 700);
+        await setInput(hInput, 500);
+        await setInput(yInput, 1000);
+      },
+      admire: 1500
+    },
+
+    // ── 14. Add another window ──
+    {
+      caption: 'Add Window',
+      sub: 'Adding a second window',
+      action: async () => {
+        const addWinBtn = document.getElementById('addWindowBtn');
+        if (addWinBtn) {
+          highlight(addWinBtn);
+          await moveAndClick(addWinBtn, 600);
+          await wait(800);
+          unhighlightAll();
+        }
+      },
+      admire: 2000
     },
   ];
 
