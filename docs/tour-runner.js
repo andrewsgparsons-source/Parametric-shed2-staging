@@ -816,6 +816,44 @@
       },
       admire: 2000
     },
+
+    // ── 15. Set window 2 position to Left ──
+    {
+      caption: 'Window Position',
+      sub: 'Placing the second window on the left',
+      action: async () => {
+        // Window 2 is newest → first .windowItem in DOM (newest at top)
+        const winItems = document.querySelectorAll('.windowItem');
+        if (!winItems.length) return;
+        const win2Item = winItems[0];
+
+        // Find the position select (has "Left"/"Right" options)
+        const selects = win2Item.querySelectorAll('select');
+        let posSel = null;
+        for (const sel of selects) {
+          const opts = Array.from(sel.options).map(o => o.text);
+          if (opts.includes('Left') || opts.includes('Centre')) {
+            posSel = sel;
+            break;
+          }
+        }
+        if (posSel) {
+          posSel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          await wait(200);
+          if (!posSel.id) posSel.id = 'tour-win2-pos-' + Date.now();
+          // Find the "Left" option value — it's the index (0 = Left for 2 windows)
+          let leftVal = '';
+          for (const opt of posSel.options) {
+            if (opt.text === 'Left') { leftVal = opt.value; break; }
+          }
+          if (leftVal !== '') {
+            await tourDropdownSelect(posSel.id, leftVal, 1500);
+            await wait(500);
+          }
+        }
+      },
+      admire: 1500
+    },
   ];
 
 
