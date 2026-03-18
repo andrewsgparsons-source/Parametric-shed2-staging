@@ -493,7 +493,8 @@
           await wait(500);
           unhighlightAll();
         }
-        // Orbit to show exposed frame
+        // Orbit to show exposed frame — keep building shifted left
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(-PI * 0.2, PI * 0.4, 7, 1500);
       },
       admire: 2000
@@ -559,6 +560,7 @@
           await tourDropdownSelect(doorWallSel.id, 'right', 1500);
           await wait(500);
         }
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(PI * 0.7, PI * 0.38, 7, 1500);
       },
       admire: 1500
@@ -633,6 +635,7 @@
           await tourDropdownSelect(winWallSel.id, 'front', 1500);
           await wait(500);
         }
+        if (camera.targetScreenOffset) camera.targetScreenOffset.x = 0.7;
         await moveCamera(-PI * 0.15, PI * 0.4, 7, 1500);
       },
       admire: 1500
