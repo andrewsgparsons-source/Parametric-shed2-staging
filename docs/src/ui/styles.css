@@ -323,6 +323,14 @@
       gap: 8px;
       background: #fafafa;
     }
+    .openingHeading{
+      font-weight: 600;
+      font-size: 13px;
+      color: #333;
+      padding-bottom: 2px;
+      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 2px;
+    }
     .doorTop, .windowTop{
       display:flex;
       gap:8px;

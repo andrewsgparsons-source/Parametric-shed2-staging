@@ -3741,12 +3741,20 @@ function wireCommitOnly(inputEl, onCommit) {
 
       var doors = getDoorsFromState(state);
 
-      for (var i = 0; i < doors.length; i++) {
-        (function (door) {
+      // Render newest first but number in creation order
+      for (var ri = doors.length - 1; ri >= 0; ri--) {
+        (function (door, creationIdx) {
           var id = String(door.id || "");
+          var doorNum = creationIdx + 1;
 
           var item = document.createElement("div");
           item.className = "doorItem";
+
+          // Numbered heading
+          var heading = document.createElement("div");
+          heading.className = "openingHeading";
+          heading.textContent = "Door " + doorNum;
+          item.appendChild(heading);
 
           var top = document.createElement("div");
           top.className = "doorTop";
@@ -4007,7 +4015,7 @@ function parseOpeningDim(val, defaultMm) {
           item.appendChild(msg);
 
           doorsListEl.appendChild(item);
-        })(doors[i]);
+        })(doors[ri], ri);
       }
 
       if (!doors.length) {
@@ -4024,12 +4032,20 @@ function parseOpeningDim(val, defaultMm) {
 
       var wins = getWindowsFromState(state);
 
-      for (var i = 0; i < wins.length; i++) {
-        (function (win) {
+      // Render newest first but number in creation order
+      for (var ri = wins.length - 1; ri >= 0; ri--) {
+        (function (win, creationIdx) {
           var id = String(win.id || "");
+          var winNum = creationIdx + 1;
 
           var item = document.createElement("div");
           item.className = "windowItem";
+
+          // Numbered heading
+          var heading = document.createElement("div");
+          heading.className = "openingHeading";
+          heading.textContent = "Window " + winNum;
+          item.appendChild(heading);
 
           var top = document.createElement("div");
           top.className = "windowTop";
@@ -4222,7 +4238,7 @@ function parseOpeningDim(val, defaultMm) {
           item.appendChild(msg);
 
           windowsListEl.appendChild(item);
-        })(wins[i]);
+        })(wins[ri], ri);
       }
 
       if (!wins.length) {
