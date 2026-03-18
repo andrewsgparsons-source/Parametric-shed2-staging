@@ -810,8 +810,6 @@
           await wait(300);
           await moveAndClick(addWinBtn, 600);
           highlight(addWinBtn);
-          await wait(300);
-          addWinBtn.click();
           await wait(800);
           unhighlightAll();
         }

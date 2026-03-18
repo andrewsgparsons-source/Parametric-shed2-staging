@@ -1242,7 +1242,7 @@
     if (new URLSearchParams(window.location.search).has('tour')) {
       window.addEventListener('load', function() {
         setTimeout(function() {
-          fetch('./tour-runner.js?_v=22').then(function(r){return r.text()}).then(function(code){eval(code)});
+          fetch('./tour-runner.js?_v=23').then(function(r){return r.text()}).then(function(code){eval(code)});
         }, 3000);
       });
     }
