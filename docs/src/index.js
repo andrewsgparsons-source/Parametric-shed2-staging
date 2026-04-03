@@ -3803,7 +3803,7 @@ var styleSel = document.createElement("select");
           if (doorWidthMm >= 1200) {
             styleOptions += '<option value="double-mortise-tenon">Double Mortise & Tenon</option>';
           }
-          if (doorWidthMm >= 1200) {
+          if (doorWidthMm >= 1000) {
             styleOptions += '<option value="french">French Doors</option>';
           }
           if (doorWidthMm >= 1200) {
@@ -3811,7 +3811,7 @@ var styleSel = document.createElement("select");
           }
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
-          if (currentStyle === "french" && doorWidthMm < 1200) {
+          if (currentStyle === "french" && doorWidthMm < 1000) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
@@ -6690,7 +6690,7 @@ function parseOverhangInput(val) {
                   if (doorWidth >= 1200) {
                     styleHtml += '<option value="double-mortise-tenon">Double M&T</option>';
                   }
-                  if (doorWidth >= 1200) {
+                  if (doorWidth >= 1000) {
                     styleHtml += '<option value="french">French Doors</option>';
                   }
                   if (doorWidth >= 1200) {
