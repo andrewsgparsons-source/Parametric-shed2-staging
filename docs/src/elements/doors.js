@@ -746,6 +746,9 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
   const clearanceZ = isLeftRightWall ? clearanceAdjust : 0;
 
   const mats = scene._doorMaterials;
+  
+  // Use custom window length if provided, otherwise default to calculated value
+  const windowLength_mm = door.frenchWindowLength_mm || null;
 
   // Build LEFT door (hinged on LEFT EDGE of opening)
   buildSingleFrenchDoorPanel(
@@ -763,7 +766,8 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
     mats,
     door.id,
     meshPrefix,
-    index
+    index,
+    windowLength_mm
   );
 
   // Build RIGHT door (hinged on RIGHT EDGE of opening)
@@ -782,7 +786,8 @@ function buildFrenchDoor(scene, door, pos, doorWidth, doorHeight, index, materia
     mats,
     door.id,
     meshPrefix,
-    index
+    index,
+    windowLength_mm
   );
 }
 
@@ -810,13 +815,26 @@ function buildFrenchHinge(scene, parent, x, y, doorThickness, material, index, p
  * Similar to buildSingleDoorPanel but with French door styling
  * @param offsetX - Hinge position relative to opening center (e.g., -fullWidth/2 for left, +fullWidth/2 for right)
  * @param doorWidth - Width of this single panel (half the opening width)
+ * @param customWindowLength_mm - Optional custom window length (if null, calculates based on door height)
  */
-function buildSingleFrenchDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0) {
+function buildSingleFrenchDoorPanel(scene, name, pos, doorWidth, doorHeight, hingeSide, offsetX, isOpen, isLeftRightWall, clearanceX, clearanceZ, mats, doorId, meshPrefix = "", doorIndex = 0, customWindowLength_mm = null) {
   // Dimensions in mm
   const doorThickness_mm = 40;
   const frameWidth_mm = 60;
-  const kickboardHeight_mm = Math.floor(doorHeight * 0.18);
-  const glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
+  
+  // Calculate glass/window dimensions
+  let glassHeight_mm;
+  let kickboardHeight_mm;
+  
+  if (customWindowLength_mm) {
+    // Use custom window length if provided
+    glassHeight_mm = customWindowLength_mm;
+    kickboardHeight_mm = doorHeight - glassHeight_mm - frameWidth_mm * 2;
+  } else {
+    // Default: kickboard is 18% of door height
+    kickboardHeight_mm = Math.floor(doorHeight * 0.18);
+    glassHeight_mm = doorHeight - kickboardHeight_mm - frameWidth_mm * 2;
+  }
 
   // Create door group (transform node for rotation)
   // Door group is positioned at the HINGE POINT (outer edge of opening)

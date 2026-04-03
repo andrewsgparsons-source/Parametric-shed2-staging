@@ -3803,7 +3803,7 @@ var styleSel = document.createElement("select");
           if (doorWidthMm >= 1200) {
             styleOptions += '<option value="double-mortise-tenon">Double Mortise & Tenon</option>';
           }
-          if (doorWidthMm > 1200) {
+          if (doorWidthMm >= 1200) {
             styleOptions += '<option value="french">French Doors</option>';
           }
           if (doorWidthMm >= 1200) {
@@ -3811,7 +3811,7 @@ var styleSel = document.createElement("select");
           }
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
-          if (currentStyle === "french" && doorWidthMm <= 1200) {
+          if (currentStyle === "french" && doorWidthMm < 1200) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
@@ -3899,10 +3899,15 @@ var unitMode = getUnitMode(state);
           var xField = makeNum("Door X " + dimUnit, Math.floor(Number(door.x_mm ?? 0)), minVal, stepVal);
           var wField = makeNum("Door W " + dimUnit, Math.floor(Number(door.width_mm ?? 900)), minSizeVal, stepVal);
           var hField = makeNum("Door H " + dimUnit, Math.floor(Number(door.height_mm ?? 2000)), minSizeVal, stepVal);
+          var windowLengthField = makeNum("Window Length " + dimUnit, Math.floor(Number(door.frenchWindowLength_mm ?? 1200)), minSizeVal, stepVal);
 
           row.appendChild(xField.lab);
           row.appendChild(wField.lab);
           row.appendChild(hField.lab);
+          row.appendChild(windowLengthField.lab);
+          
+          // Show/hide window length field based on door style
+          windowLengthField.lab.style.display = (currentStyle === "french") ? "" : "none";
 
           // Apply profile field restrictions
           applyFieldRestriction(wallSel, "door.wall");
@@ -3913,6 +3918,7 @@ var unitMode = getUnitMode(state);
           applyFieldRestriction(xField.inp, "door.x");
           applyFieldRestriction(wField.inp, "door.width");
           applyFieldRestriction(hField.inp, "door.height");
+          applyFieldRestriction(windowLengthField.inp, "door.frenchWindowLength");
           applyFieldRestriction(snapBtn, "door.snapBtn");
           applyFieldRestriction(rmBtn, "door.removeBtn");
 
@@ -3959,6 +3965,9 @@ function parseOpeningDim(val, defaultMm) {
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(door.height_mm ?? 2000))) });
           });
+          wireCommitOnly(windowLengthField.inp, function () {
+            patchOpeningById(id, { frenchWindowLength_mm: parseOpeningDim(windowLengthField.inp.value, Math.floor(Number(door.frenchWindowLength_mm ?? 1200))) });
+          });
 
           wallSel.addEventListener("change", function () {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
@@ -3972,7 +3981,10 @@ function parseOpeningDim(val, defaultMm) {
           });
 
           styleSel.addEventListener("change", function () {
-            patchOpeningById(id, { style: String(styleSel.value || "standard") });
+            var newStyle = String(styleSel.value || "standard");
+            patchOpeningById(id, { style: newStyle });
+            // Show/hide window length field
+            windowLengthField.lab.style.display = (newStyle === "french") ? "" : "none";
           });
 
           hingeSel.addEventListener("change", function () {
@@ -6678,7 +6690,7 @@ function parseOverhangInput(val) {
                   if (doorWidth >= 1200) {
                     styleHtml += '<option value="double-mortise-tenon">Double M&T</option>';
                   }
-                  if (doorWidth > 1200) {
+                  if (doorWidth >= 1200) {
                     styleHtml += '<option value="french">French Doors</option>';
                   }
                   if (doorWidth >= 1200) {
