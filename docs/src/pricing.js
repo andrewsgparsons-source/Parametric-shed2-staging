@@ -675,17 +675,21 @@ export function renderPriceBadge(state) {
   const dropdownValue = dropdownEl?.value;
   const mode = dropdownValue || state?.priceBadgeMode || 'range';
   
+  // If mode is 'none', remove badge completely and exit
+  if (mode === 'none') {
+    const existingBadge = document.getElementById('priceBadge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+    return;
+  }
+  
   let badge = document.getElementById('priceBadge');
   if (!badge) {
     badge = document.createElement('div');
     badge.id = 'priceBadge';
     badge.style.cssText = 'position:fixed;top:12px;right:12px;background:linear-gradient(135deg, #e8f5e9, #f1f8e9);border:1px solid #a5d6a7;border-radius:10px;padding:8px 16px;font-family:inherit;z-index:900;box-shadow:0 2px 10px rgba(76,175,80,0.15);pointer-events:none;transition:opacity 0.3s;';
     document.body.appendChild(badge);
-  }
-
-  if (mode === 'none') {
-    badge.style.display = 'none';
-    return;
   }
 
   const est = estimatePrice(state);
@@ -750,7 +754,7 @@ export function renderPriceBadge(state) {
 /** Hide the price badge */
 export function hidePriceBadge() {
   const badge = document.getElementById('priceBadge');
-  if (badge) badge.style.display = 'none';
+  if (badge) badge.remove();
 }
 
 /**
