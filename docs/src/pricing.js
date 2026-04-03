@@ -670,7 +670,10 @@ export function renderPriceCard(state, containerId) {
  * Small, unobtrusive — just the range.
  */
 export function renderPriceBadge(state) {
-  const mode = state?.priceBadgeMode || 'range';
+  // Check both state AND dropdown element value (dropdown is source of truth)
+  const dropdownEl = document.getElementById('priceBadgeMode');
+  const dropdownValue = dropdownEl?.value;
+  const mode = dropdownValue || state?.priceBadgeMode || 'range';
   
   let badge = document.getElementById('priceBadge');
   if (!badge) {
