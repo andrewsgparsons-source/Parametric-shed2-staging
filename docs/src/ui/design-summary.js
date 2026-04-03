@@ -145,8 +145,9 @@ export function showDesignSummary() {
   // Capture screenshot
   currentScreenshot = captureScreenshot();
 
-  // Get price estimate
-  var est = estimatePrice(state);
+  // Get price estimate (only if pricing is enabled)
+  var mode = state?.priceBadgeMode || 'range';
+  var est = (mode !== 'none') ? estimatePrice(state) : null;
 
   // Extract specs
   var w = (state.dim && state.dim.frameW_mm) || state.w || 0;
@@ -256,10 +257,12 @@ function wireEvents(modal) {
       hideDesignSummary();
       // Dynamically import quote form to keep initial bundle small
       import('./quote-form.js').then(function(mod) {
+        var currentState = getState();
+        var currentMode = currentState?.priceBadgeMode || 'range';
         mod.showQuoteForm({
           screenshot: currentScreenshot,
-          state: getState(),
-          priceEstimate: estimatePrice(getState())
+          state: currentState,
+          priceEstimate: (currentMode !== 'none') ? estimatePrice(currentState) : null
         });
       }).catch(function(err) {
         console.error('[design-summary] Failed to load quote form:', err);
@@ -295,10 +298,12 @@ function wireEvents(modal) {
     emailBtn.addEventListener('click', function() {
       hideDesignSummary();
       import('./quote-form.js').then(function(mod) {
+        var currentState = getState();
+        var currentMode = currentState?.priceBadgeMode || 'range';
         mod.showQuoteForm({
           screenshot: currentScreenshot,
-          state: getState(),
-          priceEstimate: estimatePrice(getState()),
+          state: currentState,
+          priceEstimate: (currentMode !== 'none') ? estimatePrice(currentState) : null,
           emailOnly: true  // signals lighter form (just name + email)
         });
       }).catch(function(err) {

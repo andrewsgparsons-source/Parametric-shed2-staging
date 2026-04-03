@@ -611,6 +611,14 @@ export function renderPriceCard(state, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Hide pricing if mode is 'none'
+  const mode = state?.priceBadgeMode || 'range';
+  if (mode === 'none') {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+
   const est = estimatePrice(state);
   if (!est) {
     container.style.display = 'none';
@@ -750,11 +758,21 @@ export function renderPricingBreakdown(state, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Hide pricing if mode is 'none'
+  const mode = state?.priceBadgeMode || 'range';
+  if (mode === 'none') {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+
   const est = estimatePrice(state);
   if (!est) {
     container.innerHTML = '<p style="color:#888;padding:20px;">Price data not available. Ensure the price table is loaded.</p>';
     return;
   }
+  
+  container.style.display = '';
 
   const b = est.breakdown;
   const vatNote = priceTable?.vatMode === 'ex' ? 'All prices ex-VAT' : '';
