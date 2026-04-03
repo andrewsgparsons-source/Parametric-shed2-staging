@@ -1119,6 +1119,12 @@
           if (initState && initState.showPriceBadge === false && !initState.priceBadgeMode) {
             priceBadgeModeEl.value = 'none';
           }
+          
+          // If dropdown is set to 'none' on load, hide the badge immediately
+          if (priceBadgeModeEl.value === 'none') {
+            hidePriceBadge();
+          }
+          
           priceBadgeModeEl.addEventListener('change', function() {
             var store = window.__dbg && window.__dbg.store;
             if (store && typeof store.setState === 'function') {
