@@ -525,6 +525,54 @@
             </details>
 
             <details open class="boSection">
+              <summary>Bespoke</summary>
+              <div class="boBox" id="bespokeBox" style="padding: 12px;">
+                <p class="hint" style="margin:0 0 12px 0; font-style:italic;">Special options for non-standard building shapes. These override standard dimensions.</p>
+                
+                <div class="row">
+                  <label>
+                    Footprint Shape
+                    <select id="bespokeFootprint" aria-label="Footprint Shape">
+                      <option value="rectangle" selected>Rectangle (Standard)</option>
+                      <option value="trapezoid">Trapezoid</option>
+                    </select>
+                  </label>
+                </div>
+
+                <!-- Trapezoid options (hidden by default) -->
+                <div id="bespokeTrapezoidOptions" style="display: none;">
+                  <p class="hint" style="margin:8px 0; font-style:italic; color:#996600;">⚠️ Pent roof only. Back wall stays perpendicular. Front wall angles between left and right depths.</p>
+                  
+                  <div class="row">
+                    <label>
+                      Left Depth (mm)
+                      <input id="bespokeLeftDepth" type="number" min="600" step="10" value="2400" aria-label="Left wall depth in mm" />
+                    </label>
+                    <label>
+                      Right Depth (mm)
+                      <input id="bespokeRightDepth" type="number" min="600" step="10" value="3600" aria-label="Right wall depth in mm" />
+                    </label>
+                  </div>
+
+                  <!-- Visual diagram (SVG) -->
+                  <div style="margin-top:12px; padding:12px; background:#f5f0e8; border-radius:8px; border:1px solid #ddd;">
+                    <div style="font-size:11px; font-weight:700; color:#555; margin-bottom:8px;">PLAN VIEW (looking down)</div>
+                    <svg id="bespokePlanSvg" viewBox="0 0 260 200" style="width:100%; max-width:280px; height:auto; display:block; margin:0 auto;">
+                      <!-- Shape -->
+                      <polygon id="bespokePlanShape" fill="#e8dcc8" stroke="#665533" stroke-width="2" stroke-linejoin="round" />
+                      <!-- Labels -->
+                      <text x="130" y="22" text-anchor="middle" font-size="10" fill="#555" font-weight="700">Back wall (straight)</text>
+                      <text id="bespokePlanFrontLabel" text-anchor="middle" font-size="10" fill="#555" font-weight="700">Front wall (angled)</text>
+                      <text id="bespokePlanLeftLabel" text-anchor="end" font-size="10" fill="#888">Left depth</text>
+                      <text id="bespokePlanRightLabel" text-anchor="start" font-size="10" fill="#888">Right depth</text>
+                      <text x="130" y="42" text-anchor="middle" font-size="9" fill="#888">← Width →</text>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details open class="boSection">
               <summary>Visibility</summary>
               <div class="boBox" style="padding: 12px;">
                 <p class="hint" style="margin:0 0 12px 0; font-style:italic;">These toggles show/hide parts of the 3D model for viewing — they don't change your quote. Use the controls in each section above to change what's included in your build.</p>
@@ -1056,7 +1104,7 @@
   <script type="importmap">
     { "scopes": { "./src/elements/": { "./instances.js": "../instances.js?_v=9" }, "./src/": { "./elements/instances.js": "./instances.js?_v=9" } } }
   </script>
-  <script type="module" src="./src/index.js?_v=55"></script>
+  <script type="module" src="./src/index.js?_v=57"></script>
   <!-- initViews() is called from ./src/index.js to ensure single initialization. -->
 
   <!-- Share Link wiring is handled by instances.js — no duplicate binding here -->

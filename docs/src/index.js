@@ -341,6 +341,277 @@ function shiftDividerMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
   }
 }
 
+// ============================================================================
+// Trapezoid Boolean Cut — post-processing step
+// Builds the entire building as a rectangle (maxDepth), then CSG-subtracts
+// a triangular prism to create the angled back wall.
+// ============================================================================
+function applyTrapezoidCut(scene, state, baseW_mm) {
+  if (!state.bespoke || state.bespoke.footprint !== "trapezoid") return;
+  var ld = Number(state.bespoke.leftDepth_mm) || 0;
+  var rd = Number(state.bespoke.rightDepth_mm) || 0;
+  if (!ld || !rd || ld === rd) return;
+
+  var maxD = Math.max(ld, rd);
+  var minD = Math.min(ld, rd);
+  var leftIsShort = ld < rd;
+  var W = baseW_mm; // building width in mm
+
+  console.log("[TRAPEZOID_CUT] Starting boolean cut: ld=" + ld + " rd=" + rd + " W=" + W + " leftIsShort=" + leftIsShort);
+
+  // Check CSG availability
+  var hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+  if (!hasCSG) {
+    console.warn("[TRAPEZOID_CUT] BABYLON.CSG not available, skipping boolean cut");
+    return;
+  }
+
+  // --- Build a triangular prism cutter using VertexData ---
+  // The prism covers the triangular wedge to be removed.
+  // Looking from above (XZ plane):
+  //   If left is shorter: triangle vertices are (0, ld), (0, maxD), (W, maxD)
+  //   If right is shorter: triangle vertices are (W, rd), (W, maxD), (0, maxD)
+  //
+  // The prism extends vertically from y=-2m to y=+8m (covers everything).
+  // All coordinates in METERS (matching scene units).
+
+  var yBot = -2.0;  // well below ground
+  var yTop = 8.0;   // well above any roof
+
+  // Convert to meters
+  var wM = W * 0.001;
+  var maxDM = maxD * 0.001;
+  var minDM = minD * 0.001;
+
+  // Triangle vertices in XZ (in meters), adjusted for the wall shift.
+  // Base meshes have NO shift.
+  // Wall meshes are shifted by (-WALL_OVERHANG_MM, +WALL_RISE_MM, -WALL_OVERHANG_MM).
+  // We need the cutter to work for ALL meshes regardless of their shift.
+  // Solution: make the cutter extend beyond the building edges in X so it covers
+  // both shifted and unshifted geometry. The critical dimension is Z (depth).
+  //
+  // Actually, since CSG.FromMesh uses world matrices, we just need the cutter
+  // in world space. But different meshes are at different positions...
+  //
+  // APPROACH: For each mesh, create the cutter at the right position relative to
+  // that mesh's world position. But that's expensive.
+  //
+  // SIMPLER APPROACH: The cutter extends far in X (from -1m to wM+1m) and far in Y.
+  // The critical Z coordinate is the cut line. Since base meshes are at origin and
+  // wall meshes are shifted by -25mm in Z, we use TWO cuts or make the cutter
+  // slightly conservative.
+  //
+  // SIMPLEST: Build the cutter relative to origin (same as base), then for each
+  // mesh, temporarily reset its position to origin, do the CSG, then restore.
+  // NO — that's fragile.
+  //
+  // ACTUALLY SIMPLEST: Put the cutter at world origin with no parent. The CSG
+  // will work correctly because FromMesh accounts for the world matrix of both
+  // the cutter and the target mesh. Since the cutter is at world origin with
+  // identity matrix, its vertices ARE world-space coords. The target mesh's
+  // world matrix transforms its vertices into world space too. CSG operates
+  // in the world space of the FIRST operand (the target mesh). So we need to
+  // transform the cutter's world-space vertices into the target mesh's local space.
+  //
+  // Wait — Babylon CSG.FromMesh just extracts vertex positions and applies the
+  // world matrix. The subtraction happens in a common space.
+  //
+  // Let me just do it: cutter at origin, vertices in world space.
+
+  var x0, x1, z0L, z0R, z1L, z1R;
+  // Extend X beyond building to catch shifted meshes
+  x0 = -0.5;          // 500mm before building left edge
+  x1 = wM + 0.5;      // 500mm past building right edge
+
+  if (leftIsShort) {
+    // Cut wedge from back-left
+    // At x=x0 (left side): cut from z=minDM to z=maxDM+margin
+    // At x=x1 (right side): cut from z=maxDM to z=maxDM+margin (zero-width, but we need
+    //   a proper shape, so we'll use a box-based approach)
+    z0L = minDM;     // left side: cut starts at minDepth
+    z0R = maxDM;     // right side: cut starts at maxDepth (nothing removed)
+    z1L = maxDM + 0.5; // extends past back wall
+    z1R = maxDM + 0.5;
+  } else {
+    // Cut wedge from back-right
+    z0L = maxDM;     // left side: nothing removed
+    z0R = minDM;     // right side: cut starts at minDepth
+    z1L = maxDM + 0.5;
+    z1R = maxDM + 0.5;
+  }
+
+  // Build the cutter as a proper closed 6-face prism using VertexData.
+  // The shape in XZ is a quadrilateral (trapezoid):
+  //   Front-left:  (x0, z0L)     Front-right: (x1, z0R)
+  //   Back-left:   (x0, z1L)     Back-right:  (x1, z1R)
+  // Extruded from yBot to yTop.
+  //
+  // This is actually a box-like shape (8 vertices, 12 triangles).
+  // When leftIsShort: z0L < z0R, so the front face is angled.
+  // When rightIsShort: z0R < z0L, so the front face is angled the other way.
+
+  var positions = [
+    // Bottom face (y = yBot)
+    x0, yBot, z0L,   // 0: front-left-bottom
+    x1, yBot, z0R,   // 1: front-right-bottom
+    x1, yBot, z1R,   // 2: back-right-bottom
+    x0, yBot, z1L,   // 3: back-left-bottom
+    // Top face (y = yTop)
+    x0, yTop, z0L,   // 4: front-left-top
+    x1, yTop, z0R,   // 5: front-right-top
+    x1, yTop, z1R,   // 6: back-right-top
+    x0, yTop, z1L    // 7: back-left-top
+  ];
+
+  var indices = [
+    // Bottom face (y = yBot) — looking from below, CCW = CW from above
+    0, 2, 1,  0, 3, 2,
+    // Top face (y = yTop) — looking from above, CCW
+    4, 5, 6,  4, 6, 7,
+    // Front face (angled diagonal)
+    0, 1, 5,  0, 5, 4,
+    // Back face
+    2, 3, 7,  2, 7, 6,
+    // Left face
+    0, 4, 7,  0, 7, 3,
+    // Right face
+    1, 2, 6,  1, 6, 5
+  ];
+
+  // Normals aren't critical for CSG but needed for valid mesh
+  var normals = [];
+  BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+  var vertexData = new BABYLON.VertexData();
+  vertexData.positions = positions;
+  vertexData.indices = indices;
+  vertexData.normals = normals;
+
+  var cutterMesh = new BABYLON.Mesh("trapezoid-cutter", scene);
+  vertexData.applyToMesh(cutterMesh);
+  cutterMesh.isVisible = false;
+
+  // Create CSG from cutter once
+  var cutterCSG;
+  try {
+    cutterCSG = BABYLON.CSG.FromMesh(cutterMesh);
+  } catch (e) {
+    console.error("[TRAPEZOID_CUT] Failed to create CSG from cutter:", e);
+    cutterMesh.dispose();
+    return;
+  }
+
+  // Now iterate all dynamic meshes and cut any that overlap the removal zone
+  var meshesToProcess = [];
+  for (var i = 0; i < scene.meshes.length; i++) {
+    var m = scene.meshes[i];
+    if (!m || m.isDisposed()) continue;
+    if (!m.metadata || m.metadata.dynamic !== true) continue;
+    if (m === cutterMesh) continue;
+    // Skip transform nodes, only process actual geometry
+    if (!m.getTotalVertices || m.getTotalVertices() === 0) continue;
+    // Skip attachment meshes (they have their own section)
+    if (m.metadata.sectionId && m.metadata.sectionId !== null) continue;
+
+    meshesToProcess.push(m);
+  }
+
+  console.log("[TRAPEZOID_CUT] Processing " + meshesToProcess.length + " meshes");
+
+  var cutCount = 0;
+  for (var j = 0; j < meshesToProcess.length; j++) {
+    var mesh = meshesToProcess[j];
+    try {
+      // Quick check: does this mesh extend into the removal zone?
+      // The removal zone starts at z = minD (in meters) on the short side.
+      // We need to check the mesh's world-space bounding box.
+      mesh.computeWorldMatrix(true);
+      mesh.refreshBoundingInfo();
+      var bb = mesh.getBoundingInfo();
+      var worldMin = bb.boundingBox.minimumWorld;
+      var worldMax = bb.boundingBox.maximumWorld;
+
+      // The cut diagonal runs from z=minDM at the short side to z=maxDM at the deep side.
+      // Any mesh whose maxZ > minDM *might* be in the zone.
+      // Quick reject: if the mesh is entirely in front of the cut line at its X position,
+      // skip it. For simplicity, just check if maxZ > minDM - 0.05 (small margin).
+      if (worldMax.z < minDM - 0.05) continue;
+
+      // Also skip if mesh is entirely past the back wall (shouldn't happen, but safety)
+      if (worldMin.z > maxDM + 0.5) continue;
+
+      // Check if the mesh is fully within the removal zone by testing
+      // if all its corners are past the cut line. For a mesh at world X position,
+      // the cut line Z = minDM + (maxDM - minDM) * (worldX / wM) if leftIsShort,
+      // or the inverse if rightIsShort. A mesh entirely behind the cut line
+      // would be completely removed — that's correct, dispose it.
+      // But we also need to handle meshes that DON'T intersect the cutter at all
+      // (entirely in front of the cut line) — skip those.
+
+      // Check the cut line Z at the mesh's X bounds
+      var cutZAtMinX, cutZAtMaxX;
+      if (leftIsShort) {
+        cutZAtMinX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0)));
+        cutZAtMaxX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0)));
+      } else {
+        cutZAtMinX = maxDM; // no cut at left side
+        cutZAtMaxX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, 1.0 - (worldMax.x + 0.5) / (wM + 1.0)));
+      }
+      var cutZMin = Math.min(cutZAtMinX, cutZAtMaxX);
+
+      // If mesh is entirely in FRONT of the cut line (worldMax.z < cutZMin), skip
+      if (worldMax.z < cutZMin - 0.01) continue;
+
+      // Perform CSG subtraction
+      var baseCSG = BABYLON.CSG.FromMesh(mesh);
+      var resultCSG = baseCSG.subtract(cutterCSG);
+      var resultMesh = resultCSG.toMesh(mesh.name, mesh.material, scene, false);
+
+      if (resultMesh) {
+        // Check if the result mesh has any actual geometry
+        var resultVerts = resultMesh.getTotalVertices ? resultMesh.getTotalVertices() : 0;
+        if (resultVerts === 0) {
+          // Mesh was entirely within the cutter — it should be removed
+          resultMesh.dispose();
+          try { mesh.dispose(false, false); } catch(e) {}
+          cutCount++;
+          continue;
+        }
+
+        // Preserve metadata
+        resultMesh.metadata = Object.assign({}, mesh.metadata);
+        // Preserve parent
+        resultMesh.parent = mesh.parent;
+        // Preserve position/rotation/scaling
+        resultMesh.position = mesh.position.clone();
+        resultMesh.rotation = mesh.rotation.clone();
+        resultMesh.scaling = mesh.scaling.clone();
+        // Preserve visibility
+        resultMesh.isVisible = mesh.isVisible;
+        // Preserve edge rendering if present
+        if (mesh.edgesWidth && resultMesh.enableEdgesRendering) {
+          try {
+            resultMesh.enableEdgesRendering();
+            resultMesh.edgesWidth = mesh.edgesWidth;
+            resultMesh.edgesColor = mesh.edgesColor;
+          } catch(e) {}
+        }
+
+        // Dispose the original
+        try { mesh.dispose(false, false); } catch(e) {}
+
+        cutCount++;
+      }
+    } catch (e) {
+      console.warn("[TRAPEZOID_CUT] CSG failed for mesh '" + mesh.name + "':", e.message || e);
+    }
+  }
+
+  // Clean up cutter
+  cutterMesh.dispose();
+  console.log("[TRAPEZOID_CUT] Complete: " + cutCount + " meshes cut");
+}
+
 function ensureRequiredDomScaffolding() {
   function ensureEl(tag, id, parent) {
     var el = $(id);
@@ -657,6 +928,12 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var addAttachmentBtnEl = $("addAttachmentBtn");
     var removeAllAttachmentsBtnEl = $("removeAllAttachmentsBtn");
     var attachmentsListEl = $("attachmentsList");
+
+    // Bespoke controls
+    var bespokeFootprintEl = $("bespokeFootprint");
+    var bespokeTrapezoidOptionsEl = $("bespokeTrapezoidOptions");
+    var bespokeLeftDepthEl = $("bespokeLeftDepth");
+    var bespokeRightDepthEl = $("bespokeRightDepth");
 
     // Divider controls
     var addDividerBtnEl = $("addDividerBtn");
@@ -2523,8 +2800,22 @@ function render(state) {
 
         var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
+        // Trapezoid override: use max(leftDepth, rightDepth) as the bounding depth
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _ld = Number(state.bespoke.leftDepth_mm) || baseState.d;
+          var _rd = Number(state.bespoke.rightDepth_mm) || baseState.d;
+          baseState.d = Math.max(_ld, _rd);
+        }
+
         var wallDims = getWallOuterDimsFromState(state);
         var wallState = Object.assign({}, state, { w: wallDims.w_mm, d: wallDims.d_mm });
+
+        // Trapezoid override for walls too
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _ldW = Number(state.bespoke.leftDepth_mm) || wallState.d;
+          var _rdW = Number(state.bespoke.rightDepth_mm) || wallState.d;
+          wallState.d = Math.max(_ldW, _rdW);
+        }
 
         // Apex only: allow params.resolveDims(...) to provide a derived wall height that satisfies
         // absolute "Height to Eaves" (ground->underside at wall line) once that logic is implemented there.
@@ -2605,6 +2896,14 @@ if (getWallsEnabled(state)) {
           console.log("[RENDER_LEGACY] Building roof...");
           var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
+
+          // Trapezoid override for roof depth
+          if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+            var _ldR = Number(state.bespoke.leftDepth_mm) || roofD;
+            var _rdR = Number(state.bespoke.rightDepth_mm) || roofD;
+            roofD = Math.max(_ldR, _rdR);
+          }
+
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
@@ -2637,6 +2936,13 @@ if (getWallsEnabled(state)) {
         // Update price estimate
         if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
           try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+        }
+
+        // --- Trapezoid boolean cut (post-processing) ---
+        try {
+          applyTrapezoidCut(ctx.scene, state, baseState.w);
+        } catch (trapErr) {
+          console.error("[RENDER_LEGACY] Trapezoid cut error:", trapErr);
         }
 
        // Apply all visibility settings
@@ -2729,8 +3035,22 @@ if (getWallsEnabled(state)) {
       var R = resolveDims(state);
       var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
+      // Trapezoid override: use max(leftDepth, rightDepth) as the bounding depth
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ld2 = Number(state.bespoke.leftDepth_mm) || baseState.d;
+        var _rd2 = Number(state.bespoke.rightDepth_mm) || baseState.d;
+        baseState.d = Math.max(_ld2, _rd2);
+      }
+
       var wallDims = getWallOuterDimsFromState(state);
       var wallState = Object.assign({}, state, { w: wallDims.w_mm, d: wallDims.d_mm });
+
+      // Trapezoid override for walls too
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ldW2 = Number(state.bespoke.leftDepth_mm) || wallState.d;
+        var _rdW2 = Number(state.bespoke.rightDepth_mm) || wallState.d;
+        wallState.d = Math.max(_ldW2, _rdW2);
+      }
 
       // Build main building base
       if (getBaseEnabled(state)) {
@@ -2759,6 +3079,13 @@ if (getWallsEnabled(state)) {
       var roofEnabled = getRoofEnabled(state);
       var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
       var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
+
+      // Trapezoid override for roof depth
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ldR2 = Number(state.bespoke.leftDepth_mm) || roofD;
+        var _rdR2 = Number(state.bespoke.rightDepth_mm) || roofD;
+        roofD = Math.max(_ldR2, _rdR2);
+      }
 
       if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
@@ -2805,6 +3132,13 @@ if (getWallsEnabled(state)) {
       // Update price estimate
       if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
         try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+      }
+
+      // --- Trapezoid boolean cut (post-processing) ---
+      try {
+        applyTrapezoidCut(ctx.scene, state, baseState.w);
+      } catch (trapErr) {
+        console.error("[RENDER_MULTI] Trapezoid cut error:", trapErr);
       }
 
       // Apply all visibility settings to main building AND attachments
@@ -7588,6 +7922,106 @@ function parseOverhangInput(val) {
         })(dividers[i], i);
       }
     }
+
+    // ---- Bespoke footprint controls ----
+    if (bespokeFootprintEl) {
+      // Init from state
+      var initBespoke = store.getState().bespoke || {};
+      if (initBespoke.footprint) {
+        bespokeFootprintEl.value = initBespoke.footprint;
+      }
+      if (initBespoke.footprint === "trapezoid" && bespokeTrapezoidOptionsEl) {
+        bespokeTrapezoidOptionsEl.style.display = "";
+      }
+      if (initBespoke.leftDepth_mm && bespokeLeftDepthEl) {
+        bespokeLeftDepthEl.value = initBespoke.leftDepth_mm;
+      }
+      if (initBespoke.rightDepth_mm && bespokeRightDepthEl) {
+        bespokeRightDepthEl.value = initBespoke.rightDepth_mm;
+      }
+
+      bespokeFootprintEl.addEventListener("change", function() {
+        var shape = bespokeFootprintEl.value;
+        if (bespokeTrapezoidOptionsEl) {
+          bespokeTrapezoidOptionsEl.style.display = (shape === "trapezoid") ? "" : "none";
+        }
+        if (shape === "trapezoid") {
+          // Set default depths from the input fields (or sensible defaults)
+          var ld = parseInt((bespokeLeftDepthEl || {}).value, 10) || 2400;
+          var rd = parseInt((bespokeRightDepthEl || {}).value, 10) || 3600;
+          store.setState({ bespoke: { footprint: shape, leftDepth_mm: ld, rightDepth_mm: rd } });
+        } else {
+          store.setState({ bespoke: { footprint: shape } });
+        }
+      });
+    }
+
+    if (bespokeLeftDepthEl) {
+      wireCommitOnly(bespokeLeftDepthEl, function() {
+        var val = parseInt(bespokeLeftDepthEl.value, 10);
+        if (isFinite(val) && val >= 600) {
+          store.setState({ bespoke: { leftDepth_mm: val } });
+        }
+      });
+    }
+
+    if (bespokeRightDepthEl) {
+      wireCommitOnly(bespokeRightDepthEl, function() {
+        var val = parseInt(bespokeRightDepthEl.value, 10);
+        if (isFinite(val) && val >= 600) {
+          store.setState({ bespoke: { rightDepth_mm: val } });
+        }
+      });
+    }
+
+    // --- Bespoke plan view SVG updater ---
+    function updateBespokePlanSvg() {
+      var shape = document.getElementById("bespokePlanShape");
+      var frontLabel = document.getElementById("bespokePlanFrontLabel");
+      var leftLabel = document.getElementById("bespokePlanLeftLabel");
+      var rightLabel = document.getElementById("bespokePlanRightLabel");
+      if (!shape) return;
+
+      var leftD = parseInt((bespokeLeftDepthEl || {}).value, 10) || 2400;
+      var rightD = parseInt((bespokeRightDepthEl || {}).value, 10) || 3600;
+      var maxD = Math.max(leftD, rightD, 1);
+
+      // Drawing area: x 30..230 (width=200), y 30..175 (max depth=145)
+      var x1 = 30, x2 = 230, yTop = 30;
+      var yBotL = yTop + (leftD / maxD) * 145;
+      var yBotR = yTop + (rightD / maxD) * 145;
+
+      // Trapezoid: top-left, top-right, bottom-right, bottom-left
+      shape.setAttribute("points",
+        x1 + "," + yTop + " " +
+        x2 + "," + yTop + " " +
+        x2 + "," + yBotR + " " +
+        x1 + "," + yBotL
+      );
+
+      // Position front label along the angled bottom edge
+      var midFX = (x1 + x2) / 2;
+      var midFY = ((yBotL + yBotR) / 2) + 14;
+      if (frontLabel) {
+        frontLabel.setAttribute("x", midFX);
+        frontLabel.setAttribute("y", midFY);
+      }
+
+      // Side depth labels
+      if (leftLabel) {
+        leftLabel.setAttribute("x", x1 - 4);
+        leftLabel.setAttribute("y", (yTop + yBotL) / 2 + 3);
+      }
+      if (rightLabel) {
+        rightLabel.setAttribute("x", x2 + 4);
+        rightLabel.setAttribute("y", (yTop + yBotR) / 2 + 3);
+      }
+    }
+
+    // Initial draw + update on input changes
+    updateBespokePlanSvg();
+    if (bespokeLeftDepthEl) bespokeLeftDepthEl.addEventListener("input", updateBespokePlanSvg);
+    if (bespokeRightDepthEl) bespokeRightDepthEl.addEventListener("input", updateBespokePlanSvg);
 
     // Add Divider button handler
     if (addDividerBtnEl) {
