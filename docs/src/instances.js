@@ -216,16 +216,16 @@ function applyState(stateObj) {
       };
 
       var json = JSON.stringify(exportData, null, 2);
-      var blob = new Blob([json], { type: "application/json" });
-      var url = URL.createObjectURL(blob);
+
+      // Use data URI for reliable downloads (blob URLs fail on some local servers)
+      var dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(json);
 
       var a = document.createElement("a");
-      a.href = url;
+      a.href = dataUri;
       a.download = "shed-design-" + formatDateForFilename(new Date()) + ".json";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
       setHint("Design exported");
     } catch (e) {
