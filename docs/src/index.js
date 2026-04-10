@@ -58,7 +58,7 @@ import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS, isLShapedAllowed } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js?_v=3";
 import * as Base from "./elements/base.js";
-import * as Walls from "./elements/walls.js?_v=3";
+import * as Walls from "./elements/walls.js?_v=4";
 import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=18";
 import * as Attachments from "./elements/attachments.js?_v=2";
@@ -367,10 +367,15 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
   }
 
   // --- Build a triangular prism cutter using VertexData ---
-  // The prism covers the triangular wedge to be removed.
-  // Looking from above (XZ plane):
-  //   If left is shorter: triangle vertices are (0, ld), (0, maxD), (W, maxD)
-  //   If right is shorter: triangle vertices are (W, rd), (W, maxD), (0, maxD)
+  // The prism covers the triangular wedge to be removed from the FRONT
+  // of the building (the front wall is angled, back wall is straight).
+  //
+  // Building is built as a rectangle [0 .. maxDepth].
+  // Back wall (straight) stays at z = maxDepth.
+  // Front wall (angled): short side starts at z = (maxD - minD), long side at z = 0.
+  //
+  // The cutter removes geometry from z = -margin to z = diffZ on the short side,
+  // tapering to z = 0 on the long side (nothing removed).
   //
   // The prism extends vertically from y=-2m to y=+8m (covers everything).
   // All coordinates in METERS (matching scene units).
@@ -382,41 +387,9 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
   var wM = W * 0.001;
   var maxDM = maxD * 0.001;
   var minDM = minD * 0.001;
+  var diffM = maxDM - minDM;  // how much the short side is set back
 
-  // Triangle vertices in XZ (in meters), adjusted for the wall shift.
-  // Base meshes have NO shift.
-  // Wall meshes are shifted by (-WALL_OVERHANG_MM, +WALL_RISE_MM, -WALL_OVERHANG_MM).
-  // We need the cutter to work for ALL meshes regardless of their shift.
-  // Solution: make the cutter extend beyond the building edges in X so it covers
-  // both shifted and unshifted geometry. The critical dimension is Z (depth).
-  //
-  // Actually, since CSG.FromMesh uses world matrices, we just need the cutter
-  // in world space. But different meshes are at different positions...
-  //
-  // APPROACH: For each mesh, create the cutter at the right position relative to
-  // that mesh's world position. But that's expensive.
-  //
-  // SIMPLER APPROACH: The cutter extends far in X (from -1m to wM+1m) and far in Y.
-  // The critical Z coordinate is the cut line. Since base meshes are at origin and
-  // wall meshes are shifted by -25mm in Z, we use TWO cuts or make the cutter
-  // slightly conservative.
-  //
-  // SIMPLEST: Build the cutter relative to origin (same as base), then for each
-  // mesh, temporarily reset its position to origin, do the CSG, then restore.
-  // NO — that's fragile.
-  //
-  // ACTUALLY SIMPLEST: Put the cutter at world origin with no parent. The CSG
-  // will work correctly because FromMesh accounts for the world matrix of both
-  // the cutter and the target mesh. Since the cutter is at world origin with
-  // identity matrix, its vertices ARE world-space coords. The target mesh's
-  // world matrix transforms its vertices into world space too. CSG operates
-  // in the world space of the FIRST operand (the target mesh). So we need to
-  // transform the cutter's world-space vertices into the target mesh's local space.
-  //
-  // Wait — Babylon CSG.FromMesh just extracts vertex positions and applies the
-  // world matrix. The subtraction happens in a common space.
-  //
-  // Let me just do it: cutter at origin, vertices in world space.
+  console.log("[TRAPEZOID_CUT] diffM=" + diffM + " maxDM=" + maxDM + " minDM=" + minDM);
 
   var x0, x1, z0L, z0R, z1L, z1R;
   // Extend X beyond building to catch shifted meshes
@@ -424,31 +397,27 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
   x1 = wM + 0.5;      // 500mm past building right edge
 
   if (leftIsShort) {
-    // Cut wedge from back-left
-    // At x=x0 (left side): cut from z=minDM to z=maxDM+margin
-    // At x=x1 (right side): cut from z=maxDM to z=maxDM+margin (zero-width, but we need
-    //   a proper shape, so we'll use a box-based approach)
-    z0L = minDM;     // left side: cut starts at minDepth
-    z0R = maxDM;     // right side: cut starts at maxDepth (nothing removed)
-    z1L = maxDM + 0.5; // extends past back wall
-    z1R = maxDM + 0.5;
+    // Left is shorter: front-left is set back by diffM
+    // Cutter wedge: from z = -margin up to z = diffM on left, z = 0 on right
+    z0L = -0.5;        // before building front (full coverage)
+    z0R = -0.5;        // before building front (full coverage)
+    z1L = diffM;       // left: cut extends diffM into building
+    z1R = 0;           // right: no cut (front wall stays at z=0)
   } else {
-    // Cut wedge from back-right
-    z0L = maxDM;     // left side: nothing removed
-    z0R = minDM;     // right side: cut starts at minDepth
-    z1L = maxDM + 0.5;
-    z1R = maxDM + 0.5;
+    // Right is shorter: front-right is set back by diffM
+    // Cutter wedge: from z = -margin up to z = 0 on left, z = diffM on right
+    z0L = -0.5;        // before building front
+    z0R = -0.5;        // before building front
+    z1L = 0;           // left: no cut
+    z1R = diffM;       // right: cut extends diffM into building
   }
 
   // Build the cutter as a proper closed 6-face prism using VertexData.
-  // The shape in XZ is a quadrilateral (trapezoid):
+  // The shape in XZ is a quadrilateral:
   //   Front-left:  (x0, z0L)     Front-right: (x1, z0R)
   //   Back-left:   (x0, z1L)     Back-right:  (x1, z1R)
   // Extruded from yBot to yTop.
-  //
-  // This is actually a box-like shape (8 vertices, 12 triangles).
-  // When leftIsShort: z0L < z0R, so the front face is angled.
-  // When rightIsShort: z0R < z0L, so the front face is angled the other way.
+  // The diagonal back face creates the angled front wall.
 
   var positions = [
     // Bottom face (y = yBot)
@@ -512,6 +481,8 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
     if (!m.getTotalVertices || m.getTotalVertices() === 0) continue;
     // Skip attachment meshes (they have their own section)
     if (m.metadata.sectionId && m.metadata.sectionId !== null) continue;
+    // Skip meshes already cut by a previous trapezoid pass
+    if (m.metadata._trapezoidCut) continue;
 
     meshesToProcess.push(m);
   }
@@ -531,36 +502,31 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
       var worldMin = bb.boundingBox.minimumWorld;
       var worldMax = bb.boundingBox.maximumWorld;
 
-      // The cut diagonal runs from z=minDM at the short side to z=maxDM at the deep side.
-      // Any mesh whose maxZ > minDM *might* be in the zone.
-      // Quick reject: if the mesh is entirely in front of the cut line at its X position,
-      // skip it. For simplicity, just check if maxZ > minDM - 0.05 (small margin).
-      if (worldMax.z < minDM - 0.05) continue;
+      // FRONT CUT: The cut diagonal runs from z=diffM on the short side to z=0
+      // on the long side. We remove geometry in front of the cut line (low Z).
+      // Quick reject: if the mesh is entirely behind the cut (worldMin.z > diffM + margin),
+      // it's untouched — skip it.
+      if (worldMin.z > diffM + 0.05) continue;
 
-      // Also skip if mesh is entirely past the back wall (shouldn't happen, but safety)
+      // Also skip if mesh is entirely past the back wall (safety)
       if (worldMin.z > maxDM + 0.5) continue;
 
-      // Check if the mesh is fully within the removal zone by testing
-      // if all its corners are past the cut line. For a mesh at world X position,
-      // the cut line Z = minDM + (maxDM - minDM) * (worldX / wM) if leftIsShort,
-      // or the inverse if rightIsShort. A mesh entirely behind the cut line
-      // would be completely removed — that's correct, dispose it.
-      // But we also need to handle meshes that DON'T intersect the cutter at all
-      // (entirely in front of the cut line) — skip those.
-
-      // Check the cut line Z at the mesh's X bounds
+      // Calculate the cut line Z at the mesh's X bounds.
+      // The cut line goes from z=diffM at the short side to z=0 at the long side.
       var cutZAtMinX, cutZAtMaxX;
       if (leftIsShort) {
-        cutZAtMinX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0)));
-        cutZAtMaxX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0)));
+        // Left is short: cutZ = diffM at x=0, cutZ = 0 at x=wM
+        cutZAtMinX = diffM * (1.0 - Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0))));
+        cutZAtMaxX = diffM * (1.0 - Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0))));
       } else {
-        cutZAtMinX = maxDM; // no cut at left side
-        cutZAtMaxX = minDM + (maxDM - minDM) * Math.max(0, Math.min(1, 1.0 - (worldMax.x + 0.5) / (wM + 1.0)));
+        // Right is short: cutZ = 0 at x=0, cutZ = diffM at x=wM
+        cutZAtMinX = diffM * Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0)));
+        cutZAtMaxX = diffM * Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0)));
       }
-      var cutZMin = Math.min(cutZAtMinX, cutZAtMaxX);
+      var cutZMax = Math.max(cutZAtMinX, cutZAtMaxX);
 
-      // If mesh is entirely in FRONT of the cut line (worldMax.z < cutZMin), skip
-      if (worldMax.z < cutZMin - 0.01) continue;
+      // If mesh is entirely BEHIND the cut line (worldMin.z > cutZMax), skip
+      if (worldMin.z > cutZMax + 0.01) continue;
 
       // Perform CSG subtraction
       var baseCSG = BABYLON.CSG.FromMesh(mesh);
@@ -578,14 +544,46 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
           continue;
         }
 
-        // Preserve metadata
-        resultMesh.metadata = Object.assign({}, mesh.metadata);
-        // Preserve parent
-        resultMesh.parent = mesh.parent;
-        // Preserve position/rotation/scaling
-        resultMesh.position = mesh.position.clone();
-        resultMesh.rotation = mesh.rotation.clone();
-        resultMesh.scaling = mesh.scaling.clone();
+        // Preserve metadata + mark as already cut
+        resultMesh.metadata = Object.assign({}, mesh.metadata, { _trapezoidCut: true });
+
+        // CSG.FromMesh converts to world space, and toMesh creates geometry
+        // in world space at the scene root. We must NOT naively re-apply
+        // the original parent/position/rotation — that would double-transform
+        // meshes whose parent has a non-identity transform (e.g. pent roof
+        // children of roofRoot which has a pitch rotationQuaternion).
+        //
+        // Strategy: re-parent under the same parent, but compute the correct
+        // LOCAL position/rotation/scaling so the world transform stays the same.
+        var origParent = mesh.parent;
+        if (origParent) {
+          // Get the result mesh's current world matrix (it's at scene root, identity parent)
+          resultMesh.computeWorldMatrix(true);
+          var resultWorldMatrix = resultMesh.getWorldMatrix().clone();
+
+          // Parent it — this changes the world matrix
+          resultMesh.parent = origParent;
+
+          // Compute the parent's world matrix inverse
+          origParent.computeWorldMatrix(true);
+          var parentWorldInv = origParent.getWorldMatrix().clone();
+          parentWorldInv.invert();
+
+          // Local matrix = parentWorldInverse * resultWorldMatrix
+          var localMatrix = parentWorldInv.multiply(resultWorldMatrix);
+
+          // Decompose into position/rotation/scaling
+          var localPos = new BABYLON.Vector3();
+          var localRot = new BABYLON.Quaternion();
+          var localScale = new BABYLON.Vector3();
+          localMatrix.decompose(localScale, localRot, localPos);
+
+          resultMesh.position = localPos;
+          resultMesh.rotationQuaternion = localRot;
+          resultMesh.scaling = localScale;
+        }
+        // If no parent, result is already correctly in world space — no transform needed
+
         // Preserve visibility
         resultMesh.isVisible = mesh.isVisible;
         // Preserve edge rendering if present
@@ -2905,6 +2903,19 @@ if (getWallsEnabled(state)) {
           }
 
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
+          // Trapezoid: also override dim.frameD_mm so resolveDims() inside Roof
+          // computes the correct depth for purlins, OSB, covering, etc.
+          if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+            var _maxTrapD = Math.max(
+              Number(state.bespoke.leftDepth_mm) || 0,
+              Number(state.bespoke.rightDepth_mm) || 0
+            );
+            if (_maxTrapD > 0) {
+              roofState = Object.assign({}, roofState, {
+                dim: Object.assign({}, roofState.dim || {}, { frameD_mm: _maxTrapD })
+              });
+            }
+          }
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
           // Gazebo: lift roof an extra 50mm so it sits on top of the ring beam, not submerged in it
@@ -2941,6 +2952,13 @@ if (getWallsEnabled(state)) {
         // --- Trapezoid boolean cut (post-processing) ---
         try {
           applyTrapezoidCut(ctx.scene, state, baseState.w);
+          // Expose for deferred cladding re-cut
+          window.__dbg._trapezoidCut = {
+            fn: applyTrapezoidCut,
+            scene: ctx.scene,
+            state: state,
+            baseW: baseState.w
+          };
         } catch (trapErr) {
           console.error("[RENDER_LEGACY] Trapezoid cut error:", trapErr);
         }
@@ -3089,6 +3107,19 @@ if (getWallsEnabled(state)) {
 
       if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
+        // Trapezoid: also override dim.frameD_mm so resolveDims() inside Roof
+        // computes the correct depth for purlins, OSB, covering, etc.
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _maxTrapD2 = Math.max(
+            Number(state.bespoke.leftDepth_mm) || 0,
+            Number(state.bespoke.rightDepth_mm) || 0
+          );
+          if (_maxTrapD2 > 0) {
+            roofState = Object.assign({}, roofState, {
+              dim: Object.assign({}, roofState.dim || {}, { frameD_mm: _maxTrapD2 })
+            });
+          }
+        }
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
         shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
@@ -3137,6 +3168,13 @@ if (getWallsEnabled(state)) {
       // --- Trapezoid boolean cut (post-processing) ---
       try {
         applyTrapezoidCut(ctx.scene, state, baseState.w);
+        // Expose for deferred cladding re-cut
+        window.__dbg._trapezoidCut = {
+          fn: applyTrapezoidCut,
+          scene: ctx.scene,
+          state: state,
+          baseW: baseState.w
+        };
       } catch (trapErr) {
         console.error("[RENDER_MULTI] Trapezoid cut error:", trapErr);
       }
