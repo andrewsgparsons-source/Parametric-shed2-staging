@@ -28,10 +28,11 @@
     { num: 4, label: 'Roof',               section: 'Roof' },
     { num: 5, label: 'Appearance',         section: 'Appearance' },
     { num: 6, label: 'Attachments',        section: 'Building Attachments' },
-    { num: 7, label: 'Customise View',     section: 'Visibility' },
-    { num: 8, label: 'Bill of Materials',  section: '__bom__', adminOnly: true },
-    { num: 9, label: 'Save & Share',       section: 'Save / Load Design' },
-    { num: 10, label: 'Developer',         section: 'Developer', adminOnly: true }
+    { num: 7, label: 'Bespoke',            section: 'Bespoke' },
+    { num: 8, label: 'Customise View',     section: 'Visibility' },
+    { num: 9, label: 'Bill of Materials',  section: '__bom__', adminOnly: true },
+    { num: 10, label: 'Save & Share',      section: 'Save / Load Design' },
+    { num: 11, label: 'Developer',         section: 'Developer', adminOnly: true }
   ];
 
   // Filter out admin-only steps for public visitors
@@ -377,9 +378,9 @@
     // Update flyout title
     document.getElementById('swFlyoutTitle').textContent = STEPS[idx].label;
 
-    // Show scene view buttons for steps 1-6 (indices 0-5), hide for BOM/Save/Developer
+    // Show scene view buttons for steps 1-7 (indices 0-6), hide for BOM/Save/Developer
     var sceneViews = document.getElementById('swSceneViews');
-    if (sceneViews) sceneViews.style.display = idx <= 5 ? '' : 'none';
+    if (sceneViews) sceneViews.style.display = idx <= 6 ? '' : 'none';
 
     // Show flyout
     const flyout = document.getElementById('swFlyout');

@@ -2382,6 +2382,19 @@ addCornerBoards(scene, s, wallThk, plateY, heightLocal, minHLocal, maxHLocal, is
         // ALSO: run again on the next 2 frames to catch late Apex mesh replacements
         scheduleFollowUpFinalisers();
 
+        // --- Re-run trapezoid boolean cut on newly-created cladding ---
+        // The initial cut runs synchronously in render(), but cladding is deferred
+        // (built here, one frame later). So we must re-cut these new meshes.
+        try {
+          const tc = window.__dbg && window.__dbg._trapezoidCut;
+          if (tc && typeof tc.fn === 'function' && tc.scene && tc.state) {
+            console.log('[DEFERRED_CLAD] Re-running trapezoid cut on deferred cladding');
+            tc.fn(tc.scene, tc.state, tc.baseW);
+          }
+        } catch (trapErr) {
+          console.warn('[DEFERRED_CLAD] Trapezoid re-cut error:', trapErr);
+        }
+
         // DEBUG: Dump all cladding meshes after everything is done
         setTimeout(() => {
           try {
