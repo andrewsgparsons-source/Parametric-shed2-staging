@@ -544,6 +544,29 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
           continue;
         }
 
+        // Sanity check: detect CSG artifacts where Babylon returns the CUTTER
+        // geometry instead of the subtraction result. This happens when the
+        // mesh is fully inside the cutter zone — CSG returns the cutter shape
+        // (Y range ~-2000 to ~8000) instead of an empty mesh.
+        // Compare result bounding box to original: if it grew massively, discard.
+        var csGood = true;
+        try {
+          resultMesh.computeWorldMatrix(true);
+          resultMesh.refreshBoundingInfo();
+          var resBB = resultMesh.getBoundingInfo().boundingBox;
+          var resHeight = (resBB.maximumWorld.y - resBB.minimumWorld.y) * 1000;
+          var origHeight = (worldMax.y - worldMin.y) * 1000;
+          // If result is more than 3x taller than original, it's a CSG artifact
+          if (resHeight > origHeight * 3 + 500) {
+            console.warn("[TRAPEZOID_CUT] CSG artifact detected for '" + mesh.name + "': result height " + resHeight.toFixed(0) + "mm vs original " + origHeight.toFixed(0) + "mm — disposing both");
+            resultMesh.dispose();
+            try { mesh.dispose(false, false); } catch(e) {}
+            cutCount++;
+            csGood = false;
+          }
+        } catch(e) {}
+        if (!csGood) continue;
+
         // Preserve metadata + mark as already cut
         resultMesh.metadata = Object.assign({}, mesh.metadata, { _trapezoidCut: true });
 
