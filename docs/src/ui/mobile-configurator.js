@@ -26,6 +26,7 @@
     { label: 'Roof',       section: 'Roof',                profileKey: 'roof' },
     { label: 'Appearance', section: 'Appearance',           profileKey: 'appearance' },
     { label: 'Attachments',section: 'Building Attachments', profileKey: 'buildingAttachments' },
+    { label: 'Bespoke',   section: 'Bespoke',               profileKey: null },
     { label: 'Customise View', section: 'Visibility',        profileKey: 'visibility' },
     { label: 'BOM',        section: '__bom__',              profileKey: 'display', adminOnly: true },
     { label: 'Save',       section: 'Save / Load Design',  profileKey: 'saveLoad' },
