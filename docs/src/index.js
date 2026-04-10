@@ -483,6 +483,11 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
     if (m.metadata.sectionId && m.metadata.sectionId !== null) continue;
     // Skip meshes already cut by a previous trapezoid pass
     if (m.metadata._trapezoidCut) continue;
+    // Skip cladding meshes — CSG creates gaps between shiplap boards.
+    // Cladding will be rebuilt per-wall to match trapezoid shape (TODO).
+    if (m.metadata.type === "cladding" || (typeof m.name === "string" && m.name.indexOf("clad-") === 0)) continue;
+    // Skip corner boards — they'll be repositioned with cladding
+    if (typeof m.name === "string" && m.name.indexOf("corner-board-") === 0) continue;
 
     meshesToProcess.push(m);
   }
