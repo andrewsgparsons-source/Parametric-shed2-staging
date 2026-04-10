@@ -83,14 +83,59 @@
   function addHelpButton() {
     if (document.getElementById('tipsHelpBtn')) return;
     console.log('[startup-tips] Adding help button');
+
+    // Create the ? button
     var btn = document.createElement('button');
     btn.id = 'tipsHelpBtn';
     btn.className = 'tips-help-btn';
     btn.textContent = '?';
-    btn.title = 'Show tips';
-    btn.addEventListener('click', function() {
-      startTips();
+    btn.title = 'Help & Tour';
+
+    // Create popup menu
+    var menu = document.createElement('div');
+    menu.id = 'tipsHelpMenu';
+    menu.className = 'tips-help-menu';
+    menu.style.display = 'none';
+    menu.innerHTML =
+      '<button class="tips-menu-item" id="tipsMenuQuickTips">' +
+        '<span class="tips-menu-icon">💡</span> Quick Tips' +
+      '</button>' +
+      '<button class="tips-menu-item" id="tipsMenuGuidedTour">' +
+        '<span class="tips-menu-icon">👆</span> Guided Tour' +
+      '</button>';
+
+    var menuVisible = false;
+
+    function toggleMenu() {
+      menuVisible = !menuVisible;
+      menu.style.display = menuVisible ? 'flex' : 'none';
+      if (menuVisible) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+
+    function closeMenu() {
+      menuVisible = false;
+      menu.style.display = 'none';
+      btn.classList.remove('active');
+    }
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleMenu();
     });
+
+    // Close menu on outside click
+    document.addEventListener('click', function() {
+      if (menuVisible) closeMenu();
+    });
+
+    menu.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+
     // Append to body — isProtected() in views.js covers #tipsContainer
     var container = document.getElementById('tipsContainer');
     if (!container) {
@@ -98,8 +143,34 @@
       container.id = 'tipsContainer';
       document.body.appendChild(container);
     }
+    container.appendChild(menu);
     container.appendChild(btn);
-    console.log('[startup-tips] help button appended');
+    console.log('[startup-tips] help button + menu appended');
+
+    // Wire menu items (deferred to let DOM settle)
+    setTimeout(function() {
+      var quickTipsBtn = document.getElementById('tipsMenuQuickTips');
+      var guidedTourBtn = document.getElementById('tipsMenuGuidedTour');
+
+      if (quickTipsBtn) {
+        quickTipsBtn.addEventListener('click', function() {
+          closeMenu();
+          startTips();
+        });
+      }
+
+      if (guidedTourBtn) {
+        guidedTourBtn.addEventListener('click', function() {
+          closeMenu();
+          // Load and run the guided tour
+          console.log('[startup-tips] Loading guided tour...');
+          fetch('./tour-runner.js?_v=1')
+            .then(function(r) { return r.text(); })
+            .then(function(code) { eval(code); })
+            .catch(function(e) { console.error('[startup-tips] Tour load failed:', e); });
+        });
+      }
+    }, 100);
   }
 
   function startTips() {

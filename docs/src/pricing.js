@@ -611,6 +611,14 @@ export function renderPriceCard(state, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Hide pricing if mode is 'none'
+  const mode = state?.priceBadgeMode || 'range';
+  if (mode === 'none') {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+
   const est = estimatePrice(state);
   if (!est) {
     container.style.display = 'none';
@@ -662,7 +670,19 @@ export function renderPriceCard(state, containerId) {
  * Small, unobtrusive — just the range.
  */
 export function renderPriceBadge(state) {
-  const mode = state?.priceBadgeMode || 'range';
+  // Check both state AND dropdown element value (dropdown is source of truth)
+  const dropdownEl = document.getElementById('priceBadgeMode');
+  const dropdownValue = dropdownEl?.value;
+  const mode = dropdownValue || state?.priceBadgeMode || 'range';
+  
+  // If mode is 'none', remove badge completely and exit
+  if (mode === 'none') {
+    const existingBadge = document.getElementById('priceBadge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+    return;
+  }
   
   let badge = document.getElementById('priceBadge');
   if (!badge) {
@@ -670,11 +690,6 @@ export function renderPriceBadge(state) {
     badge.id = 'priceBadge';
     badge.style.cssText = 'position:fixed;top:12px;right:12px;background:linear-gradient(135deg, #e8f5e9, #f1f8e9);border:1px solid #a5d6a7;border-radius:10px;padding:8px 16px;font-family:inherit;z-index:900;box-shadow:0 2px 10px rgba(76,175,80,0.15);pointer-events:none;transition:opacity 0.3s;';
     document.body.appendChild(badge);
-  }
-
-  if (mode === 'none') {
-    badge.style.display = 'none';
-    return;
   }
 
   const est = estimatePrice(state);
@@ -739,7 +754,7 @@ export function renderPriceBadge(state) {
 /** Hide the price badge */
 export function hidePriceBadge() {
   const badge = document.getElementById('priceBadge');
-  if (badge) badge.style.display = 'none';
+  if (badge) badge.remove();
 }
 
 /**
@@ -750,11 +765,21 @@ export function renderPricingBreakdown(state, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Hide pricing if mode is 'none'
+  const mode = state?.priceBadgeMode || 'range';
+  if (mode === 'none') {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+
   const est = estimatePrice(state);
   if (!est) {
     container.innerHTML = '<p style="color:#888;padding:20px;">Price data not available. Ensure the price table is loaded.</p>';
     return;
   }
+  
+  container.style.display = '';
 
   const b = est.breakdown;
   const vatNote = priceTable?.vatMode === 'ex' ? 'All prices ex-VAT' : '';
@@ -834,3 +859,12 @@ export function renderPricingBreakdown(state, containerId) {
     document.head.appendChild(style);
   }
 }
+
+// Expose showDesignSummary globally for non-module scripts (e.g. mobile-configurator)
+window.__showDesignSummary = function() {
+  import('./ui/design-summary.js').then(function(mod) {
+    mod.showDesignSummary();
+  }).catch(function(err) {
+    console.error('[pricing] Failed to load design summary:', err);
+  });
+};

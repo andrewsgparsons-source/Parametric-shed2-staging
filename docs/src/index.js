@@ -58,7 +58,7 @@ import { createStateStore, deepMerge } from "./state.js";
 import { DEFAULTS, resolveDims, CONFIG, createAttachment, ATTACHMENT_DEFAULTS, isLShapedAllowed } from "./params.js";
 import { boot, disposeAll } from "./renderer/babylon.js?_v=3";
 import * as Base from "./elements/base.js";
-import * as Walls from "./elements/walls.js?_v=3";
+import * as Walls from "./elements/walls.js?_v=4";
 import * as Dividers from "./elements/dividers.js";
 import * as Roof from "./elements/roof.js?_v=18";
 import * as Attachments from "./elements/attachments.js?_v=2";
@@ -339,6 +339,288 @@ function shiftDividerMeshes(scene, dx_mm, dy_mm, dz_mm, sectionContext) {
     m.position.y += dy;
     m.position.z += dz;
   }
+}
+
+// ============================================================================
+// Trapezoid Boolean Cut — post-processing step
+// Builds the entire building as a rectangle (maxDepth), then CSG-subtracts
+// a triangular prism to create the angled back wall.
+// ============================================================================
+function applyTrapezoidCut(scene, state, baseW_mm) {
+  if (!state.bespoke || state.bespoke.footprint !== "trapezoid") return;
+  var ld = Number(state.bespoke.leftDepth_mm) || 0;
+  var rd = Number(state.bespoke.rightDepth_mm) || 0;
+  if (!ld || !rd || ld === rd) return;
+
+  var maxD = Math.max(ld, rd);
+  var minD = Math.min(ld, rd);
+  var leftIsShort = ld < rd;
+  var W = baseW_mm; // building width in mm
+
+  console.log("[TRAPEZOID_CUT] Starting boolean cut: ld=" + ld + " rd=" + rd + " W=" + W + " leftIsShort=" + leftIsShort);
+
+  // Check CSG availability
+  var hasCSG = typeof BABYLON !== "undefined" && BABYLON && BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function";
+  if (!hasCSG) {
+    console.warn("[TRAPEZOID_CUT] BABYLON.CSG not available, skipping boolean cut");
+    return;
+  }
+
+  // --- Build a triangular prism cutter using VertexData ---
+  // The prism covers the triangular wedge to be removed from the FRONT
+  // of the building (the front wall is angled, back wall is straight).
+  //
+  // Building is built as a rectangle [0 .. maxDepth].
+  // Back wall (straight) stays at z = maxDepth.
+  // Front wall (angled): short side starts at z = (maxD - minD), long side at z = 0.
+  //
+  // The cutter removes geometry from z = -margin to z = diffZ on the short side,
+  // tapering to z = 0 on the long side (nothing removed).
+  //
+  // The prism extends vertically from y=-2m to y=+8m (covers everything).
+  // All coordinates in METERS (matching scene units).
+
+  var yBot = -2.0;  // well below ground
+  var yTop = 8.0;   // well above any roof
+
+  // Convert to meters
+  var wM = W * 0.001;
+  var maxDM = maxD * 0.001;
+  var minDM = minD * 0.001;
+  var diffM = maxDM - minDM;  // how much the short side is set back
+
+  console.log("[TRAPEZOID_CUT] diffM=" + diffM + " maxDM=" + maxDM + " minDM=" + minDM);
+
+  var x0, x1, z0L, z0R, z1L, z1R;
+  // Extend X beyond building to catch shifted meshes
+  x0 = -0.5;          // 500mm before building left edge
+  x1 = wM + 0.5;      // 500mm past building right edge
+
+  if (leftIsShort) {
+    // Left is shorter: front-left is set back by diffM
+    // Cutter wedge: from z = -margin up to z = diffM on left, z = 0 on right
+    z0L = -0.5;        // before building front (full coverage)
+    z0R = -0.5;        // before building front (full coverage)
+    z1L = diffM;       // left: cut extends diffM into building
+    z1R = 0;           // right: no cut (front wall stays at z=0)
+  } else {
+    // Right is shorter: front-right is set back by diffM
+    // Cutter wedge: from z = -margin up to z = 0 on left, z = diffM on right
+    z0L = -0.5;        // before building front
+    z0R = -0.5;        // before building front
+    z1L = 0;           // left: no cut
+    z1R = diffM;       // right: cut extends diffM into building
+  }
+
+  // Build the cutter as a proper closed 6-face prism using VertexData.
+  // The shape in XZ is a quadrilateral:
+  //   Front-left:  (x0, z0L)     Front-right: (x1, z0R)
+  //   Back-left:   (x0, z1L)     Back-right:  (x1, z1R)
+  // Extruded from yBot to yTop.
+  // The diagonal back face creates the angled front wall.
+
+  var positions = [
+    // Bottom face (y = yBot)
+    x0, yBot, z0L,   // 0: front-left-bottom
+    x1, yBot, z0R,   // 1: front-right-bottom
+    x1, yBot, z1R,   // 2: back-right-bottom
+    x0, yBot, z1L,   // 3: back-left-bottom
+    // Top face (y = yTop)
+    x0, yTop, z0L,   // 4: front-left-top
+    x1, yTop, z0R,   // 5: front-right-top
+    x1, yTop, z1R,   // 6: back-right-top
+    x0, yTop, z1L    // 7: back-left-top
+  ];
+
+  var indices = [
+    // Bottom face (y = yBot) — looking from below, CCW = CW from above
+    0, 2, 1,  0, 3, 2,
+    // Top face (y = yTop) — looking from above, CCW
+    4, 5, 6,  4, 6, 7,
+    // Front face (angled diagonal)
+    0, 1, 5,  0, 5, 4,
+    // Back face
+    2, 3, 7,  2, 7, 6,
+    // Left face
+    0, 4, 7,  0, 7, 3,
+    // Right face
+    1, 2, 6,  1, 6, 5
+  ];
+
+  // Normals aren't critical for CSG but needed for valid mesh
+  var normals = [];
+  BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+  var vertexData = new BABYLON.VertexData();
+  vertexData.positions = positions;
+  vertexData.indices = indices;
+  vertexData.normals = normals;
+
+  var cutterMesh = new BABYLON.Mesh("trapezoid-cutter", scene);
+  vertexData.applyToMesh(cutterMesh);
+  cutterMesh.isVisible = false;
+
+  // Create CSG from cutter once
+  var cutterCSG;
+  try {
+    cutterCSG = BABYLON.CSG.FromMesh(cutterMesh);
+  } catch (e) {
+    console.error("[TRAPEZOID_CUT] Failed to create CSG from cutter:", e);
+    cutterMesh.dispose();
+    return;
+  }
+
+  // Now iterate all dynamic meshes and cut any that overlap the removal zone
+  var meshesToProcess = [];
+  for (var i = 0; i < scene.meshes.length; i++) {
+    var m = scene.meshes[i];
+    if (!m || m.isDisposed()) continue;
+    if (!m.metadata || m.metadata.dynamic !== true) continue;
+    if (m === cutterMesh) continue;
+    // Skip transform nodes, only process actual geometry
+    if (!m.getTotalVertices || m.getTotalVertices() === 0) continue;
+    // Skip attachment meshes (they have their own section)
+    if (m.metadata.sectionId && m.metadata.sectionId !== null) continue;
+    // Skip meshes already cut by a previous trapezoid pass
+    if (m.metadata._trapezoidCut) continue;
+    // Skip cladding meshes — CSG creates gaps between shiplap boards.
+    // Cladding will be rebuilt per-wall to match trapezoid shape (TODO).
+    if (m.metadata.type === "cladding" || (typeof m.name === "string" && m.name.indexOf("clad-") === 0)) continue;
+    // Skip corner boards — they'll be repositioned with cladding
+    if (typeof m.name === "string" && m.name.indexOf("corner-board-") === 0) continue;
+
+    meshesToProcess.push(m);
+  }
+
+  console.log("[TRAPEZOID_CUT] Processing " + meshesToProcess.length + " meshes");
+
+  var cutCount = 0;
+  for (var j = 0; j < meshesToProcess.length; j++) {
+    var mesh = meshesToProcess[j];
+    try {
+      // Quick check: does this mesh extend into the removal zone?
+      // The removal zone starts at z = minD (in meters) on the short side.
+      // We need to check the mesh's world-space bounding box.
+      mesh.computeWorldMatrix(true);
+      mesh.refreshBoundingInfo();
+      var bb = mesh.getBoundingInfo();
+      var worldMin = bb.boundingBox.minimumWorld;
+      var worldMax = bb.boundingBox.maximumWorld;
+
+      // FRONT CUT: The cut diagonal runs from z=diffM on the short side to z=0
+      // on the long side. We remove geometry in front of the cut line (low Z).
+      // Quick reject: if the mesh is entirely behind the cut (worldMin.z > diffM + margin),
+      // it's untouched — skip it.
+      if (worldMin.z > diffM + 0.05) continue;
+
+      // Also skip if mesh is entirely past the back wall (safety)
+      if (worldMin.z > maxDM + 0.5) continue;
+
+      // Calculate the cut line Z at the mesh's X bounds.
+      // The cut line goes from z=diffM at the short side to z=0 at the long side.
+      var cutZAtMinX, cutZAtMaxX;
+      if (leftIsShort) {
+        // Left is short: cutZ = diffM at x=0, cutZ = 0 at x=wM
+        cutZAtMinX = diffM * (1.0 - Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0))));
+        cutZAtMaxX = diffM * (1.0 - Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0))));
+      } else {
+        // Right is short: cutZ = 0 at x=0, cutZ = diffM at x=wM
+        cutZAtMinX = diffM * Math.max(0, Math.min(1, (worldMin.x + 0.5) / (wM + 1.0)));
+        cutZAtMaxX = diffM * Math.max(0, Math.min(1, (worldMax.x + 0.5) / (wM + 1.0)));
+      }
+      var cutZMax = Math.max(cutZAtMinX, cutZAtMaxX);
+
+      // If mesh is entirely BEHIND the cut line (worldMin.z > cutZMax), skip
+      if (worldMin.z > cutZMax + 0.01) continue;
+
+      // Perform CSG subtraction
+      var baseCSG = BABYLON.CSG.FromMesh(mesh);
+      var resultCSG = baseCSG.subtract(cutterCSG);
+      var resultMesh = resultCSG.toMesh(mesh.name, mesh.material, scene, false);
+
+      if (resultMesh) {
+        // Check if the result mesh has any actual geometry
+        var resultVerts = resultMesh.getTotalVertices ? resultMesh.getTotalVertices() : 0;
+        if (resultVerts === 0) {
+          // Mesh was entirely within the cutter — it should be removed
+          resultMesh.dispose();
+          try { mesh.dispose(false, false); } catch(e) {}
+          cutCount++;
+          continue;
+        }
+
+        // Sanity check: detect CSG artifacts where Babylon returns the CUTTER
+        // geometry instead of the subtraction result. This happens when the
+        // mesh is fully inside the cutter zone — CSG returns the cutter shape
+        // (Y range ~-2000 to ~8000) instead of an empty mesh.
+        // Compare result bounding box to original: if it grew massively, discard.
+        var csGood = true;
+        try {
+          resultMesh.computeWorldMatrix(true);
+          resultMesh.refreshBoundingInfo();
+          var resBB = resultMesh.getBoundingInfo().boundingBox;
+          var resHeight = (resBB.maximumWorld.y - resBB.minimumWorld.y) * 1000;
+          var origHeight = (worldMax.y - worldMin.y) * 1000;
+          // If result is more than 3x taller than original, it's a CSG artifact
+          if (resHeight > origHeight * 3 + 500) {
+            console.warn("[TRAPEZOID_CUT] CSG artifact detected for '" + mesh.name + "': result height " + resHeight.toFixed(0) + "mm vs original " + origHeight.toFixed(0) + "mm — disposing both");
+            resultMesh.dispose();
+            try { mesh.dispose(false, false); } catch(e) {}
+            cutCount++;
+            csGood = false;
+          }
+        } catch(e) {}
+        if (!csGood) continue;
+
+        // Preserve metadata + mark as already cut
+        resultMesh.metadata = Object.assign({}, mesh.metadata, { _trapezoidCut: true });
+
+        // CSG.FromMesh converts to world space, and toMesh creates geometry
+        // that inherits the source mesh's local position/rotation — but the
+        // vertex data is in the source's LOCAL coordinate space.
+        //
+        // Since the result is un-parented (scene root), we must apply the
+        // original mesh's full world transform so it renders in the same place.
+        // Compute the original mesh's world matrix and decompose it.
+        try {
+          mesh.computeWorldMatrix(true);
+          var worldMat = mesh.getWorldMatrix();
+          var _s = new BABYLON.Vector3();
+          var _r = new BABYLON.Quaternion();
+          var _t = new BABYLON.Vector3();
+          worldMat.decompose(_s, _r, _t);
+          resultMesh.parent = null;
+          resultMesh.position = _t.clone();
+          resultMesh.rotationQuaternion = _r.clone();
+          resultMesh.scaling = _s.clone();
+        } catch (transformErr) {
+          console.warn("[TRAPEZOID_CUT] Failed to apply world transform for '" + mesh.name + "':", transformErr);
+        }
+
+        // Preserve visibility
+        resultMesh.isVisible = mesh.isVisible;
+        // Preserve edge rendering if present (check _edgesRenderer, not edgesWidth which defaults to 1)
+        if (mesh._edgesRenderer && resultMesh.enableEdgesRendering) {
+          try {
+            resultMesh.enableEdgesRendering();
+            resultMesh.edgesWidth = mesh.edgesWidth;
+            resultMesh.edgesColor = mesh.edgesColor;
+          } catch(e) {}
+        }
+
+        // Dispose the original
+        try { mesh.dispose(false, false); } catch(e) {}
+
+        cutCount++;
+      }
+    } catch (e) {
+      console.warn("[TRAPEZOID_CUT] CSG failed for mesh '" + mesh.name + "':", e.message || e);
+    }
+  }
+
+  // Clean up cutter
+  cutterMesh.dispose();
+  console.log("[TRAPEZOID_CUT] Complete: " + cutCount + " meshes cut");
 }
 
 function ensureRequiredDomScaffolding() {
@@ -657,6 +939,12 @@ var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var addAttachmentBtnEl = $("addAttachmentBtn");
     var removeAllAttachmentsBtnEl = $("removeAllAttachmentsBtn");
     var attachmentsListEl = $("attachmentsList");
+
+    // Bespoke controls
+    var bespokeFootprintEl = $("bespokeFootprint");
+    var bespokeTrapezoidOptionsEl = $("bespokeTrapezoidOptions");
+    var bespokeLeftDepthEl = $("bespokeLeftDepth");
+    var bespokeRightDepthEl = $("bespokeRightDepth");
 
     // Divider controls
     var addDividerBtnEl = $("addDividerBtn");
@@ -1917,6 +2205,58 @@ function applyOpeningsVisibility(scene, on) {
       return { min: min, max: max, center: center, extents: ext };
     }
 
+    /**
+     * Center the camera on the model after initial render.
+     * On mobile the small viewport makes the hardcoded target look off-centre.
+     */
+    function centerCameraOnModel() {
+      var sc = getActiveSceneCamera();
+      if (!sc.scene || !sc.camera) return false;
+      var bounds = computeModelBoundsWorld(sc.scene);
+      if (!bounds || !bounds.center) return false;
+
+      var cam = sc.camera;
+      // Set target to model centre (slight Y lift to frame nicely)
+      var targetY = bounds.center.y * 0.45; // Aim slightly below centre for a natural look
+      try {
+        if (typeof cam.setTarget === "function") {
+          cam.setTarget(new BABYLON.Vector3(bounds.center.x, targetY, bounds.center.z));
+        } else if (cam.target) {
+          cam.target = new BABYLON.Vector3(bounds.center.x, targetY, bounds.center.z);
+        }
+      } catch (e) {}
+
+      // On mobile, pull the camera in a bit for a tighter framing
+      var isMobile = !!document.getElementById('mobileConfigurator');
+      if (isMobile && cam.radius != null) {
+        // Calculate a radius that frames the model well
+        var maxExtent = Math.max(bounds.extents.x, bounds.extents.y, bounds.extents.z);
+        var idealRadius = maxExtent * 4.5; // Tighter framing for mobile
+        if (idealRadius > 3 && idealRadius < 20) {
+          cam.radius = idealRadius;
+        }
+      }
+
+      // On desktop with sidebar, nudge the view right so the building
+      // appears centred in the visible canvas area (not behind the sidebar).
+      // During guided tour, use the tour offset so the building stays centred.
+      if (!isMobile && cam.targetScreenOffset != null) {
+        if (window.__tourActive) {
+          cam.targetScreenOffset.x = window.__tourOffsetX != null ? window.__tourOffsetX : 0.23;
+        } else {
+          var hasSidebar = !!document.getElementById('sidebarWizard');
+          cam.targetScreenOffset.x = hasSidebar ? 0.9 : 0;
+        }
+      }
+
+      console.log('[camera] Centered on model:', bounds.center.x.toFixed(1), targetY.toFixed(1), bounds.center.z.toFixed(1),
+        isMobile ? '(mobile, r=' + (cam.radius || '?') + ')' : '(desktop)');
+      return true;
+    }
+
+    // Expose for mobile-configurator to call after layout
+    window.__centerCameraOnModel = centerCameraOnModel;
+
    function setOrthoForView(camera, viewName, bounds) {
       var BAB = window.BABYLON;
       if (!BAB || !camera || !bounds) return;
@@ -2100,11 +2440,22 @@ function applyOpeningsVisibility(scene, on) {
     function getWallLengthsForOpenings(state) {
       var dims = getWallOuterDimsFromState(state);
       var thk = currentWallThicknessFromState(state);
+
+      // Trapezoid mode: left and right walls have different depths
+      var leftD = dims.d_mm;
+      var rightD = dims.d_mm;
+      if (state && state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var ld = Number(state.bespoke.leftDepth_mm) || dims.d_mm;
+        var rd = Number(state.bespoke.rightDepth_mm) || dims.d_mm;
+        leftD = ld + (2 * WALL_OVERHANG_MM);
+        rightD = rd + (2 * WALL_OVERHANG_MM);
+      }
+
       return {
         front: Math.max(1, Math.floor(dims.w_mm)),
         back: Math.max(1, Math.floor(dims.w_mm)),
-        left: Math.max(1, Math.floor(dims.d_mm - 2 * thk)),
-        right: Math.max(1, Math.floor(dims.d_mm - 2 * thk)),
+        left: Math.max(1, Math.floor(leftD - 2 * thk)),
+        right: Math.max(1, Math.floor(rightD - 2 * thk)),
         _thk: thk
       };
     }
@@ -2471,8 +2822,22 @@ function render(state) {
 
         var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
+        // Trapezoid override: use max(leftDepth, rightDepth) as the bounding depth
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _ld = Number(state.bespoke.leftDepth_mm) || baseState.d;
+          var _rd = Number(state.bespoke.rightDepth_mm) || baseState.d;
+          baseState.d = Math.max(_ld, _rd);
+        }
+
         var wallDims = getWallOuterDimsFromState(state);
         var wallState = Object.assign({}, state, { w: wallDims.w_mm, d: wallDims.d_mm });
+
+        // Trapezoid override for walls too
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _ldW = Number(state.bespoke.leftDepth_mm) || wallState.d;
+          var _rdW = Number(state.bespoke.rightDepth_mm) || wallState.d;
+          wallState.d = Math.max(_ldW, _rdW);
+        }
 
         // Apex only: allow params.resolveDims(...) to provide a derived wall height that satisfies
         // absolute "Height to Eaves" (ground->underside at wall line) once that logic is implemented there.
@@ -2553,7 +2918,28 @@ if (getWallsEnabled(state)) {
           console.log("[RENDER_LEGACY] Building roof...");
           var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
           var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
+
+          // Trapezoid override for roof depth
+          if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+            var _ldR = Number(state.bespoke.leftDepth_mm) || roofD;
+            var _rdR = Number(state.bespoke.rightDepth_mm) || roofD;
+            roofD = Math.max(_ldR, _rdR);
+          }
+
           var roofState = Object.assign({}, state, { w: roofW, d: roofD });
+          // Trapezoid: also override dim.frameD_mm so resolveDims() inside Roof
+          // computes the correct depth for purlins, OSB, covering, etc.
+          if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+            var _maxTrapD = Math.max(
+              Number(state.bespoke.leftDepth_mm) || 0,
+              Number(state.bespoke.rightDepth_mm) || 0
+            );
+            if (_maxTrapD > 0) {
+              roofState = Object.assign({}, roofState, {
+                dim: Object.assign({}, roofState.dim || {}, { frameD_mm: _maxTrapD })
+              });
+            }
+          }
 
           if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
           // Gazebo: lift roof an extra 50mm so it sits on top of the ring beam, not submerged in it
@@ -2585,6 +2971,20 @@ if (getWallsEnabled(state)) {
         // Update price estimate
         if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
           try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+        }
+
+        // --- Trapezoid boolean cut (post-processing) ---
+        try {
+          applyTrapezoidCut(ctx.scene, state, baseState.w);
+          // Expose for deferred cladding re-cut
+          window.__dbg._trapezoidCut = {
+            fn: applyTrapezoidCut,
+            scene: ctx.scene,
+            state: state,
+            baseW: baseState.w
+          };
+        } catch (trapErr) {
+          console.error("[RENDER_LEGACY] Trapezoid cut error:", trapErr);
         }
 
        // Apply all visibility settings
@@ -2677,8 +3077,22 @@ if (getWallsEnabled(state)) {
       var R = resolveDims(state);
       var baseState = Object.assign({}, state, { w: R.base.w_mm, d: R.base.d_mm });
 
+      // Trapezoid override: use max(leftDepth, rightDepth) as the bounding depth
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ld2 = Number(state.bespoke.leftDepth_mm) || baseState.d;
+        var _rd2 = Number(state.bespoke.rightDepth_mm) || baseState.d;
+        baseState.d = Math.max(_ld2, _rd2);
+      }
+
       var wallDims = getWallOuterDimsFromState(state);
       var wallState = Object.assign({}, state, { w: wallDims.w_mm, d: wallDims.d_mm });
+
+      // Trapezoid override for walls too
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ldW2 = Number(state.bespoke.leftDepth_mm) || wallState.d;
+        var _rdW2 = Number(state.bespoke.rightDepth_mm) || wallState.d;
+        wallState.d = Math.max(_ldW2, _rdW2);
+      }
 
       // Build main building base
       if (getBaseEnabled(state)) {
@@ -2708,8 +3122,28 @@ if (getWallsEnabled(state)) {
       var roofW = (R && R.roof && R.roof.w_mm != null) ? Math.max(1, Math.floor(R.roof.w_mm)) : Math.max(1, Math.floor(R.base.w_mm));
       var roofD = (R && R.roof && R.roof.d_mm != null) ? Math.max(1, Math.floor(R.roof.d_mm)) : Math.max(1, Math.floor(R.base.d_mm));
 
+      // Trapezoid override for roof depth
+      if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var _ldR2 = Number(state.bespoke.leftDepth_mm) || roofD;
+        var _rdR2 = Number(state.bespoke.rightDepth_mm) || roofD;
+        roofD = Math.max(_ldR2, _rdR2);
+      }
+
       if (roofEnabled && (roofStyle === "pent" || roofStyle === "apex" || roofStyle === "hipped")) {
         var roofState = Object.assign({}, state, { w: roofW, d: roofD });
+        // Trapezoid: also override dim.frameD_mm so resolveDims() inside Roof
+        // computes the correct depth for purlins, OSB, covering, etc.
+        if (state.bespoke && state.bespoke.footprint === "trapezoid") {
+          var _maxTrapD2 = Math.max(
+            Number(state.bespoke.leftDepth_mm) || 0,
+            Number(state.bespoke.rightDepth_mm) || 0
+          );
+          if (_maxTrapD2 > 0) {
+            roofState = Object.assign({}, roofState, {
+              dim: Object.assign({}, roofState.dim || {}, { frameD_mm: _maxTrapD2 })
+            });
+          }
+        }
 
         if (Roof && typeof Roof.build3D === "function") Roof.build3D(roofState, ctx, undefined);
         shiftRoofMeshes(ctx.scene, -WALL_OVERHANG_MM, WALL_RISE_MM, -WALL_OVERHANG_MM);
@@ -2753,6 +3187,20 @@ if (getWallsEnabled(state)) {
       // Update price estimate
       if (window.__pricingReady && typeof window.__updatePriceCard === "function") {
         try { window.__lastState = state; window.__updatePriceCard(state); } catch(pe) { console.warn('[PRICING] Update error:', pe); }
+      }
+
+      // --- Trapezoid boolean cut (post-processing) ---
+      try {
+        applyTrapezoidCut(ctx.scene, state, baseState.w);
+        // Expose for deferred cladding re-cut
+        window.__dbg._trapezoidCut = {
+          fn: applyTrapezoidCut,
+          scene: ctx.scene,
+          state: state,
+          baseW: baseState.w
+        };
+      } catch (trapErr) {
+        console.error("[RENDER_MULTI] Trapezoid cut error:", trapErr);
       }
 
       // Apply all visibility settings to main building AND attachments
@@ -3689,12 +4137,20 @@ function wireCommitOnly(inputEl, onCommit) {
 
       var doors = getDoorsFromState(state);
 
-      for (var i = 0; i < doors.length; i++) {
-        (function (door) {
+      // Render newest first but number in creation order
+      for (var ri = doors.length - 1; ri >= 0; ri--) {
+        (function (door, creationIdx) {
           var id = String(door.id || "");
+          var doorNum = creationIdx + 1;
 
           var item = document.createElement("div");
           item.className = "doorItem";
+
+          // Numbered heading
+          var heading = document.createElement("div");
+          heading.className = "openingHeading";
+          heading.textContent = "Door " + doorNum;
+          item.appendChild(heading);
 
           var top = document.createElement("div");
           top.className = "doorTop";
@@ -3718,9 +4174,13 @@ function wireCommitOnly(inputEl, onCommit) {
           var snapPositions = computeEvenSnapPositions(state, doorWall);
           var snapHtml = '<option value="">—</option>';
           var currentSnapIdx = -1;
+          var doorActualX = Math.floor(Number(door.x_mm || 0));
           for (var sp = 0; sp < snapPositions.length; sp++) {
             snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
-            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+            // Only match if the opening is actually near the snap position (within 30mm tolerance)
+            if (snapPositions[sp].openingId === id && Math.abs(doorActualX - snapPositions[sp].x_mm) <= 30) {
+              currentSnapIdx = sp;
+            }
           }
           snapPosSel.innerHTML = snapHtml;
           if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
@@ -3739,7 +4199,7 @@ var styleSel = document.createElement("select");
           if (doorWidthMm >= 1200) {
             styleOptions += '<option value="double-mortise-tenon">Double Mortise & Tenon</option>';
           }
-          if (doorWidthMm > 1200) {
+          if (doorWidthMm >= 1000) {
             styleOptions += '<option value="french">French Doors</option>';
           }
           if (doorWidthMm >= 1200) {
@@ -3747,7 +4207,7 @@ var styleSel = document.createElement("select");
           }
           styleSel.innerHTML = styleOptions;
           var currentStyle = String(door.style || "standard");
-          if (currentStyle === "french" && doorWidthMm <= 1200) {
+          if (currentStyle === "french" && doorWidthMm < 1000) {
             currentStyle = "standard";
             patchOpeningById(id, { style: "standard" });
           }
@@ -3835,10 +4295,15 @@ var unitMode = getUnitMode(state);
           var xField = makeNum("Door X " + dimUnit, Math.floor(Number(door.x_mm ?? 0)), minVal, stepVal);
           var wField = makeNum("Door W " + dimUnit, Math.floor(Number(door.width_mm ?? 900)), minSizeVal, stepVal);
           var hField = makeNum("Door H " + dimUnit, Math.floor(Number(door.height_mm ?? 2000)), minSizeVal, stepVal);
+          var windowLengthField = makeNum("Window Length " + dimUnit, Math.floor(Number(door.frenchWindowLength_mm ?? 1200)), minSizeVal, stepVal);
 
           row.appendChild(xField.lab);
           row.appendChild(wField.lab);
           row.appendChild(hField.lab);
+          row.appendChild(windowLengthField.lab);
+          
+          // Show/hide window length field based on door style
+          windowLengthField.lab.style.display = (currentStyle === "french") ? "" : "none";
 
           // Apply profile field restrictions
           applyFieldRestriction(wallSel, "door.wall");
@@ -3849,6 +4314,7 @@ var unitMode = getUnitMode(state);
           applyFieldRestriction(xField.inp, "door.x");
           applyFieldRestriction(wField.inp, "door.width");
           applyFieldRestriction(hField.inp, "door.height");
+          applyFieldRestriction(windowLengthField.inp, "door.frenchWindowLength");
           applyFieldRestriction(snapBtn, "door.snapBtn");
           applyFieldRestriction(rmBtn, "door.removeBtn");
 
@@ -3895,6 +4361,9 @@ function parseOpeningDim(val, defaultMm) {
           wireCommitOnly(hField.inp, function () {
             patchOpeningById(id, { height_mm: parseOpeningDim(hField.inp.value, Math.floor(Number(door.height_mm ?? 2000))) });
           });
+          wireCommitOnly(windowLengthField.inp, function () {
+            patchOpeningById(id, { frenchWindowLength_mm: parseOpeningDim(windowLengthField.inp.value, Math.floor(Number(door.frenchWindowLength_mm ?? 1200))) });
+          });
 
           wallSel.addEventListener("change", function () {
             patchOpeningById(id, { wall: String(wallSel.value || "front") });
@@ -3908,7 +4377,10 @@ function parseOpeningDim(val, defaultMm) {
           });
 
           styleSel.addEventListener("change", function () {
-            patchOpeningById(id, { style: String(styleSel.value || "standard") });
+            var newStyle = String(styleSel.value || "standard");
+            patchOpeningById(id, { style: newStyle });
+            // Show/hide window length field
+            windowLengthField.lab.style.display = (newStyle === "french") ? "" : "none";
           });
 
           hingeSel.addEventListener("change", function () {
@@ -3951,7 +4423,7 @@ function parseOpeningDim(val, defaultMm) {
           item.appendChild(msg);
 
           doorsListEl.appendChild(item);
-        })(doors[i]);
+        })(doors[ri], ri);
       }
 
       if (!doors.length) {
@@ -3968,12 +4440,20 @@ function parseOpeningDim(val, defaultMm) {
 
       var wins = getWindowsFromState(state);
 
-      for (var i = 0; i < wins.length; i++) {
-        (function (win) {
+      // Render newest first but number in creation order
+      for (var ri = wins.length - 1; ri >= 0; ri--) {
+        (function (win, creationIdx) {
           var id = String(win.id || "");
+          var winNum = creationIdx + 1;
 
           var item = document.createElement("div");
           item.className = "windowItem";
+
+          // Numbered heading
+          var heading = document.createElement("div");
+          heading.className = "openingHeading";
+          heading.textContent = "Window " + winNum;
+          item.appendChild(heading);
 
           var top = document.createElement("div");
           top.className = "windowTop";
@@ -3997,9 +4477,13 @@ function parseOpeningDim(val, defaultMm) {
           var snapPositions = computeEvenSnapPositions(state, winWall);
           var snapHtml = '<option value="">—</option>';
           var currentSnapIdx = -1;
+          var winActualX = Math.floor(Number(win.x_mm || 0));
           for (var sp = 0; sp < snapPositions.length; sp++) {
             snapHtml += '<option value="' + sp + '">' + snapPositions[sp].label + '</option>';
-            if (snapPositions[sp].openingId === id) currentSnapIdx = sp;
+            // Only match if the opening is actually near the snap position (within 30mm tolerance)
+            if (snapPositions[sp].openingId === id && Math.abs(winActualX - snapPositions[sp].x_mm) <= 30) {
+              currentSnapIdx = sp;
+            }
           }
           snapPosSel.innerHTML = snapHtml;
           if (currentSnapIdx >= 0) snapPosSel.value = String(currentSnapIdx);
@@ -4162,7 +4646,7 @@ function parseOpeningDim(val, defaultMm) {
           item.appendChild(msg);
 
           windowsListEl.appendChild(item);
-        })(wins[i]);
+        })(wins[ri], ri);
       }
 
       if (!wins.length) {
@@ -4909,10 +5393,22 @@ if (state && state.overhang) {
           }
         };
 
+        // Default visibility — applied on every building type switch.
+        // Everything visible so switching type gives a clean, fully-rendered building.
+        var defaultVis = {
+          base: true, baseAll: true, concrete: true,
+          frame: true, deck: true, ins: true,
+          wallsEnabled: true, wallIns: true, wallPly: true,
+          cladding: true, roof: true,
+          cladParts: { front: true, back: true, left: true, right: true }
+        };
+
         var typeDefault = buildingTypeDefaults[newType];
         if (typeDefault) {
           // Apply building-type-specific defaults
           Object.keys(typeDefault).forEach(function(k) { patch[k] = typeDefault[k]; });
+          // Merge preset vis on top of defaults (preset can override)
+          patch.vis = Object.assign({}, defaultVis, patch.vis || {});
         } else {
           // All other types: reset to default shed preset
           var defaultPreset = findBuiltInPresetById(getDefaultBuiltInPresetId());
@@ -4921,8 +5417,7 @@ if (state && state.overhang) {
             Object.keys(ds).forEach(function(k) { patch[k] = ds[k]; });
           }
           if (patch.roof) patch.roof.covering = patch.roof.covering || "felt";
-          if (!patch.vis) patch.vis = {};
-          patch.vis.baseAll = true;
+          patch.vis = Object.assign({}, defaultVis, patch.vis || {});
           if (!patch.shelving) patch.shelving = [];
         }
 
@@ -6013,9 +6508,9 @@ function parseOverhangInput(val) {
 
         var id = "win" + String(window.__dbg.windowSeq++);
         var wall = "front";
-        var w = 900;
-        var h = 600;
-        var y = 900;
+        var w = 700;
+        var h = 500;
+        var y = 1000;
         var L = lens[wall] || 1000;
         
         // Find a free spot instead of just centering
@@ -6591,7 +7086,7 @@ function parseOverhangInput(val) {
                   if (doorWidth >= 1200) {
                     styleHtml += '<option value="double-mortise-tenon">Double M&T</option>';
                   }
-                  if (doorWidth > 1200) {
+                  if (doorWidth >= 1000) {
                     styleHtml += '<option value="french">French Doors</option>';
                   }
                   if (doorWidth >= 1200) {
@@ -7490,6 +7985,106 @@ function parseOverhangInput(val) {
       }
     }
 
+    // ---- Bespoke footprint controls ----
+    if (bespokeFootprintEl) {
+      // Init from state
+      var initBespoke = store.getState().bespoke || {};
+      if (initBespoke.footprint) {
+        bespokeFootprintEl.value = initBespoke.footprint;
+      }
+      if (initBespoke.footprint === "trapezoid" && bespokeTrapezoidOptionsEl) {
+        bespokeTrapezoidOptionsEl.style.display = "";
+      }
+      if (initBespoke.leftDepth_mm && bespokeLeftDepthEl) {
+        bespokeLeftDepthEl.value = initBespoke.leftDepth_mm;
+      }
+      if (initBespoke.rightDepth_mm && bespokeRightDepthEl) {
+        bespokeRightDepthEl.value = initBespoke.rightDepth_mm;
+      }
+
+      bespokeFootprintEl.addEventListener("change", function() {
+        var shape = bespokeFootprintEl.value;
+        if (bespokeTrapezoidOptionsEl) {
+          bespokeTrapezoidOptionsEl.style.display = (shape === "trapezoid") ? "" : "none";
+        }
+        if (shape === "trapezoid") {
+          // Set default depths from the input fields (or sensible defaults)
+          var ld = parseInt((bespokeLeftDepthEl || {}).value, 10) || 2400;
+          var rd = parseInt((bespokeRightDepthEl || {}).value, 10) || 3600;
+          store.setState({ bespoke: { footprint: shape, leftDepth_mm: ld, rightDepth_mm: rd } });
+        } else {
+          store.setState({ bespoke: { footprint: shape } });
+        }
+      });
+    }
+
+    if (bespokeLeftDepthEl) {
+      wireCommitOnly(bespokeLeftDepthEl, function() {
+        var val = parseInt(bespokeLeftDepthEl.value, 10);
+        if (isFinite(val) && val >= 600) {
+          store.setState({ bespoke: { leftDepth_mm: val } });
+        }
+      });
+    }
+
+    if (bespokeRightDepthEl) {
+      wireCommitOnly(bespokeRightDepthEl, function() {
+        var val = parseInt(bespokeRightDepthEl.value, 10);
+        if (isFinite(val) && val >= 600) {
+          store.setState({ bespoke: { rightDepth_mm: val } });
+        }
+      });
+    }
+
+    // --- Bespoke plan view SVG updater ---
+    function updateBespokePlanSvg() {
+      var shape = document.getElementById("bespokePlanShape");
+      var frontLabel = document.getElementById("bespokePlanFrontLabel");
+      var leftLabel = document.getElementById("bespokePlanLeftLabel");
+      var rightLabel = document.getElementById("bespokePlanRightLabel");
+      if (!shape) return;
+
+      var leftD = parseInt((bespokeLeftDepthEl || {}).value, 10) || 2400;
+      var rightD = parseInt((bespokeRightDepthEl || {}).value, 10) || 3600;
+      var maxD = Math.max(leftD, rightD, 1);
+
+      // Drawing area: x 30..230 (width=200), y 30..175 (max depth=145)
+      var x1 = 30, x2 = 230, yTop = 30;
+      var yBotL = yTop + (leftD / maxD) * 145;
+      var yBotR = yTop + (rightD / maxD) * 145;
+
+      // Trapezoid: top-left, top-right, bottom-right, bottom-left
+      shape.setAttribute("points",
+        x1 + "," + yTop + " " +
+        x2 + "," + yTop + " " +
+        x2 + "," + yBotR + " " +
+        x1 + "," + yBotL
+      );
+
+      // Position front label along the angled bottom edge
+      var midFX = (x1 + x2) / 2;
+      var midFY = ((yBotL + yBotR) / 2) + 14;
+      if (frontLabel) {
+        frontLabel.setAttribute("x", midFX);
+        frontLabel.setAttribute("y", midFY);
+      }
+
+      // Side depth labels
+      if (leftLabel) {
+        leftLabel.setAttribute("x", x1 - 4);
+        leftLabel.setAttribute("y", (yTop + yBotL) / 2 + 3);
+      }
+      if (rightLabel) {
+        rightLabel.setAttribute("x", x2 + 4);
+        rightLabel.setAttribute("y", (yTop + yBotR) / 2 + 3);
+      }
+    }
+
+    // Initial draw + update on input changes
+    updateBespokePlanSvg();
+    if (bespokeLeftDepthEl) bespokeLeftDepthEl.addEventListener("input", updateBespokePlanSvg);
+    if (bespokeRightDepthEl) bespokeRightDepthEl.addEventListener("input", updateBespokePlanSvg);
+
     // Add Divider button handler
     if (addDividerBtnEl) {
       addDividerBtnEl.addEventListener("click", function() {
@@ -8083,21 +8678,27 @@ function parseOverhangInput(val) {
         return;
       }
       
-      var updatedOpenings = openings.map(function(o) {
-        var newO = Object.assign({}, o);
-        // Front/back walls: x position scales with width
-        // Left/right walls: x position scales with depth
-        if (o.wall === 'front' || o.wall === 'back') {
-          if (o.x_mm != null) {
-            newO.x_mm = Math.round(o.x_mm * widthRatio);
-          }
-        } else if (o.wall === 'left' || o.wall === 'right') {
-          if (o.x_mm != null) {
-            newO.x_mm = Math.round(o.x_mm * depthRatio);
+      // Instead of proportional scaling, recalculate snap positions at new dimensions.
+      // This keeps openings at their intended positions (e.g. "Centre" stays centred).
+      var walls = ['front', 'back', 'left', 'right'];
+      var tempState = Object.assign({}, s);
+      var updatedOpenings = openings.slice(); // shallow copy
+
+      for (var wi = 0; wi < walls.length; wi++) {
+        var wall = walls[wi];
+        var newPositions = computeEvenSnapPositions(tempState, wall);
+        // Assign each opening on this wall to its snap slot (by sorted order)
+        for (var pi = 0; pi < newPositions.length; pi++) {
+          var slot = newPositions[pi];
+          if (!slot.openingId) continue;
+          for (var oi = 0; oi < updatedOpenings.length; oi++) {
+            if (String(updatedOpenings[oi].id || '') === slot.openingId) {
+              updatedOpenings[oi] = Object.assign({}, updatedOpenings[oi], { x_mm: slot.x_mm });
+              break;
+            }
           }
         }
-        return newO;
-      });
+      }
       
       console.log("[repositionOpenings] Dimension change detected - widthRatio:", widthRatio.toFixed(3), "depthRatio:", depthRatio.toFixed(3));
       
@@ -8285,6 +8886,10 @@ function parseOverhangInput(val) {
       }
 
       window.__dbg.initFinished = true;
+
+      // Center camera on model after first render (especially important on mobile)
+      setTimeout(function() { centerCameraOnModel(); }, 200);
+      setTimeout(function() { centerCameraOnModel(); }, 1500);
     }
 
     // Wait for profile to load before completing init (so controls are properly visible/enabled)

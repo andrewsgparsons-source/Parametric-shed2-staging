@@ -136,10 +136,55 @@
 
     container.appendChild(preview);
 
+    // === PRICE STRIP (compact, above drag handle) ===
+    var priceStrip = document.createElement('div');
+    priceStrip.id = 'mcPriceStrip';
+    priceStrip.innerHTML = '<div class="mc-price-tab">' +
+      '<span class="mc-price-range"></span>' +
+      '<span class="mc-price-cta">💬 Get a Quote</span>' +
+      '</div>';
+    container.appendChild(priceStrip);
+
+    // Wire price strip CTA
+    priceStrip.querySelector('.mc-price-cta').addEventListener('click', function() {
+      if (typeof window.__showDesignSummary === 'function') {
+        window.__showDesignSummary();
+      } else {
+        console.warn('[mobile] Design summary not ready yet');
+      }
+    });
+
+    // Update price strip when pricing changes
+    function updatePriceStrip() {
+      var rangeEl = priceStrip.querySelector('.mc-price-range');
+      if (!rangeEl) return;
+      try {
+        var badge = document.getElementById('priceBadge');
+        if (badge) {
+          // Extract from the hidden badge
+          var nums = badge.textContent.match(/£[\d,]+/g);
+          if (nums && nums.length >= 2) {
+            rangeEl.textContent = nums[0] + ' — ' + nums[1];
+            return;
+          } else if (nums && nums.length === 1) {
+            rangeEl.textContent = nums[0];
+            return;
+          }
+        }
+        rangeEl.textContent = '';
+      } catch(e) { rangeEl.textContent = ''; }
+    }
+    // Poll for price updates (pricing module loads async)
+    setInterval(updatePriceStrip, 2000);
+    setTimeout(updatePriceStrip, 1500);
+    setTimeout(updatePriceStrip, 3000);
+
     // === DRAG HANDLE ===
     var dragHandle = document.createElement('div');
     dragHandle.id = 'mcDragHandle';
-    dragHandle.innerHTML = '<div class="mc-handle-bar"></div>';
+    dragHandle.innerHTML = '<span class="mc-handle-arrow" data-dir="up">▲</span>' +
+      '<div class="mc-handle-bar"></div>' +
+      '<span class="mc-handle-arrow" data-dir="down">▼</span>';
     container.appendChild(dragHandle);
 
     // === BUILDING TYPE SELECTOR ===
@@ -240,8 +285,39 @@
     setTimeout(resizeEngine, 500);
     setTimeout(resizeEngine, 1500);
 
+    // Center camera on model after mobile layout is built
+    setTimeout(function() {
+      if (typeof window.__centerCameraOnModel === 'function') {
+        window.__centerCameraOnModel();
+      }
+    }, 2000);
+    setTimeout(function() {
+      if (typeof window.__centerCameraOnModel === 'function') {
+        window.__centerCameraOnModel();
+      }
+    }, 3500);
+
     // === DRAG HANDLE LOGIC ===
     initDragHandle(dragHandle, preview);
+
+    // === SCROLL HINT: show arrow when controls overflow ===
+    var scrollHint = document.createElement('div');
+    scrollHint.className = 'mc-scroll-hint';
+    scrollHint.textContent = '▼ scroll';
+    controls.style.position = 'relative';
+    controls.appendChild(scrollHint);
+
+    function updateScrollHint() {
+      var atBottom = controls.scrollHeight - controls.scrollTop - controls.clientHeight < 20;
+      var hasOverflow = controls.scrollHeight > controls.clientHeight + 10;
+      scrollHint.style.display = (hasOverflow && !atBottom) ? 'block' : 'none';
+    }
+    controls.addEventListener('scroll', updateScrollHint);
+    setTimeout(updateScrollHint, 500);
+    setTimeout(updateScrollHint, 2000);
+
+    // Also update scroll hint when switching steps
+    var _origGoToStep = goToStep;
 
     // === KEYBOARD: scroll controls into view when input focused ===
     controls.addEventListener('focusin', function(e) {
@@ -627,7 +703,17 @@
 
     // Scroll controls to top
     var controls = document.getElementById('mcControls');
-    if (controls) controls.scrollTop = 0;
+    if (controls) {
+      controls.scrollTop = 0;
+      // Update scroll hint after step change
+      setTimeout(function() {
+        var hint = controls.querySelector('.mc-scroll-hint');
+        if (hint) {
+          var hasOverflow = controls.scrollHeight > controls.clientHeight + 10;
+          hint.style.display = hasOverflow ? 'block' : 'none';
+        }
+      }, 100);
+    }
 
     // Update footer buttons
     var prevBtn = document.querySelector('.mc-prev');
@@ -645,7 +731,40 @@
     var startHeight = 0;
     var isDragging = false;
 
+    // Preset heights for arrow buttons (vh)
+    var presets = [20, 40, 55, 70];
+    var presetIdx = 2; // start at 55vh
+
+    function setPreviewVh(vh) {
+      preview.style.height = vh + 'vh';
+      preview.style.flex = '0 0 ' + vh + 'vh';
+      preview.style.transition = 'height 0.25s ease, flex 0.25s ease';
+      setTimeout(function() { preview.style.transition = ''; }, 300);
+      setTimeout(resizeEngine, 50);
+      setTimeout(resizeEngine, 300);
+    }
+
+    // Arrow buttons: step through presets by index
+    handle.querySelectorAll('.mc-handle-arrow').forEach(function(arrow) {
+      arrow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var dir = arrow.dataset.dir;
+
+        if (dir === 'up' && presetIdx > 0) {
+          presetIdx--;
+          setPreviewVh(presets[presetIdx]);
+        } else if (dir === 'down' && presetIdx < presets.length - 1) {
+          presetIdx++;
+          setPreviewVh(presets[presetIdx]);
+        }
+      });
+      // Prevent touch from triggering drag
+      arrow.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+    });
+
+    // Drag to resize
     handle.addEventListener('touchstart', function(e) {
+      if (e.target.classList.contains('mc-handle-arrow')) return;
       isDragging = true;
       startY = e.touches[0].clientY;
       startHeight = preview.offsetHeight;
@@ -658,7 +777,7 @@
       var newHeight = Math.max(
         window.innerHeight * 0.15,  // min 15vh
         Math.min(
-          window.innerHeight * 0.70, // max 70vh
+          window.innerHeight * 0.80, // max 80vh
           startHeight + dy
         )
       );
@@ -670,23 +789,21 @@
     document.addEventListener('touchend', function() {
       if (!isDragging) return;
       isDragging = false;
-      // Resize engine to match new canvas size
       resizeEngine();
       setTimeout(resizeEngine, 100);
     });
 
-    // Double-tap to toggle between 40% and 15%
+    // Double-tap bar to toggle between 55% and 20%
     var lastTap = 0;
-    handle.addEventListener('touchend', function() {
+    handle.querySelector('.mc-handle-bar').addEventListener('touchend', function() {
       var now = Date.now();
       if (now - lastTap < 300) {
-        // Double tap
-        var currentRatio = preview.offsetHeight / window.innerHeight;
-        var targetVh = currentRatio > 0.3 ? 15 : 40;
-        preview.style.height = targetVh + 'vh';
-        preview.style.flex = '0 0 ' + targetVh + 'vh';
-        setTimeout(resizeEngine, 50);
-        setTimeout(resizeEngine, 300);
+        if (presetIdx > 1) {
+          presetIdx = 0;
+        } else {
+          presetIdx = 2;
+        }
+        setPreviewVh(presets[presetIdx]);
       }
       lastTap = now;
     });
@@ -792,6 +909,23 @@
       console.warn('[mobile-configurator] resizeEngine error:', e);
     }
   }
+
+  // === Expose API for tour/demo scripts ===
+  window.__mobileConfigurator = {
+    goToStep: function(idx) { goToStep(idx); },
+    getActiveStep: function() { return activeStep; },
+    getSteps: function() { return STEPS.filter(function(s, i) { return hiddenSteps.indexOf(i) < 0 && !s.adminOnly; }); },
+    getStepCount: function() { return STEPS.filter(function(s, i) { return hiddenSteps.indexOf(i) < 0 && !s.adminOnly; }).length; },
+    setPreviewHeight: function(vh) {
+      var preview = document.getElementById('mcPreview');
+      if (preview) {
+        preview.style.height = vh + 'vh';
+        preview.style.flex = '0 0 ' + vh + 'vh';
+        setTimeout(resizeEngine, 50);
+        setTimeout(resizeEngine, 300);
+      }
+    }
+  };
 
   // Start
   if (document.readyState === 'loading') {
