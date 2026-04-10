@@ -2435,11 +2435,22 @@ function applyOpeningsVisibility(scene, on) {
     function getWallLengthsForOpenings(state) {
       var dims = getWallOuterDimsFromState(state);
       var thk = currentWallThicknessFromState(state);
+
+      // Trapezoid mode: left and right walls have different depths
+      var leftD = dims.d_mm;
+      var rightD = dims.d_mm;
+      if (state && state.bespoke && state.bespoke.footprint === "trapezoid") {
+        var ld = Number(state.bespoke.leftDepth_mm) || dims.d_mm;
+        var rd = Number(state.bespoke.rightDepth_mm) || dims.d_mm;
+        leftD = ld + (2 * WALL_OVERHANG_MM);
+        rightD = rd + (2 * WALL_OVERHANG_MM);
+      }
+
       return {
         front: Math.max(1, Math.floor(dims.w_mm)),
         back: Math.max(1, Math.floor(dims.w_mm)),
-        left: Math.max(1, Math.floor(dims.d_mm - 2 * thk)),
-        right: Math.max(1, Math.floor(dims.d_mm - 2 * thk)),
+        left: Math.max(1, Math.floor(leftD - 2 * thk)),
+        right: Math.max(1, Math.floor(rightD - 2 * thk)),
         _thk: thk
       };
     }
