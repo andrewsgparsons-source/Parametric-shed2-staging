@@ -571,15 +571,26 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
         resultMesh.metadata = Object.assign({}, mesh.metadata, { _trapezoidCut: true });
 
         // CSG.FromMesh converts to world space, and toMesh creates geometry
-        // in world space at the scene root. We must NOT re-apply the original
-        // parent/position/rotation — that would double-transform meshes whose
-        // parent has a non-identity transform (e.g. pent roof children of
-        // roofRoot which has a pitch rotationQuaternion).
+        // that inherits the source mesh's local position/rotation — but the
+        // vertex data is in the source's LOCAL coordinate space.
         //
-        // Strategy: leave the result mesh at the scene root with no parent.
-        // The CSG vertex data is already in world-space coordinates, so
-        // the mesh renders correctly without any transform.
-        // (Do NOT set parent/position/rotation — that causes double-transform.)
+        // Since the result is un-parented (scene root), we must apply the
+        // original mesh's full world transform so it renders in the same place.
+        // Compute the original mesh's world matrix and decompose it.
+        try {
+          mesh.computeWorldMatrix(true);
+          var worldMat = mesh.getWorldMatrix();
+          var _s = new BABYLON.Vector3();
+          var _r = new BABYLON.Quaternion();
+          var _t = new BABYLON.Vector3();
+          worldMat.decompose(_s, _r, _t);
+          resultMesh.parent = null;
+          resultMesh.position = _t.clone();
+          resultMesh.rotationQuaternion = _r.clone();
+          resultMesh.scaling = _s.clone();
+        } catch (transformErr) {
+          console.warn("[TRAPEZOID_CUT] Failed to apply world transform for '" + mesh.name + "':", transformErr);
+        }
 
         // Preserve visibility
         resultMesh.isVisible = mesh.isVisible;
