@@ -599,8 +599,8 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
 
         // Preserve visibility
         resultMesh.isVisible = mesh.isVisible;
-        // Preserve edge rendering if present
-        if (mesh.edgesWidth && resultMesh.enableEdgesRendering) {
+        // Preserve edge rendering if present (check _edgesRenderer, not edgesWidth which defaults to 1)
+        if (mesh._edgesRenderer && resultMesh.enableEdgesRendering) {
           try {
             resultMesh.enableEdgesRendering();
             resultMesh.edgesWidth = mesh.edgesWidth;
