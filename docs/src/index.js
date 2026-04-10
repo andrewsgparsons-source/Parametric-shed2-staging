@@ -548,41 +548,15 @@ function applyTrapezoidCut(scene, state, baseW_mm) {
         resultMesh.metadata = Object.assign({}, mesh.metadata, { _trapezoidCut: true });
 
         // CSG.FromMesh converts to world space, and toMesh creates geometry
-        // in world space at the scene root. We must NOT naively re-apply
-        // the original parent/position/rotation — that would double-transform
-        // meshes whose parent has a non-identity transform (e.g. pent roof
-        // children of roofRoot which has a pitch rotationQuaternion).
+        // in world space at the scene root. We must NOT re-apply the original
+        // parent/position/rotation — that would double-transform meshes whose
+        // parent has a non-identity transform (e.g. pent roof children of
+        // roofRoot which has a pitch rotationQuaternion).
         //
-        // Strategy: re-parent under the same parent, but compute the correct
-        // LOCAL position/rotation/scaling so the world transform stays the same.
-        var origParent = mesh.parent;
-        if (origParent) {
-          // Get the result mesh's current world matrix (it's at scene root, identity parent)
-          resultMesh.computeWorldMatrix(true);
-          var resultWorldMatrix = resultMesh.getWorldMatrix().clone();
-
-          // Parent it — this changes the world matrix
-          resultMesh.parent = origParent;
-
-          // Compute the parent's world matrix inverse
-          origParent.computeWorldMatrix(true);
-          var parentWorldInv = origParent.getWorldMatrix().clone();
-          parentWorldInv.invert();
-
-          // Local matrix = parentWorldInverse * resultWorldMatrix
-          var localMatrix = parentWorldInv.multiply(resultWorldMatrix);
-
-          // Decompose into position/rotation/scaling
-          var localPos = new BABYLON.Vector3();
-          var localRot = new BABYLON.Quaternion();
-          var localScale = new BABYLON.Vector3();
-          localMatrix.decompose(localScale, localRot, localPos);
-
-          resultMesh.position = localPos;
-          resultMesh.rotationQuaternion = localRot;
-          resultMesh.scaling = localScale;
-        }
-        // If no parent, result is already correctly in world space — no transform needed
+        // Strategy: leave the result mesh at the scene root with no parent.
+        // The CSG vertex data is already in world-space coordinates, so
+        // the mesh renders correctly without any transform.
+        // (Do NOT set parent/position/rotation — that causes double-transform.)
 
         // Preserve visibility
         resultMesh.isVisible = mesh.isVisible;
