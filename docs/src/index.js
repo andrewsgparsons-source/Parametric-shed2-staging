@@ -825,6 +825,14 @@ var unitModeMetricEl = $("unitModeMetric");
     var unitModeImperialEl = $("unitModeImperial");
     var wFtInEl = $("wFtIn");
     var dFtInEl = $("dFtIn");
+    var wFtInInputsEl = $("wFtInInputs");
+    var dFtInInputsEl = $("dFtInInputs");
+    var wFeetEl = $("wFeet");
+    var wInchesEl = $("wInches");
+    var dFeetEl = $("dFeet");
+    var dInchesEl = $("dInches");
+    var wLabelTextEl = $("wLabelText");
+    var dLabelTextEl = $("dLabelText");
 var roofApexEaveFtInEl = $("roofApexEaveFtIn");
     var roofApexCrestFtInEl = $("roofApexCrestFtIn");
     var roofMinFtInEl = $("roofMinFtIn");
@@ -4664,24 +4672,26 @@ function syncUiFromState(state, validations) {
         if (unitModeMetricEl) unitModeMetricEl.checked = (unitMode === "metric");
         if (unitModeImperialEl) unitModeImperialEl.checked = (unitMode === "imperial");
 
-// Update dimension labels based on unit mode
-        var unitLabel = (unitMode === "imperial") ? "(inches)" : "(mm)";
-        var wLabel = wInputEl && wInputEl.parentElement ? wInputEl.parentElement : null;
-        var dLabel = dInputEl && dInputEl.parentElement ? dInputEl.parentElement : null;
-        if (wLabel && wLabel.childNodes[0]) wLabel.childNodes[0].textContent = "Width " + unitLabel + " ";
-        if (dLabel && dLabel.childNodes[0]) dLabel.childNodes[0].textContent = "Depth " + unitLabel + " ";
-        
-// Keep as number input, adjust step and min for imperial
-        if (wInputEl) {
-          wInputEl.step = (unitMode === "imperial") ? "0.5" : "10";
-          wInputEl.min = (unitMode === "imperial") ? "1" : "1";
-        }
-        if (dInputEl) {
-          dInputEl.step = (unitMode === "imperial") ? "0.5" : "10";
-          dInputEl.min = (unitMode === "imperial") ? "1" : "1";
+// Update dimension labels and input visibility based on unit mode
+        if (unitMode === "imperial") {
+          // Imperial: show feet+inches inputs, hide mm input
+          if (wLabelTextEl) wLabelTextEl.textContent = "Width";
+          if (dLabelTextEl) dLabelTextEl.textContent = "Depth";
+          if (wInputEl) wInputEl.style.display = "none";
+          if (dInputEl) dInputEl.style.display = "none";
+          if (wFtInInputsEl) wFtInInputsEl.style.display = "flex";
+          if (dFtInInputsEl) dFtInInputsEl.style.display = "flex";
+        } else {
+          // Metric: show mm input, hide feet+inches inputs
+          if (wLabelTextEl) wLabelTextEl.textContent = "Width (mm)";
+          if (dLabelTextEl) dLabelTextEl.textContent = "Depth (mm)";
+          if (wInputEl) wInputEl.style.display = "";
+          if (dInputEl) dInputEl.style.display = "";
+          if (wFtInInputsEl) wFtInInputsEl.style.display = "none";
+          if (dFtInInputsEl) dFtInInputsEl.style.display = "none";
         }
 
-        // Show feet-inches readout when in imperial mode
+        // Show hint below: total inches when imperial, hidden when metric
         if (unitMode === "imperial") {
           try {
             var R0ft = resolveDims(state || {});
@@ -4697,12 +4707,14 @@ function syncUiFromState(state, validations) {
               wMmFt = R0ft.base.w_mm;
               dMmFt = R0ft.base.d_mm;
             }
+            var wTotalIn = Math.round((wMmFt / 25.4) * 10) / 10;
+            var dTotalIn = Math.round((dMmFt / 25.4) * 10) / 10;
             if (wFtInEl) {
-              wFtInEl.textContent = "= " + formatFeetInchesReadout(wMmFt);
+              wFtInEl.textContent = "= " + wTotalIn + '"';
               wFtInEl.style.display = "inline";
             }
             if (dFtInEl) {
-              dFtInEl.textContent = "= " + formatFeetInchesReadout(dMmFt);
+              dFtInEl.textContent = "= " + dTotalIn + '"';
               dFtInEl.style.display = "inline";
             }
           } catch (eFt) {}
@@ -4716,8 +4728,8 @@ function syncUiFromState(state, validations) {
 if (wInputEl && dInputEl) {
           // Skip updating dimension inputs if either one has focus (user is editing)
           // This prevents the input from being overwritten while user is typing
-          var wHasFocus = document.activeElement === wInputEl;
-          var dHasFocus = document.activeElement === dInputEl;
+          var wHasFocus = document.activeElement === wInputEl || document.activeElement === wFeetEl || document.activeElement === wInchesEl;
+          var dHasFocus = document.activeElement === dInputEl || document.activeElement === dFeetEl || document.activeElement === dInchesEl;
           console.log("[syncUiFromState] wHasFocus:", wHasFocus, "dHasFocus:", dHasFocus);
           console.log("[syncUiFromState] state.dim:", state.dim);
 
@@ -4738,11 +4750,21 @@ if (wInputEl && dInputEl) {
                 dMm = R0.base.d_mm;
               }
               console.log("[syncUiFromState] Setting inputs to wMm:", wMm, "dMm:", dMm, "mode:", m0);
-              wInputEl.value = formatDimension(wMm, unitMode);
-              dInputEl.value = formatDimension(dMm, unitMode);
+              // Always update mm input (used in metric mode)
+              wInputEl.value = formatDimension(wMm, "metric");
+              dInputEl.value = formatDimension(dMm, "metric");
+              // Also update feet+inches inputs (used in imperial mode)
+              if (unitMode === "imperial") {
+                var wFI = mmToFeetInches(wMm);
+                var dFI = mmToFeetInches(dMm);
+                if (wFeetEl) wFeetEl.value = String(wFI.feet);
+                if (wInchesEl) wInchesEl.value = String(Math.round(wFI.inches * 2) / 2); // snap to half-inch
+                if (dFeetEl) dFeetEl.value = String(dFI.feet);
+                if (dInchesEl) dInchesEl.value = String(Math.round(dFI.inches * 2) / 2);
+              }
             } catch (e0) {
-              if (wInputEl && state && state.w != null) wInputEl.value = formatDimension(state.w, unitMode);
-              if (dInputEl && state && state.d != null) dInputEl.value = formatDimension(state.d, unitMode);
+              if (wInputEl && state && state.w != null) wInputEl.value = formatDimension(state.w, "metric");
+              if (dInputEl && state && state.d != null) dInputEl.value = formatDimension(state.d, "metric");
             }
           } else {
             console.log("[syncUiFromState] Skipping dimension input update - one has focus");
@@ -5550,8 +5572,16 @@ if (state && state.overhang) {
             store.setState(stateUpdate);
             // Update UI inputs to match
             if (dimChanged) {
-              if (wInputEl) wInputEl.value = formatDimension(curW, unitMode);
-              if (dInputEl) dInputEl.value = formatDimension(curD, unitMode);
+              if (wInputEl) wInputEl.value = formatDimension(curW, "metric");
+              if (dInputEl) dInputEl.value = formatDimension(curD, "metric");
+              if (unitMode === "imperial") {
+                var hcwFI = mmToFeetInches(curW);
+                var hcdFI = mmToFeetInches(curD);
+                if (wFeetEl) wFeetEl.value = String(hcwFI.feet);
+                if (wInchesEl) wInchesEl.value = String(Math.round(hcwFI.inches * 2) / 2);
+                if (dFeetEl) dFeetEl.value = String(hcdFI.feet);
+                if (dInchesEl) dInchesEl.value = String(Math.round(hcdFI.inches * 2) / 2);
+              }
             }
             if (ovhChanged && overUniformEl) {
               overUniformEl.value = formatDimension(curUniformOvh, unitMode);
@@ -6209,11 +6239,13 @@ function writeActiveDims() {
       var w, d;
 
 if (unitMode === "imperial") {
-        // Input is in decimal inches
-        var wInches = parseFloat(wInputEl ? wInputEl.value : 0) || 0;
-        var dInches = parseFloat(dInputEl ? dInputEl.value : 0) || 0;
-        w = Math.round(wInches * 25.4);
-        d = Math.round(dInches * 25.4);
+        // Input is in feet + inches (two separate fields)
+        var wFt = parseInt(wFeetEl ? wFeetEl.value : 0, 10) || 0;
+        var wIn = parseFloat(wInchesEl ? wInchesEl.value : 0) || 0;
+        var dFt = parseInt(dFeetEl ? dFeetEl.value : 0, 10) || 0;
+        var dIn = parseFloat(dInchesEl ? dInchesEl.value : 0) || 0;
+        w = feetInchesToMm(wFt, wIn);
+        d = feetInchesToMm(dFt, dIn);
         if (w < 1) w = 1000;
         if (d < 1) d = 1000;
       } else {
@@ -6228,8 +6260,16 @@ if (unitMode === "imperial") {
 
       // If values were clamped, update the input fields to reflect the actual values
       if (clamped.clamped) {
-        if (wInputEl) wInputEl.value = formatDimension(w, unitMode);
-        if (dInputEl) dInputEl.value = formatDimension(d, unitMode);
+        if (wInputEl) wInputEl.value = formatDimension(w, "metric");
+        if (dInputEl) dInputEl.value = formatDimension(d, "metric");
+        if (unitMode === "imperial") {
+          var cwFI = mmToFeetInches(w);
+          var cdFI = mmToFeetInches(d);
+          if (wFeetEl) wFeetEl.value = String(cwFI.feet);
+          if (wInchesEl) wInchesEl.value = String(Math.round(cwFI.inches * 2) / 2);
+          if (dFeetEl) dFeetEl.value = String(cdFI.feet);
+          if (dInchesEl) dInchesEl.value = String(Math.round(cdFI.inches * 2) / 2);
+        }
         console.log("[writeActiveDims] Dimensions clamped to:", w, "x", d, "mm");
       }
 
@@ -6294,6 +6334,11 @@ if (unitMode === "imperial") {
     }
 if (wInputEl) wireCommitOnly(wInputEl, writeActiveDims);
     if (dInputEl) wireCommitOnly(dInputEl, writeActiveDims);
+    // Wire feet+inches inputs for imperial mode
+    if (wFeetEl) wireCommitOnly(wFeetEl, writeActiveDims);
+    if (wInchesEl) wireCommitOnly(wInchesEl, writeActiveDims);
+    if (dFeetEl) wireCommitOnly(dFeetEl, writeActiveDims);
+    if (dInchesEl) wireCommitOnly(dInchesEl, writeActiveDims);
 
 function parseOverhangInput(val) {
       var s = store.getState();

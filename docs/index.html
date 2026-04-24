@@ -112,14 +112,22 @@
                 </div>                           
                 
             <div class="row">
-                  <label>
-                    Width (mm)
+                  <label id="wLabelWrap">
+                    <span id="wLabelText">Width (mm)</span>
                     <input id="wInput" type="number" min="1" max="8000" step="10" value="3000" />
+                    <span id="wFtInInputs" class="ftInInputRow" style="display:none;">
+                      <input id="wFeet" type="number" min="0" max="26" step="1" value="9" class="ftInput" aria-label="Width feet" /><span class="ftInSep">ft</span>
+                      <input id="wInches" type="number" min="0" max="11.5" step="0.5" value="10" class="inInput" aria-label="Width inches" /><span class="ftInSep">in</span>
+                    </span>
                     <span id="wFtIn" class="ftInHint" style="display:none;"></span>
                   </label>
-                  <label>
-                    Depth (mm)
+                  <label id="dLabelWrap">
+                    <span id="dLabelText">Depth (mm)</span>
                     <input id="dInput" type="number" min="1" max="8000" step="10" value="4000" />
+                    <span id="dFtInInputs" class="ftInInputRow" style="display:none;">
+                      <input id="dFeet" type="number" min="0" max="26" step="1" value="13" class="ftInput" aria-label="Depth feet" /><span class="ftInSep">ft</span>
+                      <input id="dInches" type="number" min="0" max="11.5" step="0.5" value="1" class="inInput" aria-label="Depth inches" /><span class="ftInSep">in</span>
+                    </span>
                     <span id="dFtIn" class="ftInHint" style="display:none;"></span>
                   </label>
                 </div>

@@ -146,6 +146,25 @@
   margin-top: 2px;
 }
 
+/* Feet + inches input row (imperial mode) */
+.ftInInputRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.ftInInputRow .ftInput {
+  width: 52px;
+}
+.ftInInputRow .inInput {
+  width: 60px;
+}
+.ftInSep {
+  font-size: 12px;
+  color: #555;
+  margin-right: 4px;
+}
+
 /* Profile system - disabled controls */
 .profile-disabled {
   opacity: 0.6;
