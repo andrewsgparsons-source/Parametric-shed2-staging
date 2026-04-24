@@ -308,6 +308,25 @@ body.mobile-configurator #mcControls .boSection .boBox {
    Apply via JS inline styles instead — CSS specificity battles are unwinnable.
    See mobile-configurator.js applyMobileStyles() */
 
+/* Feet + inches input row (imperial mode) — layout on mobile.
+   Visibility is controlled by JS inline style (display:none / display:flex).
+   These rules only apply when the row is visible. */
+#mobileConfigurator .ftInInputRow .ftInput,
+#mobileConfigurator .ftInInputRow .inInput {
+  width: auto !important;
+  min-width: 50px !important;
+  max-width: 65px !important;
+  flex: 0 0 auto !important;
+  font-size: 16px !important;
+  padding: 7px 6px !important;
+}
+#mobileConfigurator .ftInSep {
+  font-size: 13px !important;
+  color: #555 !important;
+  flex: 0 0 auto !important;
+  margin-right: 4px !important;
+}
+
 /* Grid rows — keep 2-column on mobile */
 #mobileConfigurator .row {
   display: grid !important;
